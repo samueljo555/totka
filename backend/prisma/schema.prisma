@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model School {
+  id        String   @id @default(uuid())
+  name      String
+  region    String?
+  createdAt DateTime @default(now())
+  users     User[]
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  role      String   // super_admin, guru, operator, siswa
+  fullName  String
+  nisn      String?  @unique
+  className String?  // 6A, 6B
+  schoolId  String?
+  school    School?  @relation(fields: [schoolId], references: [id])
+  createdAt DateTime @default(now())
+
+  authoredQuestions Question[]
+  createdPackages   Package[]
+  examSessions      ExamSession[]
+}
+
+model Question {
+  id            String   @id @default(uuid())
+  type          String   // PG_Sederhana, PG_Kompleks, PG_Kategori
+  mapel         String
+  element       String
+  content       String   @db.Text
+  options       Json
+  correctAnswer Json
+  authorId      String?
+  author        User?    @relation(fields: [authorId], references: [id])
+  createdAt     DateTime @default(now())
+
+  packages PackageQuestion[]
+  answers  Answer[]
+}
+
+model Package {
+  id                 String   @id @default(uuid())
+  name               String
+  mapel              String
+  durationMinutes    Int      @default(90)
+  navigationMode     String   @default("bebas")
+  releaseScoreMode   String   @default("langsung")
+  status             String   @default("draft")
+  createdById        String?
+  createdBy          User?    @relation(fields: [createdById], references: [id])
+  createdAt          DateTime @default(now())
+
+  questions    PackageQuestion[]
+  examSessions ExamSession[]
+}
+
+model PackageQuestion {
+  packageId  String
+  questionId String
+  package    Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@id([packageId, questionId])
+}
+
+model ExamSession {
+  id          String    @id @default(uuid())
+  studentId   String
+  packageId   String
+  status      String    @default("sedang_mengerjakan")
+  startTime   DateTime  @default(now())
+  endTime     DateTime?
+  totalScore  Decimal?  @db.Decimal(5, 2)
+
+  student User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  answers Answer[]
+
+  @@unique([studentId, packageId])
+}
+
+model Answer {
+  id         String   @id @default(uuid())
+  sessionId  String
+  questionId String
+  answerData Json
+  isCorrect  Boolean?
+
+  session  ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, questionId])
+}
