@@ -267,6 +267,35 @@ app.post('/api/users/siswa', async (req, res) => {
   }
 });
 
+app.post('/api/users/siswa/batch', async (req, res) => {
+  const { students, schoolNpsn } = req.body;
+  if (!Array.isArray(students)) return res.status(400).json({ error: 'Invalid data' });
+
+  const dataToInsert = students.map(s => {
+    const tempPassword = Math.random().toString(36).slice(-6).toUpperCase();
+    return {
+      username: s.nisn,
+      password: tempPassword,
+      role: 'siswa',
+      fullName: s.fullName,
+      nisn: s.nisn,
+      className: s.className || '',
+      schoolNpsn: schoolNpsn || s.schoolNpsn
+    };
+  });
+
+  try {
+    const result = await prisma.user.createMany({
+      data: dataToInsert,
+      skipDuplicates: true
+    });
+    res.json({ message: `Successfully imported ${result.count} students` });
+  } catch (error) {
+    console.error("Batch insert siswa error:", error);
+    res.status(500).json({ error: 'Failed to import students' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });

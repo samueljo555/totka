@@ -26,6 +26,14 @@ Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Ba
 ### 3. Alur Otomatisasi (Workflow) Operator & Siswa
 - Backend telah diperbarui untuk menyertakan (*include*) data relasi `school` setiap kali pengguna berhasil login (`/api/login`).
 - Saat **Operator Sekolah** login dan menambahkan data peserta didik (Siswa), mereka tidak perlu lagi mengetikkan nama sekolah. Akun Siswa yang baru dibuat akan langsung secara otomatis diikat (*linked*) ke `schoolNpsn` milik Operator tersebut.
+- **Import Massal Siswa via CSV**: Operator kini dapat mengunggah file CSV berisikan data siswa secara massal.
+  - **Panduan Format CSV**: File harus memiliki 3 kolom (nisn, fullName, className).
+    ```csv
+    nisn,fullName,className
+    1234567890,Budi Santoso,Kelas 6A
+    0987654321,Siti Aminah,Kelas 6B
+    ```
+  - **Pembuatan Akun Otomatis**: Sistem secara otomatis akan memakai NISN sebagai `username`, membuat *password* 6-karakter acak secara otomatis, serta menautkannya dengan NPSN operator saat ini.
 
 ---
 

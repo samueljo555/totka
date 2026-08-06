@@ -40,6 +40,54 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
     }
   }, [activeTab]);
 
+  const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n').filter(line => line.trim() !== '');
+      const hasHeader = lines[0].toLowerCase().includes('nisn');
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+      
+      const studentsData = dataLines.map(line => {
+        const [nisn, fullName, className] = line.split(',');
+        return { 
+          nisn: nisn?.trim(), 
+          fullName: fullName?.trim(), 
+          className: className?.trim() || '' 
+        };
+      }).filter(s => s.nisn && s.fullName);
+
+      if (studentsData.length === 0) {
+        alert('Format CSV tidak valid atau kosong. Pastikan format: nisn,fullName,className');
+        return;
+      }
+
+      try {
+        const res = await fetch('http://localhost:3001/api/users/siswa/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            students: studentsData, 
+            schoolNpsn: user?.school?.npsn 
+          })
+        });
+        if (res.ok) {
+          alert(`Berhasil mengimpor ${studentsData.length} data siswa!`);
+          fetchStudents();
+        } else {
+          alert('Terjadi kesalahan saat impor data.');
+        }
+      } catch(err) {
+        alert('Gagal menghubungi server.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const tabs = [
     { id: 'students', name: 'Manajemen Siswa', icon: <Users size={20} /> },
     { id: 'monitoring', name: 'Pantau Ujian', icon: <Activity size={20} /> },
@@ -124,10 +172,11 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 <p>Kelola data akun siswa di sekolah Anda (tambah satuan atau impor Excel).</p>
               </div>
               <div className="flex gap-2">
-                <button className="btn-secondary" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <Upload size={18} /> Impor Massal
-                </button>
-                <button className="btn" onClick={() => setIsAddingSiswa(true)} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="file" id="csv-upload" accept=".csv" style={{ display: 'none' }} onChange={handleImportCsv} />
+                <label htmlFor="csv-upload" className="btn-secondary" style={{ margin: 0 }}>
+                  <Upload size={18} /> Import CSV
+                </label>
+                <button className="btn" onClick={() => setIsAddingSiswa(true)}>
                   <Plus size={18} /> Tambah Siswa
                 </button>
               </div>
