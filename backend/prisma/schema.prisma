@@ -7,7 +7,7 @@ datasource db {
 }
 
 model School {
-  id        String   @id @default(uuid())
+  npsn      String   @id
   name      String
   region    String?
   createdAt DateTime @default(now())
@@ -18,12 +18,16 @@ model User {
   id        String   @id @default(uuid())
   username  String   @unique
   password  String
-  role      String   // super_admin, guru, operator, siswa
   fullName  String
+  role      String   // super_admin, admin, guru, operator, siswa
+  
+  // Siswa specific fields
   nisn      String?  @unique
-  className String?  // 6A, 6B
-  schoolId  String?
-  school    School?  @relation(fields: [schoolId], references: [id])
+  className String?
+
+  schoolNpsn String?
+  school     School? @relation(fields: [schoolNpsn], references: [npsn])
+
   createdAt DateTime @default(now())
 
   authoredQuestions Question[]

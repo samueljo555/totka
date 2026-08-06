@@ -8,21 +8,56 @@ import {
   Plus,
   Search,
   LineChart,
-  Download
+  Download,
+  Upload
 } from 'lucide-react';
 
-const AdminDashboard = ({ onLogout }: { onLogout: () => void }) => {
+const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isAddingPackage, setIsAddingPackage] = useState(false);
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
+  const [schools, setSchools] = useState<any[]>([]);
+
+  // School State
+  const [isAddingSchool, setIsAddingSchool] = useState(false);
+  const [editingSchool, setEditingSchool] = useState<any>(null);
+  const [schoolNameInput, setSchoolNameInput] = useState('');
+  const [schoolRegionInput, setSchoolRegionInput] = useState('');
+  const [schoolNpsnInput, setSchoolNpsnInput] = useState('');
+  const [isSavingSchool, setIsSavingSchool] = useState(false);
+
+  // Add User State
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newFullName, setNewFullName] = useState('');
+  const [newRole, setNewRole] = useState('operator');
+  const [newSchoolNpsn, setNewSchoolNpsn] = useState('');
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [userErrorMsg, setUserErrorMsg] = useState('');
+
+  const fetchUsers = () => {
+    fetch('http://localhost:3001/api/users')
+      .then(res => res.json())
+      .then(data => setUsers(data))
+      .catch(err => console.error("Error fetching users:", err));
+  };
+
+  const fetchSchools = () => {
+    fetch('http://localhost:3001/api/schools')
+      .then(res => res.json())
+      .then(data => setSchools(data))
+      .catch(err => console.error("Error fetching schools:", err));
+  };
 
   useEffect(() => {
     if (activeTab === 'accounts') {
-      fetch('http://localhost:3001/api/users')
-        .then(res => res.json())
-        .then(data => setUsers(data))
-        .catch(err => console.error("Error fetching users:", err));
+      fetchUsers();
+      fetchSchools();
+    } else if (activeTab === 'schools') {
+      fetchSchools();
     } else if (activeTab === 'packages') {
       fetch('http://localhost:3001/api/packages')
         .then(res => res.json())
@@ -31,10 +66,56 @@ const AdminDashboard = ({ onLogout }: { onLogout: () => void }) => {
     }
   }, [activeTab]);
 
+  const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+  
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n').filter(line => line.trim() !== '');
+      const hasHeader = lines[0].toLowerCase().includes('npsn');
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+      
+      const schoolsData = dataLines.map(line => {
+        const [npsn, name, region] = line.split(',');
+        return { 
+          npsn: npsn?.trim(), 
+          name: name?.trim(), 
+          region: region?.trim() || '' 
+        };
+      }).filter(s => s.npsn && s.name);
+  
+      if (schoolsData.length === 0) {
+        alert('Format CSV tidak valid atau kosong. Pastikan format: npsn,name,region');
+        return;
+      }
+  
+      try {
+        const res = await fetch('http://localhost:3001/api/schools/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ schools: schoolsData })
+        });
+        if (res.ok) {
+          alert(`Berhasil mengimpor ${schoolsData.length} data sekolah!`);
+          fetchSchools();
+        } else {
+          alert('Terjadi kesalahan saat impor data.');
+        }
+      } catch(err) {
+        alert('Gagal menghubungi server.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const tabs = [
     { id: 'overview', name: 'Ringkasan', icon: <BarChart3 size={20} /> },
     { id: 'accounts', name: 'Manajemen Akun', icon: <Users size={20} /> },
-    { id: 'packages', name: 'Paket Try Out', icon: <BookOpen size={20} /> },
+    { id: 'schools', name: 'Data Sekolah', icon: <BookOpen size={20} /> },
+    { id: 'packages', name: 'Paket Try Out', icon: <Settings size={20} /> },
     { id: 'results', name: 'Analitik Hasil', icon: <LineChart size={20} /> },
     { id: 'settings', name: 'Pengaturan Ujian', icon: <Settings size={20} /> },
   ];
@@ -45,7 +126,7 @@ const AdminDashboard = ({ onLogout }: { onLogout: () => void }) => {
       <aside className="glass-panel" style={{ width: '280px', margin: '1rem', display: 'flex', flexDirection: 'column' }}>
         <div className="p-6">
           <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Super Admin</h2>
-          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>TKA SD Platform</p>
+          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{user?.school?.name || 'Pusat TKA'}</p>
         </div>
         
         <nav style={{ flex: 1, padding: '0 1rem' }}>
@@ -137,11 +218,11 @@ const AdminDashboard = ({ onLogout }: { onLogout: () => void }) => {
           </div>
         )}
 
-        {activeTab === 'accounts' && (
+        {activeTab === 'accounts' && !isAddingUser && !editingUser && (
           <div className="animate-fade-in glass-panel p-8">
             <div className="flex justify-between items-center mb-6">
               <h2>Daftar Pengguna Sistem</h2>
-              <button className="btn">
+              <button className="btn" onClick={() => setIsAddingUser(true)}>
                 <Plus size={18} /> Tambah Akun
               </button>
             </div>
@@ -176,7 +257,20 @@ const AdminDashboard = ({ onLogout }: { onLogout: () => void }) => {
                       </span>
                     </td>
                     <td className="p-4">
-                      <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }}>Edit</button>
+                      <button 
+                        className="btn-secondary" 
+                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                        onClick={() => {
+                          setEditingUser(u);
+                          setNewUsername(u.username);
+                          setNewPassword(u.password);
+                          setNewFullName(u.fullName);
+                          setNewRole(u.role);
+                          setNewSchoolNpsn(u.schoolNpsn || '');
+                        }}
+                      >
+                        Edit
+                      </button>
                     </td>
                   </tr>
                 )) : (
@@ -186,6 +280,306 @@ const AdminDashboard = ({ onLogout }: { onLogout: () => void }) => {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {activeTab === 'accounts' && isAddingUser && (
+          <div className="animate-fade-in glass-panel p-8" style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <div className="flex justify-between items-center mb-6">
+              <h2>Tambah Akun Pengguna</h2>
+              <button className="btn-secondary" onClick={() => setIsAddingUser(false)}>Batal</button>
+            </div>
+
+            {userErrorMsg && (
+              <div className="p-4 mb-4" style={{ background: 'rgba(255, 0, 0, 0.1)', color: 'red', borderRadius: '8px' }}>
+                {userErrorMsg}
+              </div>
+            )}
+
+            <div className="input-group">
+              <label className="input-label">Username</label>
+              <input type="text" className="input-field" placeholder="Ketik username" value={newUsername} onChange={e => setNewUsername(e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Password</label>
+              <input type="password" className="input-field" placeholder="Ketik password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Nama Lengkap / Nama Institusi</label>
+              <input type="text" className="input-field" placeholder="Ketik nama pengguna" value={newFullName} onChange={e => setNewFullName(e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Peran (Role)</label>
+              <select className="input-field" value={newRole} onChange={e => setNewRole(e.target.value)}>
+                <option value="operator">Operator Sekolah</option>
+                <option value="guru">Guru Penulis Soal</option>
+                <option value="super_admin">Super Admin</option>
+              </select>
+            </div>
+            {(newRole === 'operator' || newRole === 'guru') && (
+              <div className="input-group">
+                <label className="input-label">Sekolah / Instansi (Opsional)</label>
+                <select className="input-field" value={newSchoolNpsn} onChange={e => setNewSchoolNpsn(e.target.value)}>
+                  <option value="">Pilih Sekolah...</option>
+                  {schools.map(s => (
+                    <option key={s.npsn} value={s.npsn}>{s.name} (NPSN: {s.npsn})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <button 
+              className="btn mt-6" 
+              style={{ width: '100%', opacity: isSavingUser ? 0.7 : 1 }} 
+              disabled={isSavingUser}
+              onClick={() => {
+                if (!newUsername || !newPassword || !newFullName) {
+                  setUserErrorMsg('Semua kolom wajib diisi.');
+                  return;
+                }
+                setIsSavingUser(true);
+                setUserErrorMsg('');
+                fetch('http://localhost:3001/api/users', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    username: newUsername,
+                    password: newPassword,
+                    fullName: newFullName,
+                    role: newRole,
+                    schoolNpsn: newSchoolNpsn
+                  })
+                })
+                .then(async res => {
+                  if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Terjadi kesalahan saat menyimpan');
+                  }
+                  return res.json();
+                })
+                .then(() => {
+                  setIsSavingUser(false);
+                  setIsAddingUser(false);
+                  setNewUsername('');
+                  setNewPassword('');
+                  setNewFullName('');
+                  fetchUsers();
+                })
+                .catch(err => {
+                  setUserErrorMsg(err.message);
+                  setIsSavingUser(false);
+                });
+              }}
+            >
+              {isSavingUser ? 'Menyimpan...' : 'Simpan Data Pengguna'}
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'accounts' && editingUser && (
+          <div className="animate-fade-in glass-panel p-8" style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <div className="flex justify-between items-center mb-6">
+              <h2>Edit Akun Pengguna</h2>
+              <button className="btn-secondary" onClick={() => setEditingUser(null)}>Batal</button>
+            </div>
+
+            {userErrorMsg && (
+              <div className="p-4 mb-4" style={{ background: 'rgba(255, 0, 0, 0.1)', color: 'red', borderRadius: '8px' }}>
+                {userErrorMsg}
+              </div>
+            )}
+
+            <div className="input-group">
+              <label className="input-label">Username</label>
+              <input type="text" className="input-field" placeholder="Ketik username" value={newUsername} onChange={e => setNewUsername(e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Password</label>
+              <input type="text" className="input-field" placeholder="Ketik password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Nama Lengkap / Nama Institusi</label>
+              <input type="text" className="input-field" placeholder="Ketik nama pengguna" value={newFullName} onChange={e => setNewFullName(e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Peran (Role)</label>
+              <select className="input-field" value={newRole} onChange={e => setNewRole(e.target.value)}>
+                <option value="operator">Operator Sekolah</option>
+                <option value="guru">Guru Penulis Soal</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="siswa">Siswa</option>
+              </select>
+            </div>
+            {(newRole === 'operator' || newRole === 'guru' || newRole === 'siswa') && (
+              <div className="input-group">
+                <label className="input-label">Sekolah / Instansi (Opsional)</label>
+                <select className="input-field" value={newSchoolNpsn} onChange={e => setNewSchoolNpsn(e.target.value)}>
+                  <option value="">Pilih Sekolah...</option>
+                  {schools.map(s => (
+                    <option key={s.npsn} value={s.npsn}>{s.name} (NPSN: {s.npsn})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <button 
+              className="btn mt-6" 
+              style={{ width: '100%', opacity: isSavingUser ? 0.7 : 1 }} 
+              disabled={isSavingUser}
+              onClick={() => {
+                if (!newUsername || !newPassword || !newFullName) {
+                  setUserErrorMsg('Semua kolom wajib diisi.');
+                  return;
+                }
+                setIsSavingUser(true);
+                setUserErrorMsg('');
+                fetch(`http://localhost:3001/api/users/${editingUser.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    username: newUsername,
+                    password: newPassword,
+                    fullName: newFullName,
+                    role: newRole,
+                    schoolNpsn: newSchoolNpsn
+                  })
+                })
+                .then(async res => {
+                  if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Terjadi kesalahan saat menyimpan');
+                  }
+                  return res.json();
+                })
+                .then(() => {
+                  setIsSavingUser(false);
+                  setEditingUser(null);
+                  setNewUsername('');
+                  setNewPassword('');
+                  setNewFullName('');
+                  setNewSchoolNpsn('');
+                  fetchUsers();
+                })
+                .catch(err => {
+                  setUserErrorMsg(err.message);
+                  setIsSavingUser(false);
+                });
+              }}
+            >
+              {isSavingUser ? 'Menyimpan...' : 'Simpan Perubahan'}
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'schools' && !isAddingSchool && !editingSchool && (
+          <div className="animate-fade-in glass-panel p-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2>Data Sekolah & Instansi</h2>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <input type="file" id="csv-upload" accept=".csv" style={{ display: 'none' }} onChange={handleImportCsv} />
+                <label htmlFor="csv-upload" className="btn-secondary" style={{ margin: 0 }}>
+                  <Upload size={18} /> Import CSV
+                </label>
+                <button className="btn" onClick={() => setIsAddingSchool(true)}>
+                  <Plus size={18} /> Tambah Sekolah
+                </button>
+              </div>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
+                  <th className="p-4">Nama Sekolah</th>
+                  <th className="p-4">Wilayah</th>
+                  <th className="p-4">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schools.length > 0 ? schools.map((s, i) => (
+                  <tr key={s.npsn} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                    <td className="p-4 font-semibold text-main">{s.name} <br/><span className="text-muted" style={{ fontWeight: 'normal', fontSize: '0.85rem' }}>NPSN: {s.npsn}</span></td>
+                    <td className="p-4">{s.region || '-'}</td>
+                    <td className="p-4">
+                      <button 
+                        className="btn-secondary" 
+                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                        onClick={() => {
+                          setEditingSchool(s);
+                          setSchoolNpsnInput(s.npsn);
+                          setSchoolNameInput(s.name);
+                          setSchoolRegionInput(s.region || '');
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        className="btn-secondary" 
+                        style={{ padding: '6px 12px', fontSize: '0.85rem', marginLeft: '8px', color: 'red', borderColor: 'red' }}
+                        onClick={() => {
+                          if (window.confirm('Hapus sekolah ini?')) {
+                            fetch(`http://localhost:3001/api/schools/${s.npsn}`, { method: 'DELETE' })
+                              .then(() => fetchSchools());
+                          }
+                        }}
+                      >
+                        Hapus
+                      </button>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={3} className="p-4 text-center text-muted">Belum ada data sekolah.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === 'schools' && (isAddingSchool || editingSchool) && (
+          <div className="animate-fade-in glass-panel p-8" style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <div className="flex justify-between items-center mb-6">
+              <h2>{editingSchool ? 'Edit Sekolah' : 'Tambah Sekolah Baru'}</h2>
+              <button className="btn-secondary" onClick={() => { setIsAddingSchool(false); setEditingSchool(null); }}>Batal</button>
+            </div>
+            <div className="input-group">
+              <label className="input-label">NPSN (8 Digit)</label>
+              <input type="text" className="input-field" placeholder="Contoh: 10101234" value={schoolNpsnInput} onChange={e => setSchoolNpsnInput(e.target.value)} disabled={!!editingSchool} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Nama Sekolah / Instansi</label>
+              <input type="text" className="input-field" placeholder="Contoh: SDN 01 Pagi Jakarta" value={schoolNameInput} onChange={e => setSchoolNameInput(e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Wilayah (Opsional)</label>
+              <input type="text" className="input-field" placeholder="Contoh: Jakarta Pusat" value={schoolRegionInput} onChange={e => setSchoolRegionInput(e.target.value)} />
+            </div>
+            <button 
+              className="btn mt-6" 
+              style={{ width: '100%', opacity: isSavingSchool ? 0.7 : 1 }} 
+              disabled={isSavingSchool}
+              onClick={() => {
+                if (!schoolNameInput || !schoolNpsnInput) return;
+                setIsSavingSchool(true);
+                const url = editingSchool ? `http://localhost:3001/api/schools/${editingSchool.npsn}` : 'http://localhost:3001/api/schools';
+                const method = editingSchool ? 'PUT' : 'POST';
+                fetch(url, {
+                  method,
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ npsn: schoolNpsnInput, name: schoolNameInput, region: schoolRegionInput })
+                })
+                .then(() => {
+                  setIsSavingSchool(false);
+                  setIsAddingSchool(false);
+                  setEditingSchool(null);
+                  setSchoolNpsnInput('');
+                  setSchoolNameInput('');
+                  setSchoolRegionInput('');
+                  fetchSchools();
+                });
+              }}
+            >
+              {isSavingSchool ? 'Menyimpan...' : 'Simpan Data Sekolah'}
+            </button>
           </div>
         )}
 

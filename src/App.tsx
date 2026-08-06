@@ -6,7 +6,10 @@ import SiswaDashboard from './pages/SiswaDashboard';
 import OperatorDashboard from './pages/OperatorDashboard';
 
 function App() {
-  const [role, setRole] = useState<string | null>(null); // This holds the authenticated role
+  const [authUser, setAuthUser] = useState<any | null>(() => {
+    const saved = localStorage.getItem('tka_auth_user');
+    return saved ? JSON.parse(saved) : null;
+  }); // This holds the authenticated user data
   const [loginView, setLoginView] = useState<string | null>(null); // Shows the login form for a specific role
   
   const [username, setUsername] = useState('');
@@ -25,7 +28,8 @@ function App() {
       const data = await response.json();
       
       if (response.ok) {
-        setRole(data.user.role); // e.g., 'super_admin'
+        setAuthUser(data.user); // Store the full user object
+        localStorage.setItem('tka_auth_user', JSON.stringify(data.user));
         setLoginView(null);
       } else {
         setError(data.error || 'Login gagal');
@@ -42,20 +46,25 @@ function App() {
     { id: 'super_admin', title: 'Super Admin', description: 'Kendali penuh sistem try out', icon: '⚙️' }
   ];
 
-  if (role === 'super_admin' || role === 'admin') {
-    return <AdminDashboard onLogout={() => setRole(null)} />;
+  const handleLogout = () => {
+    setAuthUser(null);
+    localStorage.removeItem('tka_auth_user');
+  };
+
+  if (authUser?.role === 'super_admin' || authUser?.role === 'admin') {
+    return <AdminDashboard user={authUser} onLogout={handleLogout} />;
   }
   
-  if (role === 'guru') {
-    return <GuruDashboard onLogout={() => setRole(null)} />;
+  if (authUser?.role === 'guru') {
+    return <GuruDashboard user={authUser} onLogout={handleLogout} />;
   }
 
-  if (role === 'siswa') {
-    return <SiswaDashboard onLogout={() => setRole(null)} />;
+  if (authUser?.role === 'siswa') {
+    return <SiswaDashboard user={authUser} onLogout={handleLogout} />;
   }
 
-  if (role === 'operator') {
-    return <OperatorDashboard onLogout={() => setRole(null)} />;
+  if (authUser?.role === 'operator') {
+    return <OperatorDashboard user={authUser} onLogout={handleLogout} />;
   }
 
   if (loginView) {

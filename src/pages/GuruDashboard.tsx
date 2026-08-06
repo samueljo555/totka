@@ -11,7 +11,7 @@ import {
   Eye
 } from 'lucide-react';
 
-const GuruDashboard = ({ onLogout }: { onLogout: () => void }) => {
+const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('bank');
   const [isAdding, setIsAdding] = useState(false);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -86,7 +86,7 @@ const GuruDashboard = ({ onLogout }: { onLogout: () => void }) => {
       <aside className="glass-panel" style={{ width: '280px', margin: '1rem', display: 'flex', flexDirection: 'column' }}>
         <div className="p-6">
           <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Guru Penulis</h2>
-          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>TKA SD Platform</p>
+          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{user?.school?.name || 'Sekolah Pusat / Belum Terdaftar'}</p>
         </div>
         
         <nav style={{ flex: 1, padding: '0 1rem' }}>

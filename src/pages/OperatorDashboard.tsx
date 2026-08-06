@@ -9,18 +9,29 @@ import {
   Download
 } from 'lucide-react';
 
-const OperatorDashboard = ({ onLogout }: { onLogout: () => void }) => {
+const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('students');
   const [isAddingSiswa, setIsAddingSiswa] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
 
+  // State for new siswa form
+  const [newNisn, setNewNisn] = useState('');
+  const [newFullName, setNewFullName] = useState('');
+  const [newClassName, setNewClassName] = useState('6A');
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const fetchStudents = () => {
+    fetch('http://localhost:3001/api/users')
+      .then(res => res.json())
+      .then(data => setStudents(data.filter((u: any) => u.role === 'siswa')))
+      .catch(err => console.error(err));
+  };
+
   useEffect(() => {
     if (activeTab === 'students') {
-      fetch('http://localhost:3001/api/users')
-        .then(res => res.json())
-        .then(data => setStudents(data.filter((u: any) => u.role === 'siswa')))
-        .catch(err => console.error(err));
+      fetchStudents();
     } else if (activeTab === 'monitoring') {
       fetch('http://localhost:3001/api/sessions')
         .then(res => res.json())
@@ -40,7 +51,7 @@ const OperatorDashboard = ({ onLogout }: { onLogout: () => void }) => {
       <aside className="glass-panel" style={{ width: '280px', margin: '1rem', display: 'flex', flexDirection: 'column' }}>
         <div className="p-6">
           <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Operator Sekolah</h2>
-          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>SDN 01 Pagi Jakarta</p>
+          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{user?.school?.name || 'Sekolah Pusat / Belum Terdaftar'}</p>
         </div>
         
         <nav style={{ flex: 1, padding: '0 1rem' }}>
@@ -169,20 +180,26 @@ const OperatorDashboard = ({ onLogout }: { onLogout: () => void }) => {
               <button className="btn-secondary" onClick={() => setIsAddingSiswa(false)}>Batal</button>
             </div>
 
+            {errorMsg && (
+              <div className="p-4 mb-4" style={{ background: 'rgba(255, 0, 0, 0.1)', color: 'red', borderRadius: '8px' }}>
+                {errorMsg}
+              </div>
+            )}
+
             <div className="input-group">
               <label className="input-label">Nomor Induk Siswa Nasional (NISN) - Sbg Username</label>
-              <input type="text" className="input-field" placeholder="Contoh: 0091234567" />
+              <input type="text" className="input-field" placeholder="Contoh: 0091234567" value={newNisn} onChange={e => setNewNisn(e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">Nama Lengkap</label>
-              <input type="text" className="input-field" placeholder="Ketik nama lengkap siswa" />
+              <input type="text" className="input-field" placeholder="Ketik nama lengkap siswa" value={newFullName} onChange={e => setNewFullName(e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">Kelas (Atribut Profil)</label>
-              <select className="input-field">
-                <option>6A</option>
-                <option>6B</option>
-                <option>6C</option>
+              <select className="input-field" value={newClassName} onChange={e => setNewClassName(e.target.value)}>
+                <option value="6A">6A</option>
+                <option value="6B">6B</option>
+                <option value="6C">6C</option>
               </select>
             </div>
             
@@ -190,8 +207,48 @@ const OperatorDashboard = ({ onLogout }: { onLogout: () => void }) => {
               <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Catatan: Password sementara akan digenerate otomatis oleh sistem dan dapat diunduh (download) oleh operator setelah siswa didaftarkan.</p>
             </div>
 
-            <button className="btn mt-6" style={{ width: '100%' }} onClick={() => setIsAddingSiswa(false)}>
-              Simpan Data Siswa
+            <button 
+              className="btn mt-6" 
+              style={{ width: '100%', opacity: isSaving ? 0.7 : 1 }} 
+              disabled={isSaving}
+              onClick={() => {
+                if (!newNisn || !newFullName) {
+                  setErrorMsg('NISN dan Nama Lengkap harus diisi.');
+                  return;
+                }
+                setIsSaving(true);
+                setErrorMsg('');
+                fetch('http://localhost:3001/api/users/siswa', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    nisn: newNisn,
+                    fullName: newFullName,
+                    className: newClassName,
+                    schoolNpsn: user?.school?.npsn
+                  })
+                })
+                .then(async res => {
+                  if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Terjadi kesalahan saat menyimpan');
+                  }
+                  return res.json();
+                })
+                .then(() => {
+                  setIsSaving(false);
+                  setIsAddingSiswa(false);
+                  setNewNisn('');
+                  setNewFullName('');
+                  fetchStudents();
+                })
+                .catch(err => {
+                  setErrorMsg(err.message);
+                  setIsSaving(false);
+                });
+              }}
+            >
+              {isSaving ? 'Menyimpan...' : 'Simpan Data Siswa'}
             </button>
           </div>
         )}

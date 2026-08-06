@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, LogOut, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 
-const SiswaDashboard = ({ onLogout }: { onLogout: () => void }) => {
+const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const [hasEnteredToken, setHasEnteredToken] = useState(false);
   const [token, setToken] = useState('');
   
@@ -211,8 +211,8 @@ const SiswaDashboard = ({ onLogout }: { onLogout: () => void }) => {
       {/* Navigation Sidebar */}
       <aside className="glass-panel" style={{ width: '320px', borderRadius: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(0,0,0,0.1)' }}>
         <div className="p-6" style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-          <h3 style={{ margin: 0 }}>Navigasi Soal</h3>
-          <p style={{ fontSize: '0.85rem', margin: '4px 0 0 0' }}>Siswa: Budi Santoso</p>
+          <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Siswa TKA</h2>
+          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{user?.school?.name || 'Sekolah Pusat / Belum Terdaftar'}</p>
         </div>
         
         <div className="p-6" style={{ overflowY: 'auto', flex: 1 }}>
