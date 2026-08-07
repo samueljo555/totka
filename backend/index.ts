@@ -4,6 +4,9 @@ import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -16,6 +19,31 @@ const port = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir)
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, uniqueSuffix + path.extname(file.originalname))
+  }
+});
+const upload = multer({ storage: storage });
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.post('/api/upload', upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No image uploaded' });
+  }
+  res.json({ imageUrl: `/uploads/${req.file.filename}` });
+});
 
 // Basic health check route
 app.get('/api/health', (req, res) => {
@@ -278,7 +306,7 @@ app.get('/api/questions', async (req, res) => {
 });
 
 app.post('/api/questions', async (req, res) => {
-  const { type, mapel, element, content, options, correctAnswer, authorId, readingId } = req.body;
+  const { type, mapel, element, content, imageUrl, options, correctAnswer, authorId, readingId } = req.body;
   if (!content || !type || !mapel || !element) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -290,6 +318,7 @@ app.post('/api/questions', async (req, res) => {
         mapel,
         element,
         content,
+        imageUrl: imageUrl || null,
         options: options || [],
         correctAnswer: correctAnswer || [],
         ...(authorId && { authorId }),

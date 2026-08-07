@@ -76,6 +76,8 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   const [questionText, setQuestionText] = useState('');
   const [selectedMapel, setSelectedMapel] = useState('Matematika (Numerasi)');
   const [selectedReadingId, setSelectedReadingId] = useState('');
+  const [questionImage, setQuestionImage] = useState<File | null>(null);
+  const [questionImageUrl, setQuestionImageUrl] = useState('');
   const [showPreview, setShowPreview] = useState(false);
 
   const handleSaveQuestion = async () => {
@@ -85,6 +87,23 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
     }
 
     try {
+      let finalImageUrl = questionImageUrl;
+      if (questionImage) {
+        const formData = new FormData();
+        formData.append('image', questionImage);
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          finalImageUrl = uploadData.imageUrl;
+        } else {
+          alert('Gagal mengupload gambar.');
+          return;
+        }
+      }
+
       const res = await fetch('/api/questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -93,6 +112,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
           mapel: selectedMapel,
           element: selectedElement,
           content: questionText,
+          imageUrl: finalImageUrl,
           options: options,
           correctAnswer: [], // currently mocked correct answer logic
           authorId: user?.id,
@@ -102,6 +122,8 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
       if (res.ok) {
         setIsAdding(false);
         setQuestionText('');
+        setQuestionImage(null);
+        setQuestionImageUrl('');
         setOptions([{ id: 1, text: '' }, { id: 2, text: '' }, { id: 3, text: '' }, { id: 4, text: '' }]);
         const data = await fetch('/api/questions').then(r => r.json());
         setQuestions(data);
@@ -267,12 +289,16 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                     </td>
                     <td className="p-4 font-semibold text-main">{soal.type || 'Pilihan Ganda'}</td>
                     <td className="p-4" style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {soal.content}
+                      <div className="flex items-center gap-2">
+                        {soal.imageUrl && <ImageIcon size={14} style={{ color: 'var(--primary-color)', flexShrink: 0 }} />}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{soal.content}</span>
+                      </div>
                     </td>
                     <td className="p-4 flex gap-2">
                       <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: 'var(--primary-color)' }} title="Lihat Pratinjau" onClick={() => {
                         setQuestionText(soal.content);
                         setQuestionType(soal.type || 'Pilihan Ganda Sederhana');
+                        setQuestionImageUrl(soal.imageUrl || '');
                         setOptions(soal.options && soal.options.length ? soal.options : [{ id: 1, text: 'Contoh A' }, { id: 2, text: 'Contoh B' }]);
                         setShowPreview(true);
                       }}>
@@ -375,9 +401,23 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                   <label className="input-label">Pertanyaan Soal</label>
                   <textarea className="input-field" rows={5} placeholder="Ketik pertanyaan di sini..." value={questionText} onChange={(e) => setQuestionText(e.target.value)}></textarea>
                   <div className="mt-4">
-                    <button className="btn-secondary" style={{ padding: '8px 12px', fontSize: '0.85rem', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input type="file" id="upload-image" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setQuestionImage(e.target.files[0]);
+                        setQuestionImageUrl(URL.createObjectURL(e.target.files[0]));
+                      }
+                    }} />
+                    <label htmlFor="upload-image" className="btn-secondary" style={{ padding: '8px 12px', fontSize: '0.85rem', display: 'inline-flex', gap: '8px', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
                       <ImageIcon size={16}/> Sisipkan Gambar
-                    </button>
+                    </label>
+                    {questionImageUrl && (
+                      <div className="mt-4" style={{ position: 'relative', display: 'inline-block' }}>
+                        <img src={questionImageUrl} alt="Preview Soal" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                        <button className="btn-secondary" style={{ position: 'absolute', top: '-10px', right: '-10px', padding: '4px', borderRadius: '50%', color: 'red', background: 'white', border: '1px solid #e2e8f0' }} onClick={() => { setQuestionImage(null); setQuestionImageUrl(''); }}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -527,6 +567,11 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
               <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', background: '#f8fafc' }}>
                 <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', whiteSpace: 'pre-wrap' }}>
                   {questionText || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>[Pertanyaan kosong...]</span>}
+                  {questionImageUrl && (
+                    <div className="mt-4">
+                      <img src={questionImageUrl} alt="Preview" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }} />
+                    </div>
+                  )}
                 </div>
                 
                 {questionType === 'Pilihan Ganda Sederhana' && (

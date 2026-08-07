@@ -9,7 +9,8 @@ import {
   Search,
   LineChart,
   Download,
-  Upload
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
@@ -737,7 +738,12 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         <input type="checkbox" style={{ marginTop: '5px', width: '18px', height: '18px' }} />
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-color)', marginBottom: '4px' }}>ID: {q.id.substring(0, 8)}</div>
-                          <div style={{ fontSize: '0.95rem', lineHeight: '1.5', color: '#334155' }}>{q.content?.length > 120 ? q.content.substring(0, 120) + '...' : q.content}</div>
+                          <div style={{ fontSize: '0.95rem', lineHeight: '1.5', color: '#334155', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                            {q.imageUrl && <ImageIcon size={16} style={{ color: 'var(--primary-color)', flexShrink: 0, marginTop: '2px' }} />}
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {q.content?.length > 120 ? q.content.substring(0, 120) + '...' : q.content}
+                            </span>
+                          </div>
                           <div className="flex gap-2 mt-3">
                             <span className="tag" style={{ fontSize: '0.75rem', padding: '4px 10px', background: 'var(--primary-light)', color: 'white', border: 'none' }}>{q.type}</span>
                             <span className="tag" style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#e2e8f0', color: '#475569', border: 'none' }}>{q.element}</span>

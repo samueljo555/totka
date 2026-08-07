@@ -42,6 +42,7 @@ model Question {
   mapel         String
   element       String
   content       String   @db.Text
+  imageUrl      String?
   options       Json
   correctAnswer Json
   authorId      String?
