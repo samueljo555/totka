@@ -21,6 +21,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [packages, setPackages] = useState<any[]>([]);
   const [schools, setSchools] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
+  const [questionPage, setQuestionPage] = useState(1);
+  const questionsPerPage = 5;
 
   // School State
   const [isAddingSchool, setIsAddingSchool] = useState(false);
@@ -696,22 +698,34 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                   <input type="text" className="input-field" placeholder="Cari ID soal atau teks..." style={{ paddingLeft: '36px' }} />
                 </div>
-                
-                <div style={{ height: '300px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                  {questions.length > 0 ? questions.map((q, idx) => (
-                    <label key={q.id} className="flex items-start gap-3 p-3" style={{ borderBottom: '1px solid #e2e8f0', cursor: 'pointer', background: idx % 2 === 0 ? '#f8fafc' : 'white' }}>
-                      <input type="checkbox" style={{ marginTop: '4px' }} />
-                      <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-color)' }}>ID: {q.id.substring(0, 8)}</div>
-                        <div style={{ fontSize: '0.9rem', marginTop: '2px' }}>{q.content?.length > 100 ? q.content.substring(0, 100) + '...' : q.content}</div>
-                        <div className="flex gap-2 mt-2">
-                          <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>{q.type}</span>
-                          <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px', background: '#f1f5f9', color: '#64748b' }}>{q.element}</span>
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', background: 'white' }}>
+                  <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Menampilkan soal (Total: {questions.length})</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {questions.slice((questionPage - 1) * questionsPerPage, questionPage * questionsPerPage).map((q, idx) => ( 
+                      <label key={q.id} className="flex items-start gap-4 p-5" style={{ borderBottom: '1px solid #e2e8f0', cursor: 'pointer', background: idx % 2 === 0 ? '#f8fafc' : 'white', transition: 'all 0.2s ease' }}>
+                        <input type="checkbox" style={{ marginTop: '5px', width: '18px', height: '18px' }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-color)', marginBottom: '4px' }}>ID: {q.id.substring(0, 8)}</div>
+                          <div style={{ fontSize: '0.95rem', lineHeight: '1.5', color: '#334155' }}>{q.content?.length > 120 ? q.content.substring(0, 120) + '...' : q.content}</div>
+                          <div className="flex gap-2 mt-3">
+                            <span className="tag" style={{ fontSize: '0.75rem', padding: '4px 10px', background: 'var(--primary-light)', color: 'white', border: 'none' }}>{q.type}</span>
+                            <span className="tag" style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#e2e8f0', color: '#475569', border: 'none' }}>{q.element}</span>
+                          </div>
                         </div>
-                      </div>
-                    </label>
-                  )) : (
-                    <div className="p-4 text-center text-muted">Belum ada soal di bank soal.</div>
+                      </label>
+                    ))}
+                    {questions.length === 0 && (
+                      <div className="p-8 text-center text-muted">Belum ada soal di bank soal.</div>
+                    )}
+                  </div>
+                  {questions.length > questionsPerPage && (
+                    <div className="flex justify-between items-center p-4" style={{ borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                      <button className="btn-secondary" disabled={questionPage === 1} onClick={() => setQuestionPage(p => Math.max(1, p - 1))} style={{ padding: '6px 12px', fontSize: '0.85rem', opacity: questionPage === 1 ? 0.5 : 1 }}>Sebelumnya</button>
+                      <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Halaman {questionPage} dari {Math.ceil(questions.length / questionsPerPage)}</span>
+                      <button className="btn-secondary" disabled={questionPage >= Math.ceil(questions.length / questionsPerPage)} onClick={() => setQuestionPage(p => Math.min(Math.ceil(questions.length / questionsPerPage), p + 1))} style={{ padding: '6px 12px', fontSize: '0.85rem', opacity: questionPage >= Math.ceil(questions.length / questionsPerPage) ? 0.5 : 1 }}>Selanjutnya</button>
+                    </div>
                   )}
                 </div>
                 
