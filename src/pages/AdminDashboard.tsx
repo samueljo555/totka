@@ -18,8 +18,15 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
+  const [userPage, setUserPage] = useState(1);
+  const usersPerPage = 10;
+  
   const [packages, setPackages] = useState<any[]>([]);
+  
   const [schools, setSchools] = useState<any[]>([]);
+  const [schoolPage, setSchoolPage] = useState(1);
+  const schoolsPerPage = 10;
+
   const [questions, setQuestions] = useState<any[]>([]);
   const [questionPage, setQuestionPage] = useState(1);
   const questionsPerPage = 5;
@@ -236,35 +243,35 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
-                <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
-                  <th className="p-4">Nama / Institusi</th>
-                  <th className="p-4">Peran</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Aksi</th>
+                <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
+                  <th className="p-5" style={{ fontWeight: 600 }}>Nama / Institusi</th>
+                  <th className="p-5" style={{ fontWeight: 600 }}>Peran</th>
+                  <th className="p-5" style={{ fontWeight: 600 }}>Status</th>
+                  <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {users.length > 0 ? users.map((u, i) => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td className="p-4 font-semibold text-main">
+                {users.length > 0 ? users.slice((userPage - 1) * usersPerPage, userPage * usersPerPage).map((u, i) => (
+                  <tr key={u.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td className="p-5 font-semibold text-main">
                       {u.fullName} <br/>
                       <span className="text-muted" style={{ fontWeight: 'normal', fontSize: '0.85rem' }}>{u.school?.name || 'Pusat'}</span>
                     </td>
-                    <td className="p-4">
-                      <span className="tag">
+                    <td className="p-5">
+                      <span className="tag" style={{ padding: '6px 12px', fontSize: '0.85rem' }}>
                         {u.role === 'super_admin' ? 'Super Admin' : u.role === 'guru' ? 'Guru (Author)' : u.role === 'operator' ? 'Operator' : 'Siswa'}
                       </span>
                     </td>
-                    <td className="p-4">
+                    <td className="p-5">
                       <span style={{ 
                         color: 'green',
                         background: 'rgba(0,128,0,0.1)',
-                        padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 600
+                        padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600
                       }}>
                         Aktif
                       </span>
                     </td>
-                    <td className="p-4">
+                    <td className="p-5">
                       <div className="flex gap-2">
                         <button 
                           className="btn-secondary" 
@@ -300,11 +307,20 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={4} className="p-4 text-center text-muted">Memuat data dari API...</td>
+                    <td colSpan={4} className="p-5 text-center text-muted">Belum ada pengguna.</td>
                   </tr>
                 )}
               </tbody>
             </table>
+            
+            {/* Pagination for Users */}
+            {users.length > usersPerPage && (
+              <div className="flex justify-between items-center mt-6 p-4" style={{ background: '#f8fafc', borderRadius: '8px' }}>
+                <button className="btn-secondary" disabled={userPage === 1} onClick={() => setUserPage(p => Math.max(1, p - 1))} style={{ opacity: userPage === 1 ? 0.5 : 1 }}>Sebelumnya</button>
+                <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Halaman {userPage} dari {Math.ceil(users.length / usersPerPage)}</span>
+                <button className="btn-secondary" disabled={userPage >= Math.ceil(users.length / usersPerPage)} onClick={() => setUserPage(p => Math.min(Math.ceil(users.length / usersPerPage), p + 1))} style={{ opacity: userPage >= Math.ceil(users.length / usersPerPage) ? 0.5 : 1 }}>Selanjutnya</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -512,51 +528,64 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
-                <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
-                  <th className="p-4">Nama Sekolah</th>
-                  <th className="p-4">Wilayah</th>
-                  <th className="p-4">Aksi</th>
+                <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
+                  <th className="p-5" style={{ fontWeight: 600 }}>NPSN</th>
+                  <th className="p-5" style={{ fontWeight: 600 }}>Nama Sekolah</th>
+                  <th className="p-5" style={{ fontWeight: 600 }}>Wilayah</th>
+                  <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {schools.length > 0 ? schools.map((s, i) => (
-                  <tr key={s.npsn} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td className="p-4 font-semibold text-main">{s.name} <br/><span className="text-muted" style={{ fontWeight: 'normal', fontSize: '0.85rem' }}>NPSN: {s.npsn}</span></td>
-                    <td className="p-4">{s.region || '-'}</td>
-                    <td className="p-4">
-                      <button 
-                        className="btn-secondary" 
-                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
-                        onClick={() => {
-                          setEditingSchool(s);
-                          setSchoolNpsnInput(s.npsn);
-                          setSchoolNameInput(s.name);
-                          setSchoolRegionInput(s.region || '');
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        className="btn-secondary" 
-                        style={{ padding: '6px 12px', fontSize: '0.85rem', marginLeft: '8px', color: 'red', borderColor: 'red' }}
-                        onClick={() => {
-                          if (window.confirm('Hapus sekolah ini?')) {
-                            fetch(`/api/schools/${s.npsn}`, { method: 'DELETE' })
-                              .then(() => fetchSchools());
-                          }
-                        }}
-                      >
-                        Hapus
-                      </button>
+                {schools.length > 0 ? schools.slice((schoolPage - 1) * schoolsPerPage, schoolPage * schoolsPerPage).map((s, i) => (
+                  <tr key={s.npsn} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td className="p-5 font-semibold text-muted">{s.npsn}</td>
+                    <td className="p-5 font-semibold text-main">{s.name}</td>
+                    <td className="p-5">{s.region || '-'}</td>
+                    <td className="p-5">
+                      <div className="flex gap-2">
+                        <button 
+                          className="btn-secondary" 
+                          style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                          onClick={() => {
+                            setEditingSchool(s);
+                            setSchoolNpsnInput(s.npsn);
+                            setSchoolNameInput(s.name);
+                            setSchoolRegionInput(s.region || '');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          className="btn-secondary" 
+                          style={{ padding: '6px 12px', fontSize: '0.85rem', color: '#d32f2f', background: 'rgba(255,0,0,0.05)' }}
+                          onClick={() => {
+                            if (window.confirm('Hapus sekolah ini?')) {
+                              fetch(`/api/schools/${s.npsn}`, { method: 'DELETE' })
+                                .then(() => fetchSchools());
+                            }
+                          }}
+                        >
+                          Hapus
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={3} className="p-4 text-center text-muted">Belum ada data sekolah.</td>
+                    <td colSpan={4} className="p-5 text-center text-muted">Belum ada data sekolah.</td>
                   </tr>
                 )}
               </tbody>
             </table>
+            
+            {/* Pagination for Schools */}
+            {schools.length > schoolsPerPage && (
+              <div className="flex justify-between items-center mt-6 p-4" style={{ background: '#f8fafc', borderRadius: '8px' }}>
+                <button className="btn-secondary" disabled={schoolPage === 1} onClick={() => setSchoolPage(p => Math.max(1, p - 1))} style={{ opacity: schoolPage === 1 ? 0.5 : 1 }}>Sebelumnya</button>
+                <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Halaman {schoolPage} dari {Math.ceil(schools.length / schoolsPerPage)}</span>
+                <button className="btn-secondary" disabled={schoolPage >= Math.ceil(schools.length / schoolsPerPage)} onClick={() => setSchoolPage(p => Math.min(Math.ceil(schools.length / schoolsPerPage), p + 1))} style={{ opacity: schoolPage >= Math.ceil(schools.length / schoolsPerPage) ? 0.5 : 1 }}>Selanjutnya</button>
+              </div>
+            )}
           </div>
         )}
 
