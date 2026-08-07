@@ -1,144 +1,92 @@
 import React, { useState } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './index.css';
+import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import GuruDashboard from './pages/GuruDashboard';
 import SiswaDashboard from './pages/SiswaDashboard';
 import OperatorDashboard from './pages/OperatorDashboard';
 
 function App() {
+  const navigate = useNavigate();
   const [authUser, setAuthUser] = useState<any | null>(() => {
     const saved = localStorage.getItem('tka_auth_user');
     return saved ? JSON.parse(saved) : null;
   }); // This holds the authenticated user data
-  const [loginView, setLoginView] = useState<string | null>(null); // Shows the login form for a specific role
-  
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    try {
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await response.json();
-      
-      if (response.ok) {
-        setAuthUser(data.user); // Store the full user object
-        localStorage.setItem('tka_auth_user', JSON.stringify(data.user));
-        setLoginView(null);
-      } else {
-        setError(data.error || 'Login gagal');
-      }
-    } catch (err) {
-      setError('Koneksi ke server gagal. Pastikan backend sudah menyala.');
-    }
+  const handleLogin = (user: any) => {
+    setAuthUser(user);
+    localStorage.setItem('tka_auth_user', JSON.stringify(user));
   };
-
-  const roles = [
-    { id: 'siswa', title: 'Siswa', description: 'Masuk dengan NISN dan Token untuk mulai ujian', icon: '🎓' },
-    { id: 'operator', title: 'Operator Sekolah', description: 'Kelola data siswa dan pantau ujian', icon: '🏫' },
-    { id: 'guru', title: 'Guru Penulis', description: 'Akses bank soal dan perumusan', icon: '✍️' },
-    { id: 'super_admin', title: 'Super Admin', description: 'Kendali penuh sistem try out', icon: '⚙️' }
-  ];
 
   const handleLogout = () => {
     setAuthUser(null);
     localStorage.removeItem('tka_auth_user');
+    navigate('/');
   };
 
-  if (authUser?.role === 'super_admin' || authUser?.role === 'admin') {
-    return <AdminDashboard user={authUser} onLogout={handleLogout} />;
-  }
-  
-  if (authUser?.role === 'guru') {
-    return <GuruDashboard user={authUser} onLogout={handleLogout} />;
-  }
+  // Protected Route Wrapper
+  const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) => {
+    if (!authUser) {
+      return <Navigate to="/" replace />;
+    }
+    
+    // For admin, handle 'super_admin' and 'admin' interchangeably for now
+    const userRole = authUser.role === 'super_admin' ? 'admin' : authUser.role;
+    
+    if (!allowedRoles.includes(userRole)) {
+      return <Navigate to="/" replace />;
+    }
 
-  if (authUser?.role === 'siswa') {
-    return <SiswaDashboard user={authUser} onLogout={handleLogout} />;
-  }
-
-  if (authUser?.role === 'operator') {
-    return <OperatorDashboard user={authUser} onLogout={handleLogout} />;
-  }
-
-  if (loginView) {
-    return (
-      <div className="app-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <div className="login-card glass-panel animate-fade-in" style={{ padding: '2.5rem', width: '100%', maxWidth: '400px' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: '0.5rem', color: 'var(--primary-dark)' }}>Login {roles.find(r => r.id === loginView)?.title}</h2>
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: '2rem' }}>Silakan masukkan kredensial Anda</p>
-          
-          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {error && <div style={{ color: 'red', background: 'rgba(255,0,0,0.1)', padding: '10px', borderRadius: '8px', fontSize: '0.9rem', textAlign: 'center' }}>{error}</div>}
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label htmlFor="username" style={{ fontWeight: 600, fontSize: '0.9rem' }}>Username / NISN</label>
-              <input 
-                id="username"
-                type="text" 
-                className="input-field" 
-                placeholder="Masukkan username" 
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label htmlFor="password" style={{ fontWeight: 600, fontSize: '0.9rem' }}>Password</label>
-              <input 
-                id="password"
-                type="password" 
-                className="input-field" 
-                placeholder="Masukkan password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-
-            <button type="submit" className="btn" style={{ marginTop: '1rem', width: '100%', padding: '0.8rem' }}>
-              Masuk ke Sistem
-            </button>
-            <button type="button" className="btn-secondary" style={{ width: '100%', padding: '0.8rem' }} onClick={() => setLoginView(null)}>
-              Kembali
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
+    return <>{children}</>;
+  };
 
   return (
-    <div className="app-container" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-      <header className="text-center animate-fade-in" style={{ marginBottom: '3rem' }}>
-        <div className="tag mb-4">Sistem Try Out Terpadu</div>
-        <h1>Try Out TKA - Jenjang SD</h1>
-        <p style={{ maxWidth: '600px', margin: '0 auto', fontSize: '1.1rem' }}>
-          Platform simulasi Tes Kemampuan Akademik (TKA) untuk Sekolah Dasar.
-          Pilih peran Anda untuk masuk ke dalam sistem.
-        </p>
-      </header>
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login/:roleId" element={<LoginPage onLogin={handleLogin} />} />
+      
+      {/* Protected Routes */}
+      <Route 
+        path="/admin/*" 
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
+            <AdminDashboard user={authUser} onLogout={handleLogout} />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/guru/*" 
+        element={
+          <ProtectedRoute allowedRoles={['guru']}>
+            <GuruDashboard user={authUser} onLogout={handleLogout} />
+          </ProtectedRoute>
+        } 
+      />
 
-      <div className="dashboard-grid animate-fade-in">
-        {roles.map((r) => (
-          <div key={r.id} className="glass-panel card flex flex-col items-center text-center">
-            <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>{r.icon}</div>
-            <h3 style={{ fontSize: '1.4rem' }}>{r.title}</h3>
-            <p style={{ marginBottom: '1.5rem', flexGrow: 1 }}>{r.description}</p>
-            <button className="btn btn-secondary" onClick={() => { setLoginView(r.id); setError(''); setUsername(''); setPassword(''); }} style={{ width: '100%' }}>
-              Masuk sebagai {r.title}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
+      <Route 
+        path="/siswa/*" 
+        element={
+          <ProtectedRoute allowedRoles={['siswa']}>
+            <SiswaDashboard user={authUser} onLogout={handleLogout} />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/operator/*" 
+        element={
+          <ProtectedRoute allowedRoles={['operator']}>
+            <OperatorDashboard user={authUser} onLogout={handleLogout} />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Fallback route */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
