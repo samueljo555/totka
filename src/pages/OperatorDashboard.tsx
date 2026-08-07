@@ -23,7 +23,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const [errorMsg, setErrorMsg] = useState('');
 
   const fetchStudents = () => {
-    fetch('http://localhost:3001/api/users')
+    fetch('/api/users')
       .then(res => res.json())
       .then(data => setStudents(data.filter((u: any) => u.role === 'siswa')))
       .catch(err => console.error(err));
@@ -33,7 +33,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
     if (activeTab === 'students') {
       fetchStudents();
     } else if (activeTab === 'monitoring') {
-      fetch('http://localhost:3001/api/sessions')
+      fetch('/api/sessions')
         .then(res => res.json())
         .then(data => setSessions(data))
         .catch(err => console.error(err));
@@ -66,7 +66,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
       }
 
       try {
-        const res = await fetch('http://localhost:3001/api/users/siswa/batch', {
+        const res = await fetch('/api/users/siswa/batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -267,7 +267,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 }
                 setIsSaving(true);
                 setErrorMsg('');
-                fetch('http://localhost:3001/api/users/siswa', {
+                fetch('/api/users/siswa', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({

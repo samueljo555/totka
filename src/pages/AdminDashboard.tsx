@@ -39,14 +39,14 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [userErrorMsg, setUserErrorMsg] = useState('');
 
   const fetchUsers = () => {
-    fetch('http://localhost:3001/api/users')
+    fetch('/api/users')
       .then(res => res.json())
       .then(data => setUsers(data))
       .catch(err => console.error("Error fetching users:", err));
   };
 
   const fetchSchools = () => {
-    fetch('http://localhost:3001/api/schools')
+    fetch('/api/schools')
       .then(res => res.json())
       .then(data => setSchools(data))
       .catch(err => console.error("Error fetching schools:", err));
@@ -59,7 +59,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     } else if (activeTab === 'schools') {
       fetchSchools();
     } else if (activeTab === 'packages') {
-      fetch('http://localhost:3001/api/packages')
+      fetch('/api/packages')
         .then(res => res.json())
         .then(data => setPackages(data))
         .catch(err => console.error("Error fetching packages:", err));
@@ -92,7 +92,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       }
   
       try {
-        const res = await fetch('http://localhost:3001/api/schools/batch', {
+        const res = await fetch('/api/schools/batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ schools: schoolsData })
@@ -257,20 +257,37 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       </span>
                     </td>
                     <td className="p-4">
-                      <button 
-                        className="btn-secondary" 
-                        style={{ padding: '6px 12px', fontSize: '0.85rem' }}
-                        onClick={() => {
-                          setEditingUser(u);
-                          setNewUsername(u.username);
-                          setNewPassword(u.password);
-                          setNewFullName(u.fullName);
-                          setNewRole(u.role);
-                          setNewSchoolNpsn(u.schoolNpsn || '');
-                        }}
-                      >
-                        Edit
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          className="btn-secondary" 
+                          style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                          onClick={() => {
+                            setEditingUser(u);
+                            setNewUsername(u.username);
+                            setNewPassword(u.password);
+                            setNewFullName(u.fullName);
+                            setNewRole(u.role);
+                            setNewSchoolNpsn(u.schoolNpsn || '');
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          className="btn-secondary" 
+                          style={{ padding: '6px 12px', fontSize: '0.85rem', color: '#d32f2f', background: 'rgba(255,0,0,0.05)' }}
+                          onClick={() => {
+                            if (window.confirm(`Yakin ingin menghapus pengguna ${u.fullName}?`)) {
+                              fetch(`/api/users/${u.id}`, { method: 'DELETE' })
+                                .then(res => {
+                                  if (res.ok) fetchUsers();
+                                  else alert('Gagal menghapus pengguna');
+                                });
+                            }
+                          }}
+                        >
+                          Hapus
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )) : (
@@ -339,7 +356,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 }
                 setIsSavingUser(true);
                 setUserErrorMsg('');
-                fetch('http://localhost:3001/api/users', {
+                fetch('/api/users', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -433,7 +450,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 }
                 setIsSavingUser(true);
                 setUserErrorMsg('');
-                fetch(`http://localhost:3001/api/users/${editingUser.id}`, {
+                fetch(`/api/users/${editingUser.id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -516,7 +533,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         style={{ padding: '6px 12px', fontSize: '0.85rem', marginLeft: '8px', color: 'red', borderColor: 'red' }}
                         onClick={() => {
                           if (window.confirm('Hapus sekolah ini?')) {
-                            fetch(`http://localhost:3001/api/schools/${s.npsn}`, { method: 'DELETE' })
+                            fetch(`/api/schools/${s.npsn}`, { method: 'DELETE' })
                               .then(() => fetchSchools());
                           }
                         }}
@@ -560,7 +577,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               onClick={() => {
                 if (!schoolNameInput || !schoolNpsnInput) return;
                 setIsSavingSchool(true);
-                const url = editingSchool ? `http://localhost:3001/api/schools/${editingSchool.npsn}` : 'http://localhost:3001/api/schools';
+                const url = editingSchool ? `/api/schools/${editingSchool.npsn}` : '/api/schools';
                 const method = editingSchool ? 'PUT' : 'POST';
                 fetch(url, {
                   method,

@@ -113,6 +113,17 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
+app.delete('/api/users/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    await prisma.user.delete({ where: { id } });
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error("Delete user error:", error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 // School CRUD
 app.get('/api/schools', async (req, res) => {
   try {

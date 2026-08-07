@@ -18,7 +18,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
 
   useEffect(() => {
     if (activeTab === 'bank') {
-      fetch('http://localhost:3001/api/questions')
+      fetch('/api/questions')
         .then(res => res.json())
         .then(data => setQuestions(data))
         .catch(err => console.error("Error fetching questions:", err));

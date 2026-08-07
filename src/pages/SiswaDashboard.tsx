@@ -14,7 +14,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [isFinished, setIsFinished] = useState(false);
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/questions')
+    fetch('/api/questions')
       .then(res => res.json())
       .then(data => setQuestions(data))
       .catch(err => console.error("Error fetching exam questions:", err));
