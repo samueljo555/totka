@@ -352,6 +352,83 @@ app.get('/api/sessions', async (req, res) => {
   }
 });
 
+app.post('/api/sessions/start', async (req, res) => {
+  const { studentId, token } = req.body;
+  if (!studentId || !token) {
+    return res.status(400).json({ error: 'Missing studentId or token' });
+  }
+
+  try {
+    let packageObj = await prisma.package.findFirst({ where: { token } });
+    
+    // For development, auto-create a mock package if token is TEST123
+    if (!packageObj && token === 'TEST123') {
+       packageObj = await prisma.package.create({
+         data: {
+           name: 'Paket Try Out Simulasi',
+           mapel: 'Matematika',
+           token: 'TEST123',
+           durationMinutes: 90
+         }
+       });
+       const allQuestions = await prisma.question.findMany();
+       if (allQuestions.length > 0) {
+         await prisma.packageQuestion.createMany({
+           data: allQuestions.map(q => ({ packageId: packageObj!.id, questionId: q.id }))
+         });
+       }
+    } else if (!packageObj) {
+      return res.status(404).json({ error: 'Token paket tidak valid' });
+    }
+
+    let session = await prisma.examSession.findUnique({
+      where: { studentId_packageId: { studentId, packageId: packageObj.id } }
+    });
+
+    if (!session) {
+      session = await prisma.examSession.create({
+        data: {
+          studentId,
+          packageId: packageObj.id,
+          status: 'sedang_mengerjakan'
+        }
+      });
+    }
+
+    const packageQuestions = await prisma.packageQuestion.findMany({
+      where: { packageId: packageObj.id },
+      include: { question: true }
+    });
+    const questions = packageQuestions.map(pq => pq.question);
+
+    const existingAnswers = await prisma.answer.findMany({
+      where: { sessionId: session.id }
+    });
+
+    res.json({ session, package: packageObj, questions, existingAnswers });
+  } catch (error) {
+    console.error("Start session error:", error);
+    res.status(500).json({ error: 'Failed to start session' });
+  }
+});
+
+app.post('/api/sessions/:sessionId/answer', async (req, res) => {
+  const { sessionId } = req.params;
+  const { questionId, answerData } = req.body;
+
+  try {
+    const answer = await prisma.answer.upsert({
+      where: { sessionId_questionId: { sessionId, questionId } },
+      update: { answerData },
+      create: { sessionId, questionId, answerData }
+    });
+    res.json(answer);
+  } catch (error) {
+    console.error("Save answer error:", error);
+    res.status(500).json({ error: 'Failed to save answer' });
+  }
+});
+
 app.post('/api/users/siswa', async (req, res) => {
   const { nisn, fullName, className, schoolNpsn } = req.body;
   if (!nisn || !fullName) {

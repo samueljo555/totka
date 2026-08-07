@@ -4,21 +4,17 @@ import { Clock, LogOut, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-r
 const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const [hasEnteredToken, setHasEnteredToken] = useState(false);
   const [token, setToken] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   
   // Engine State
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(1);
   const [questions, setQuestions] = useState<any[]>([]);
   const totalQuestions = questions.length;
   const [answers, setAnswers] = useState<Record<number, any>>({});
   const [timeLeft, setTimeLeft] = useState(90 * 60); // 90 minutes
   const [isFinished, setIsFinished] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/questions')
-      .then(res => res.json())
-      .then(data => setQuestions(data))
-      .catch(err => console.error("Error fetching exam questions:", err));
-  }, []);
 
   // Timer effect
   useEffect(() => {
@@ -38,8 +34,59 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleAnswer = (qNumber: number, answer: any) => {
+  const handleAnswer = async (qNumber: number, answer: any) => {
     setAnswers(prev => ({ ...prev, [qNumber]: answer }));
+    if (sessionId && questions[qNumber - 1]) {
+      try {
+        await fetch(`/api/sessions/${sessionId}/answer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ questionId: questions[qNumber - 1].id, answerData: answer })
+        });
+      } catch (err) {
+        console.error("Failed to auto-save answer:", err);
+      }
+    }
+  };
+
+  const handleStartExam = async () => {
+    if (token.length < 3) return;
+    setIsLoading(true);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/sessions/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: user.id, token })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal memulai ujian');
+
+      setSessionId(data.session.id);
+      setQuestions(data.questions || []);
+      
+      // Map existing answers to our qNumber format
+      const loadedAnswers: Record<number, any> = {};
+      if (data.questions && data.existingAnswers) {
+        data.questions.forEach((q: any, idx: number) => {
+          const ans = data.existingAnswers.find((a: any) => a.questionId === q.id);
+          if (ans) loadedAnswers[idx + 1] = ans.answerData;
+        });
+      }
+      setAnswers(loadedAnswers);
+      
+      // Calculate remaining time
+      const startTime = new Date(data.session.startTime).getTime();
+      const elapsedSecs = Math.floor((Date.now() - startTime) / 1000);
+      const durationSecs = (data.package?.durationMinutes || 90) * 60;
+      setTimeLeft(Math.max(0, durationSecs - elapsedSecs));
+
+      setHasEnteredToken(true);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (!hasEnteredToken) {
@@ -49,8 +96,10 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           <h2 className="mb-2">Mulai Ujian</h2>
           <p className="mb-6">Silakan masukkan Token Ujian yang diberikan oleh Operator Sekolah Anda.</p>
           
+          {errorMsg && <div className="p-3 mb-4 text-sm text-red-600 bg-red-100 rounded-lg">{errorMsg}</div>}
+          
           <div className="input-group text-left">
-            <label className="input-label">Token Ujian</label>
+            <label className="input-label">Token Ujian (Ketik TEST123 untuk ujicoba)</label>
             <input 
               type="text" 
               className="input-field" 
@@ -63,12 +112,11 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           
           <button 
             className="btn mt-4" 
-            style={{ width: '100%' }}
-            onClick={() => {
-              if (token.length > 3) setHasEnteredToken(true);
-            }}
+            style={{ width: '100%', opacity: isLoading ? 0.7 : 1 }}
+            disabled={isLoading}
+            onClick={handleStartExam}
           >
-            Mulai Kerjakan
+            {isLoading ? 'Memproses...' : 'Mulai Kerjakan'}
           </button>
           
           <button className="btn-secondary mt-4" style={{ width: '100%' }} onClick={onLogout}>

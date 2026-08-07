@@ -57,6 +57,7 @@ model Question {
 
 model Package {
   id                 String   @id @default(uuid())
+  token              String?
   name               String
   mapel              String
   durationMinutes    Int      @default(90)
