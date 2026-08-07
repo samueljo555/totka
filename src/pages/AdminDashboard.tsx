@@ -20,6 +20,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [users, setUsers] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
   const [schools, setSchools] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]);
 
   // School State
   const [isAddingSchool, setIsAddingSchool] = useState(false);
@@ -63,6 +64,11 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         .then(res => res.json())
         .then(data => setPackages(data))
         .catch(err => console.error("Error fetching packages:", err));
+
+      fetch('/api/questions')
+        .then(res => res.json())
+        .then(data => setQuestions(data))
+        .catch(err => console.error("Error fetching questions:", err));
     }
   }, [activeTab]);
 
@@ -692,19 +698,21 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </div>
                 
                 <div style={{ height: '300px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                  {[1, 2, 3, 4, 5, 6].map((num) => (
-                    <label key={num} className="flex items-start gap-3 p-3" style={{ borderBottom: '1px solid #e2e8f0', cursor: 'pointer', background: num % 2 === 0 ? '#f8fafc' : 'white' }}>
+                  {questions.length > 0 ? questions.map((q, idx) => (
+                    <label key={q.id} className="flex items-start gap-3 p-3" style={{ borderBottom: '1px solid #e2e8f0', cursor: 'pointer', background: idx % 2 === 0 ? '#f8fafc' : 'white' }}>
                       <input type="checkbox" style={{ marginTop: '4px' }} />
                       <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-color)' }}>ID: Q-{1000 + num}</div>
-                        <div style={{ fontSize: '0.9rem', marginTop: '2px' }}>Cuplikan soal nomor {num} dari bank soal akan tampil di sini.</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-color)' }}>ID: {q.id.substring(0, 8)}</div>
+                        <div style={{ fontSize: '0.9rem', marginTop: '2px' }}>{q.content?.length > 100 ? q.content.substring(0, 100) + '...' : q.content}</div>
                         <div className="flex gap-2 mt-2">
-                          <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>PG Sederhana</span>
-                          <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px', background: '#f1f5f9', color: '#64748b' }}>Bilangan</span>
+                          <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>{q.type}</span>
+                          <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px', background: '#f1f5f9', color: '#64748b' }}>{q.element}</span>
                         </div>
                       </div>
                     </label>
-                  ))}
+                  )) : (
+                    <div className="p-4 text-center text-muted">Belum ada soal di bank soal.</div>
+                  )}
                 </div>
                 
                 <div className="flex justify-between items-center mt-4 p-4" style={{ background: 'rgba(0, 82, 204, 0.05)', borderRadius: '8px' }}>
