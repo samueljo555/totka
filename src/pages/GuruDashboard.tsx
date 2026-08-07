@@ -8,22 +8,58 @@ import {
   Image as ImageIcon,
   Edit,
   Trash2,
-  Eye
+  Eye,
+  BookOpen,
+  BarChart2,
+  CheckCircle2,
+  AlertCircle,
+  Edit2
 } from 'lucide-react';
 
 const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('bank');
   const [isAdding, setIsAdding] = useState(false);
   const [questions, setQuestions] = useState<any[]>([]);
+  const [readings, setReadings] = useState<any[]>([]);
+  const [isAddingReading, setIsAddingReading] = useState(false);
+  const [readingTitle, setReadingTitle] = useState('');
+  const [readingContent, setReadingContent] = useState('');
 
   useEffect(() => {
-    if (activeTab === 'bank') {
-      fetch('/api/questions')
+    fetch('/api/questions')
+      .then(res => res.json())
+      .then(data => setQuestions(data))
+      .catch(err => console.error(err));
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'bacaan') {
+      fetch('/api/readings')
         .then(res => res.json())
-        .then(data => setQuestions(data))
-        .catch(err => console.error("Error fetching questions:", err));
+        .then(data => setReadings(data))
+        .catch(err => console.error(err));
     }
   }, [activeTab]);
+
+  const handleSaveReading = async () => {
+    try {
+      const res = await fetch('/api/readings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: readingTitle, content: readingContent, authorId: user?.id })
+      });
+      if (res.ok) {
+        setIsAddingReading(false);
+        setReadingTitle('');
+        setReadingContent('');
+        const data = await fetch('/api/readings').then(r => r.json());
+        setReadings(data);
+      }
+    } catch(err) {
+      alert('Gagal menyimpan bacaan');
+    }
+  };
+
   const [questionType, setQuestionType] = useState('Pilihan Ganda Sederhana');
   
   const [elements, setElements] = useState(['Bilangan', 'Geometri & Pengukuran', 'Data']);
@@ -281,9 +317,10 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 <div className="input-group">
                   <label className="input-label">Tautan Bacaan (Opsional)</label>
                   <select className="input-field">
-                    <option>-- Tidak Terpaut Bacaan --</option>
-                    <option>Teks Fiksi: "Petualangan Kancil"</option>
-                    <option>Teks Informasi: "Siklus Air"</option>
+                    <option value="">-- Tidak Terpaut Bacaan --</option>
+                    {readings.map(r => (
+                      <option key={r.id} value={r.id}>{r.title}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -365,11 +402,71 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
           </div>
         )}
 
-        {activeTab === 'bacaan' && (
-          <div className="animate-fade-in glass-panel p-8 flex flex-col items-center justify-center text-center" style={{ minHeight: '400px' }}>
-            <FileText size={48} style={{ color: 'var(--primary-light)', marginBottom: '1rem' }} />
-            <h2>Manajemen Teks Bacaan Bersama</h2>
-            <p style={{ maxWidth: '400px' }}>Modul ini mengelola bacaan yang dapat ditautkan ke lebih dari satu soal sekaligus (khususnya untuk literasi).</p>
+        {activeTab === 'bacaan' && !isAddingReading && (
+          <div className="animate-fade-in glass-panel p-8" style={{ minHeight: '400px' }}>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2>Manajemen Teks Bacaan Bersama</h2>
+                <p>Kelola bacaan yang dapat ditautkan ke lebih dari satu soal sekaligus.</p>
+              </div>
+              <button className="btn" onClick={() => setIsAddingReading(true)}>
+                <Plus size={18} /> Tambah Bacaan
+              </button>
+            </div>
+            
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
+                  <th className="p-4">Judul Bacaan</th>
+                  <th className="p-4">Potongan Teks</th>
+                  <th className="p-4">Jml Soal Ditautkan</th>
+                  <th className="p-4">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {readings.length > 0 ? readings.map(r => (
+                  <tr key={r.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                    <td className="p-4 font-semibold text-main">{r.title}</td>
+                    <td className="p-4 text-muted">{r.content.substring(0, 50)}...</td>
+                    <td className="p-4">{r._count?.questions || 0} Soal</td>
+                    <td className="p-4">
+                      <button className="btn-secondary" style={{ padding: '4px 8px', color: '#d32f2f', background: 'rgba(255,0,0,0.1)' }} onClick={async () => {
+                        if (window.confirm('Hapus bacaan ini?')) {
+                          await fetch(`/api/readings/${r.id}`, { method: 'DELETE' });
+                          const data = await fetch('/api/readings').then(res => res.json());
+                          setReadings(data);
+                        }
+                      }}>Hapus</button>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={4} className="p-4 text-center text-muted">Belum ada bacaan bersama.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === 'bacaan' && isAddingReading && (
+          <div className="animate-fade-in glass-panel p-8" style={{ minHeight: '400px' }}>
+            <h2>Tambah Bacaan Baru</h2>
+            <p className="text-muted mb-6">Buat wacana atau teks panjang untuk digunakan di soal-soal literasi.</p>
+            
+            <div className="flex flex-col gap-4 mb-6">
+              <div className="input-group">
+                <label className="input-label">Judul Bacaan</label>
+                <input type="text" className="input-field" value={readingTitle} onChange={e => setReadingTitle(e.target.value)} placeholder="Contoh: Peristiwa Rengasdengklok" />
+              </div>
+              <div className="input-group">
+                <label className="input-label">Isi Bacaan</label>
+                <textarea className="input-field" rows={10} value={readingContent} onChange={e => setReadingContent(e.target.value)} placeholder="Masukkan teks cerita/wacana lengkap di sini..."></textarea>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button className="btn-secondary" onClick={() => setIsAddingReading(false)}>Batal</button>
+              <button className="btn" onClick={handleSaveReading}>Simpan Teks Bacaan</button>
+            </div>
           </div>
         )}
 

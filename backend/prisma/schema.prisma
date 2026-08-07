@@ -31,6 +31,7 @@ model User {
   createdAt DateTime @default(now())
 
   authoredQuestions Question[]
+  authoredReadings  ReadingText[]
   createdPackages   Package[]
   examSessions      ExamSession[]
 }
@@ -45,6 +46,8 @@ model Question {
   correctAnswer Json
   authorId      String?
   author        User?    @relation(fields: [authorId], references: [id])
+  readingId     String?
+  reading       ReadingText? @relation(fields: [readingId], references: [id])
   createdAt     DateTime @default(now())
 
   packages PackageQuestion[]
@@ -74,6 +77,17 @@ model PackageQuestion {
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@id([packageId, questionId])
+}
+
+model ReadingText {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+
+  questions Question[]
 }
 
 model ExamSession {

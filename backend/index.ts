@@ -190,6 +190,51 @@ app.delete('/api/schools/:npsn', async (req, res) => {
   }
 });
 
+// Reading Text CRUD
+app.get('/api/readings', async (req, res) => {
+  try {
+    const readings = await prisma.readingText.findMany({
+      include: { _count: { select: { questions: true } } }
+    });
+    res.json(readings);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch readings' });
+  }
+});
+
+app.post('/api/readings', async (req, res) => {
+  const { title, content, authorId } = req.body;
+  if (!title || !content) return res.status(400).json({ error: 'Title and content are required' });
+  try {
+    const reading = await prisma.readingText.create({ data: { title, content, authorId } });
+    res.json(reading);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create reading' });
+  }
+});
+
+app.put('/api/readings/:id', async (req, res) => {
+  const { title, content } = req.body;
+  try {
+    const reading = await prisma.readingText.update({
+      where: { id: req.params.id },
+      data: { title, content }
+    });
+    res.json(reading);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update reading' });
+  }
+});
+
+app.delete('/api/readings/:id', async (req, res) => {
+  try {
+    await prisma.readingText.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete reading' });
+  }
+});
+
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   
