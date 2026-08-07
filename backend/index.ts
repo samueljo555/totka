@@ -277,6 +277,41 @@ app.get('/api/questions', async (req, res) => {
   }
 });
 
+app.post('/api/questions', async (req, res) => {
+  const { type, mapel, element, content, options, correctAnswer, authorId, readingId } = req.body;
+  if (!content || !type || !mapel || !element) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const question = await prisma.question.create({
+      data: {
+        type,
+        mapel,
+        element,
+        content,
+        options: options || [],
+        correctAnswer: correctAnswer || [],
+        ...(authorId && { authorId }),
+        ...(readingId && { readingId }),
+      }
+    });
+    res.json(question);
+  } catch (error) {
+    console.error("Create question error:", error);
+    res.status(500).json({ error: 'Failed to create question' });
+  }
+});
+
+app.delete('/api/questions/:id', async (req, res) => {
+  try {
+    await prisma.question.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete question' });
+  }
+});
+
 app.get('/api/sessions', async (req, res) => {
   try {
     const sessions = await prisma.examSession.findMany({

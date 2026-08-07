@@ -74,7 +74,44 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
     { id: 4, text: '' }
   ]);
   const [questionText, setQuestionText] = useState('');
+  const [selectedMapel, setSelectedMapel] = useState('Matematika (Numerasi)');
+  const [selectedReadingId, setSelectedReadingId] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+
+  const handleSaveQuestion = async () => {
+    if (!questionText || options.length === 0) {
+      alert("Pertanyaan dan opsi tidak boleh kosong!");
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: questionType,
+          mapel: selectedMapel,
+          element: selectedElement,
+          content: questionText,
+          options: options,
+          correctAnswer: [], // currently mocked correct answer logic
+          authorId: user?.id,
+          ...(selectedReadingId && { readingId: selectedReadingId })
+        })
+      });
+      if (res.ok) {
+        setIsAdding(false);
+        setQuestionText('');
+        setOptions([{ id: 1, text: '' }, { id: 2, text: '' }, { id: 3, text: '' }, { id: 4, text: '' }]);
+        const data = await fetch('/api/questions').then(r => r.json());
+        setQuestions(data);
+      } else {
+        alert("Gagal menyimpan soal");
+      }
+    } catch(err) {
+      alert("Error saving question");
+    }
+  };
 
   const handleAddOption = () => {
     setOptions([...options, { id: Date.now(), text: '' }]);
@@ -226,23 +263,31 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 {questions.length > 0 ? questions.map((soal, i) => (
                   <tr key={soal.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                     <td className="p-4">
-                      <span className="tag">{soal.subject || 'Mapel'}</span>
+                      <span className="tag">{soal.mapel || 'Mapel'}</span>
                     </td>
                     <td className="p-4 font-semibold text-main">{soal.type || 'Pilihan Ganda'}</td>
                     <td className="p-4" style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {soal.text}
+                      {soal.content}
                     </td>
                     <td className="p-4 flex gap-2">
                       <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: 'var(--primary-color)' }} title="Lihat Pratinjau" onClick={() => {
-                        setQuestionText(soal.text);
+                        setQuestionText(soal.content);
                         setQuestionType(soal.type || 'Pilihan Ganda Sederhana');
-                        setOptions([{ id: 1, text: 'Contoh A' }, { id: 2, text: 'Contoh B' }]);
+                        setOptions(soal.options && soal.options.length ? soal.options : [{ id: 1, text: 'Contoh A' }, { id: 2, text: 'Contoh B' }]);
                         setShowPreview(true);
                       }}>
                         <Eye size={16}/>
                       </button>
                       <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px' }} title="Edit"><Edit size={16}/></button>
-                      <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: '#d32f2f' }} title="Hapus"><Trash2 size={16}/></button>
+                      <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: '#d32f2f' }} title="Hapus" onClick={async () => {
+                        if (window.confirm('Yakin ingin menghapus soal ini?')) {
+                          await fetch(`/api/questions/${soal.id}`, { method: 'DELETE' });
+                          const data = await fetch('/api/questions').then(r => r.json());
+                          setQuestions(data);
+                        }
+                      }}>
+                        <Trash2 size={16}/>
+                      </button>
                     </td>
                   </tr>
                 )) : (
@@ -266,9 +311,9 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
               <div>
                 <div className="input-group">
                   <label className="input-label">Mata Pelajaran</label>
-                  <select className="input-field">
-                    <option>Matematika (Numerasi)</option>
-                    <option>Bahasa Indonesia (Literasi Membaca)</option>
+                  <select className="input-field" value={selectedMapel} onChange={e => setSelectedMapel(e.target.value)}>
+                    <option value="Matematika (Numerasi)">Matematika (Numerasi)</option>
+                    <option value="Bahasa Indonesia (Literasi Membaca)">Bahasa Indonesia (Literasi Membaca)</option>
                   </select>
                 </div>
                 <div className="input-group">
@@ -316,7 +361,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 </div>
                 <div className="input-group">
                   <label className="input-label">Tautan Bacaan (Opsional)</label>
-                  <select className="input-field">
+                  <select className="input-field" value={selectedReadingId} onChange={e => setSelectedReadingId(e.target.value)}>
                     <option value="">-- Tidak Terpaut Bacaan --</option>
                     {readings.map(r => (
                       <option key={r.id} value={r.id}>{r.title}</option>
@@ -395,7 +440,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
 
                 <div className="flex justify-end gap-4 mt-8">
                   <button className="btn-secondary" onClick={() => setShowPreview(true)}>Pratinjau (Preview)</button>
-                  <button className="btn" onClick={() => setIsAdding(false)}>Simpan ke Bank Soal</button>
+                  <button className="btn" onClick={handleSaveQuestion}>Simpan ke Bank Soal</button>
                 </div>
               </div>
             </div>
