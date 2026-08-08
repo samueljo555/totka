@@ -753,7 +753,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       setIsAddingPackage(true);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}>Edit Paket</button>
-                    {pkg.status === 'draft' && (
+                    {pkg.status === 'draft' ? (
                       <button className="btn" style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }} onClick={async () => {
                         if (confirm('Ubah status paket menjadi AKTIF? Paket yang aktif dapat diakses siswa.')) {
                           await fetch(`/api/packages/${pkg.id}`, {
@@ -765,6 +765,18 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                           setPackages(pkgs);
                         }
                       }}>Buka Ujian</button>
+                    ) : (
+                      <button className="btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '0.9rem', color: '#d32f2f', border: '1px solid #d32f2f' }} onClick={async () => {
+                        if (confirm('Nonaktifkan paket ujian ini? Siswa tidak akan bisa masuk menggunakan token ini lagi.')) {
+                          await fetch(`/api/packages/${pkg.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: 'draft' })
+                          });
+                          const pkgs = await fetch('/api/packages').then(r => r.json());
+                          setPackages(pkgs);
+                        }
+                      }}>Tutup Ujian</button>
                     )}
                   </div>
                 </div>
