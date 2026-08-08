@@ -475,24 +475,17 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 </div>
 
                 <div className="dashboard-grid">
-                  {allPackages.length > 0 ? allPackages.map(pkg => (
+                  {allPackages.filter(pkg => pkg.status !== 'aktif').length > 0 ? allPackages.filter(pkg => pkg.status !== 'aktif').map(pkg => (
                     <div key={pkg.id} className="glass-panel card flex flex-col hover:shadow-lg transition-all" style={{ cursor: 'pointer' }} onClick={() => setSelectedHistoryPackage(pkg)}>
                       <div className="flex justify-between mb-4">
                         <span className="tag">{pkg.mapel}</span>
-                        <span style={{ 
-                          color: pkg.status === 'aktif' ? 'green' : '#64748b',
-                          background: pkg.status === 'aktif' ? 'rgba(0,128,0,0.1)' : '#f1f5f9',
-                          padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600
-                        }}>
-                          {pkg.status.toUpperCase()}
-                        </span>
                       </div>
                       <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{pkg.name}</h3>
                       <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Token: {pkg.token}</p>
                     </div>
                   )) : (
                     <div className="p-8 text-center text-muted col-span-full">
-                      Belum ada paket ujian yang tersedia.
+                      Belum ada riwayat ujian yang telah selesai.
                     </div>
                   )}
                 </div>
