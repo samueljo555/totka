@@ -57,7 +57,8 @@ app.get('/api/packages', async (req, res) => {
       include: {
         _count: {
           select: { questions: true }
-        }
+        },
+        questions: true // Include relation to questions
       }
     });
     res.json(packages);
@@ -102,6 +103,52 @@ app.post('/api/packages', async (req, res) => {
   } catch (error) {
     console.error("Create package error:", error);
     res.status(500).json({ error: 'Failed to create package' });
+  }
+});
+
+app.put('/api/packages/:id', async (req, res) => {
+  try {
+    const { name, mapel, token, durationMinutes, navigationMode, releaseScoreMode, status, questionIds } = req.body;
+    
+    // Validate if token is already in use by ANOTHER package
+    if (token) {
+      const existing = await prisma.package.findFirst({ where: { token } });
+      if (existing && existing.id !== req.params.id) {
+        return res.status(400).json({ error: 'Token sudah digunakan oleh paket lain' });
+      }
+    }
+
+    const updatedPackage = await prisma.package.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name }),
+        ...(mapel && { mapel }),
+        ...(token && { token }),
+        ...(durationMinutes && { durationMinutes }),
+        ...(navigationMode && { navigationMode }),
+        ...(releaseScoreMode && { releaseScoreMode }),
+        ...(status && { status }),
+      }
+    });
+
+    if (questionIds) {
+      // Delete existing
+      await prisma.packageQuestion.deleteMany({ where: { packageId: req.params.id } });
+      // Create new
+      if (questionIds.length > 0) {
+        await prisma.packageQuestion.createMany({
+          data: questionIds.map((qId: string) => ({
+            packageId: req.params.id,
+            questionId: qId
+          }))
+        });
+      }
+    }
+
+    res.json(updatedPackage);
+  } catch (error) {
+    console.error("Update package error:", error);
+    res.status(500).json({ error: 'Failed to update package' });
   }
 });
 

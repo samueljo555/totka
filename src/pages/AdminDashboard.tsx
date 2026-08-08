@@ -33,6 +33,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [newPackageToken, setNewPackageToken] = useState('');
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
   const [isSavingPackage, setIsSavingPackage] = useState(false);
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   
   const [schools, setSchools] = useState<any[]>([]);
   const [schoolPage, setSchoolPage] = useState(1);
@@ -154,8 +155,10 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     
     setIsSavingPackage(true);
     try {
-      const res = await fetch('/api/packages', {
-        method: 'POST',
+      const url = editingPackageId ? `/api/packages/${editingPackageId}` : '/api/packages';
+      const method = editingPackageId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newPackageName,
@@ -171,8 +174,9 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       });
 
       if (res.ok) {
-        alert("Paket berhasil disimpan!");
+        alert(editingPackageId ? "Paket berhasil diperbarui!" : "Paket berhasil disimpan!");
         setIsAddingPackage(false);
+        setEditingPackageId(null);
         setNewPackageName('');
         setNewPackageToken('');
         setSelectedQuestionIds([]);
@@ -708,7 +712,14 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 <h2>Paket Try Out</h2>
                 <p>Kelola dan racik paket soal untuk diujikan ke siswa.</p>
               </div>
-              <button className="btn" onClick={() => setIsAddingPackage(true)}>
+              <button className="btn" onClick={() => {
+                setEditingPackageId(null);
+                setNewPackageName('');
+                setNewPackageToken('');
+                setNewPackageDuration(90);
+                setSelectedQuestionIds([]);
+                setIsAddingPackage(true);
+              }}>
                 <Plus size={18} /> Buat Paket Baru
               </button>
             </div>
@@ -729,9 +740,30 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{pkg.name}</h3>
                   <p style={{ fontSize: '0.9rem', marginBottom: '1.5rem', flexGrow: 1 }}>Terdiri dari {pkg._count?.questions || 0} soal terpilih.</p>
                   <div className="flex gap-2">
-                    <button className="btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }}>Edit Paket</button>
+                    <button className="btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }} onClick={() => {
+                      setEditingPackageId(pkg.id);
+                      setNewPackageName(pkg.name);
+                      setNewPackageMapel(pkg.mapel);
+                      setNewPackageDuration(pkg.durationMinutes);
+                      setNewPackageNavMode(pkg.navigationMode || 'bebas');
+                      setNewPackageReleaseMode(pkg.releaseScoreMode || 'langsung');
+                      setNewPackageToken(pkg.token);
+                      setSelectedQuestionIds(pkg.questions?.map((pq: any) => pq.questionId) || []);
+                      setIsAddingPackage(true);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}>Edit Paket</button>
                     {pkg.status === 'draft' && (
-                      <button className="btn" style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }}>Buka Ujian</button>
+                      <button className="btn" style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }} onClick={async () => {
+                        if (confirm('Ubah status paket menjadi AKTIF? Paket yang aktif dapat diakses siswa.')) {
+                          await fetch(`/api/packages/${pkg.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: 'aktif' })
+                          });
+                          const pkgs = await fetch('/api/packages').then(r => r.json());
+                          setPackages(pkgs);
+                        }
+                      }}>Buka Ujian</button>
                     )}
                   </div>
                 </div>
@@ -747,8 +779,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         {activeTab === 'packages' && isAddingPackage && (
           <div className="animate-fade-in glass-panel p-8">
             <div className="flex justify-between items-center mb-6">
-              <h2>Peracikan Paket Baru</h2>
-              <button className="btn-secondary" onClick={() => setIsAddingPackage(false)}>Batal</button>
+              <h2>{editingPackageId ? 'Edit Paket Ujian' : 'Peracikan Paket Baru'}</h2>
+              <button className="btn-secondary" onClick={() => { setIsAddingPackage(false); setEditingPackageId(null); }}>Batal</button>
             </div>
 
             <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 0, gap: '2rem' }}>
