@@ -383,7 +383,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
               </tbody>
             </table>
           </div>
-        ))()}
+        })()}
       </main>
     </div>
   );
