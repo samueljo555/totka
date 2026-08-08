@@ -14,6 +14,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const [isAddingSiswa, setIsAddingSiswa] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
+  const [activePackages, setActivePackages] = useState<any[]>([]);
 
   // State for new siswa form
   const [newNisn, setNewNisn] = useState('');
@@ -25,7 +26,10 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const fetchStudents = () => {
     fetch('/api/users')
       .then(res => res.json())
-      .then(data => setStudents(data.filter((u: any) => u.role === 'siswa')))
+      .then(data => {
+        const schoolStudents = data.filter((u: any) => u.role === 'siswa' && u.schoolNpsn === user?.school?.npsn);
+        setStudents(schoolStudents);
+      })
       .catch(err => console.error(err));
   };
 
@@ -33,12 +37,22 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
     if (activeTab === 'students') {
       fetchStudents();
     } else if (activeTab === 'monitoring') {
-      fetch('/api/sessions')
+      fetchStudents(); // Need students for 'Belum Mengerjakan' stats
+      
+      const npsn = user?.school?.npsn || '';
+      fetch(`/api/sessions?schoolNpsn=${npsn}`)
         .then(res => res.json())
         .then(data => setSessions(data))
         .catch(err => console.error(err));
+        
+      fetch('/api/packages')
+        .then(res => res.json())
+        .then(data => {
+          setActivePackages(data.filter((p: any) => p.status === 'aktif'));
+        })
+        .catch(err => console.error(err));
     }
-  }, [activeTab]);
+  }, [activeTab, user]);
 
   const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -302,35 +316,41 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
           </div>
         )}
 
-        {activeTab === 'monitoring' && (
-          <div className="animate-fade-in glass-panel p-8">
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h2>Pantau Pengerjaan Ujian</h2>
-                <p>Monitor status try out siswa secara real-time.</p>
-              </div>
-              <div className="flex gap-4">
-                <div style={{ padding: '8px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Token Aktif Saat Ini</div>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', letterSpacing: '2px', color: 'var(--primary-dark)' }}>AX99B2</div>
+        {activeTab === 'monitoring' && (() => {
+          const finished = sessions.filter(s => s.status === 'selesai').length;
+          const ongoing = sessions.filter(s => s.status === 'berlangsung').length;
+          const notStarted = Math.max(0, students.length - finished - ongoing);
+          const activeTokens = activePackages.map(p => p.token).join(', ') || 'Tidak Ada';
+
+          return (
+            <div className="animate-fade-in glass-panel p-8">
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h2>Pantau Pengerjaan Ujian</h2>
+                  <p>Monitor status try out siswa secara real-time.</p>
+                </div>
+                <div className="flex gap-4">
+                  <div style={{ padding: '8px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Token Aktif Saat Ini</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 'bold', letterSpacing: '2px', color: 'var(--primary-dark)' }}>{activeTokens}</div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 0, marginBottom: '2rem' }}>
-              <div className="card" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1.5rem' }}>
-                <h3 style={{ fontSize: '2.5rem', color: '#64748b', margin: 0 }}>45</h3>
-                <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Belum Mengerjakan</p>
+              <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 0, marginBottom: '2rem' }}>
+                <div className="card" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1.5rem' }}>
+                  <h3 style={{ fontSize: '2.5rem', color: '#64748b', margin: 0 }}>{notStarted}</h3>
+                  <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Belum Mengerjakan</p>
+                </div>
+                <div className="card" style={{ background: 'rgba(0, 184, 217, 0.1)', border: '1px solid rgba(0, 184, 217, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
+                  <h3 style={{ fontSize: '2.5rem', color: '#00b8d9', margin: 0 }}>{ongoing}</h3>
+                  <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Sedang Mengerjakan</p>
+                </div>
+                <div className="card" style={{ background: 'rgba(0, 128, 0, 0.1)', border: '1px solid rgba(0, 128, 0, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
+                  <h3 style={{ fontSize: '2.5rem', color: 'green', margin: 0 }}>{finished}</h3>
+                  <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Selesai Ujian</p>
+                </div>
               </div>
-              <div className="card" style={{ background: 'rgba(0, 184, 217, 0.1)', border: '1px solid rgba(0, 184, 217, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
-                <h3 style={{ fontSize: '2.5rem', color: '#00b8d9', margin: 0 }}>82</h3>
-                <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Sedang Mengerjakan</p>
-              </div>
-              <div className="card" style={{ background: 'rgba(0, 128, 0, 0.1)', border: '1px solid rgba(0, 128, 0, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
-                <h3 style={{ fontSize: '2.5rem', color: 'green', margin: 0 }}>23</h3>
-                <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Selesai Ujian</p>
-              </div>
-            </div>
 
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
@@ -348,24 +368,22 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                     <td className="p-4">{session.student?.className || '-'}</td>
                     <td className="p-4 text-muted">{session.package?.name || '-'}</td>
                     <td className="p-4">
-                      <span style={{ 
-                        color: session.status === 'completed' ? 'green' : (session.status === 'in_progress' ? '#00b8d9' : '#64748b'),
-                        background: session.status === 'completed' ? 'rgba(0,128,0,0.1)' : (session.status === 'in_progress' ? 'rgba(0,184,217,0.1)' : '#f1f5f9'),
-                        padding: '6px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 600
-                      }}>
-                        {session.status}
-                      </span>
+                      {session.status === 'selesai' ? (
+                        <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green' }}>Selesai</span>
+                      ) : (
+                        <span className="tag" style={{ background: 'rgba(0, 184, 217, 0.1)', color: '#00b8d9', border: '1px solid #00b8d9' }}>Sedang Mengerjakan</span>
+                      )}
                     </td>
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={4} className="p-4 text-center text-muted">Belum ada sesi ujian (Atau sedang memuat dari API).</td>
+                    <td colSpan={4} className="p-4 text-center text-muted">Belum ada siswa yang mulai ujian.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-        )}
+        )})}
       </main>
     </div>
   );

@@ -453,7 +453,15 @@ app.delete('/api/questions/:id', async (req, res) => {
 
 app.get('/api/sessions', async (req, res) => {
   try {
+    const { schoolNpsn } = req.query;
+    const whereClause = schoolNpsn ? {
+      student: {
+        schoolNpsn: String(schoolNpsn)
+      }
+    } : {};
+    
     const sessions = await prisma.examSession.findMany({
+      where: whereClause,
       include: { student: true, package: true }
     });
     res.json(sessions);
