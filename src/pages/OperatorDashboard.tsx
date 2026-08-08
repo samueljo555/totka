@@ -339,7 +339,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                   {activePackages.map(pkg => {
                     const pkgSessions = sessions.filter(s => s.packageId === pkg.id);
                     const finished = pkgSessions.filter(s => s.status === 'selesai').length;
-                    const ongoing = pkgSessions.filter(s => s.status === 'berlangsung').length;
+                    const ongoing = pkgSessions.filter(s => s.status === 'sedang_mengerjakan').length;
                     const notStarted = Math.max(0, students.length - finished - ongoing);
 
                     return (
@@ -376,21 +376,26 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                             </tr>
                           </thead>
                           <tbody>
-                            {pkgSessions.length > 0 ? pkgSessions.map((session, i) => (
-                              <tr key={session.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                                <td className="p-4 font-semibold text-main">{session.student?.fullName || '-'}</td>
-                                <td className="p-4">{session.student?.className || '-'}</td>
-                                <td className="p-4">
-                                  {session.status === 'selesai' ? (
-                                    <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green', fontSize: '0.75rem' }}>Selesai</span>
-                                  ) : (
-                                    <span className="tag" style={{ background: 'rgba(0, 184, 217, 0.1)', color: '#00b8d9', border: '1px solid #00b8d9', fontSize: '0.75rem' }}>Sedang Mengerjakan</span>
-                                  )}
-                                </td>
-                              </tr>
-                            )) : (
+                            {students.length > 0 ? students.map((student, i) => {
+                              const session = pkgSessions.find(s => s.studentId === student.id);
+                              return (
+                                <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                                  <td className="p-4 font-semibold text-main">{student.fullName || '-'}</td>
+                                  <td className="p-4">{student.className || '-'}</td>
+                                  <td className="p-4">
+                                    {!session ? (
+                                      <span className="tag" style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', fontSize: '0.75rem' }}>Belum Mengerjakan</span>
+                                    ) : session.status === 'selesai' ? (
+                                      <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green', fontSize: '0.75rem' }}>Selesai</span>
+                                    ) : (
+                                      <span className="tag" style={{ background: 'rgba(0, 184, 217, 0.1)', color: '#00b8d9', border: '1px solid #00b8d9', fontSize: '0.75rem' }}>Sedang Mengerjakan</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            }) : (
                               <tr>
-                                <td colSpan={3} className="p-4 text-center text-muted" style={{ fontSize: '0.9rem' }}>Belum ada siswa yang mulai ujian ini.</td>
+                                <td colSpan={3} className="p-4 text-center text-muted" style={{ fontSize: '0.9rem' }}>Belum ada data siswa di sekolah ini.</td>
                               </tr>
                             )}
                           </tbody>
@@ -441,22 +446,27 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                           </tr>
                         </thead>
                         <tbody>
-                          {pkgSessions.length > 0 ? pkgSessions.map((session, i) => (
-                            <tr key={session.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                              <td className="p-4 font-semibold text-main">{session.student?.fullName || '-'}</td>
-                              <td className="p-4">{session.student?.className || '-'}</td>
-                              <td className="p-4 font-bold">{session.finalScore !== null ? session.finalScore : '-'}</td>
-                              <td className="p-4">
-                                {session.status === 'selesai' ? (
-                                  <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green', fontSize: '0.75rem' }}>Selesai</span>
-                                ) : (
-                                  <span className="tag" style={{ background: 'rgba(255, 165, 0, 0.1)', color: 'orange', border: '1px solid orange', fontSize: '0.75rem' }}>Tidak Selesai</span>
-                                )}
-                              </td>
-                            </tr>
-                          )) : (
+                          {students.length > 0 ? students.map((student, i) => {
+                            const session = pkgSessions.find(s => s.studentId === student.id);
+                            return (
+                              <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                                <td className="p-4 font-semibold text-main">{student.fullName || '-'}</td>
+                                <td className="p-4">{student.className || '-'}</td>
+                                <td className="p-4 font-bold">{session?.finalScore !== undefined && session?.finalScore !== null ? session.finalScore : '-'}</td>
+                                <td className="p-4">
+                                  {!session ? (
+                                    <span className="tag" style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', fontSize: '0.75rem' }}>Tidak Mengerjakan</span>
+                                  ) : session.status === 'selesai' ? (
+                                    <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green', fontSize: '0.75rem' }}>Selesai</span>
+                                  ) : (
+                                    <span className="tag" style={{ background: 'rgba(255, 165, 0, 0.1)', color: 'orange', border: '1px solid orange', fontSize: '0.75rem' }}>Tidak Selesai</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          }) : (
                             <tr>
-                              <td colSpan={4} className="p-4 text-center text-muted">Tidak ada rekaman sesi untuk ujian ini.</td>
+                              <td colSpan={4} className="p-4 text-center text-muted">Belum ada data siswa di sekolah ini.</td>
                             </tr>
                           )}
                         </tbody>
