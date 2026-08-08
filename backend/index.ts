@@ -361,20 +361,27 @@ app.post('/api/sessions/start', async (req, res) => {
   try {
     let packageObj = await prisma.package.findFirst({ where: { token } });
     
-    // For development, auto-create a mock package if token is TEST123
-    if (!packageObj && token === 'TEST123') {
-       packageObj = await prisma.package.create({
-         data: {
-           name: 'Paket Try Out Simulasi',
-           mapel: 'Matematika',
-           token: 'TEST123',
-           durationMinutes: 90
-         }
-       });
+    // For development, auto-create or update mock package if token is TEST123
+    if (token === 'TEST123') {
+       if (!packageObj) {
+         packageObj = await prisma.package.create({
+           data: {
+             name: 'Paket Try Out Simulasi',
+             mapel: 'Matematika',
+             token: 'TEST123',
+             durationMinutes: 90
+           }
+         });
+       }
+       // Ensure all questions in DB are linked to this package
        const allQuestions = await prisma.question.findMany();
-       if (allQuestions.length > 0) {
+       const existingLinks = await prisma.packageQuestion.findMany({ where: { packageId: packageObj.id } });
+       const existingQuestionIds = new Set(existingLinks.map(l => l.questionId));
+       const newLinks = allQuestions.filter(q => !existingQuestionIds.has(q.id));
+       
+       if (newLinks.length > 0) {
          await prisma.packageQuestion.createMany({
-           data: allQuestions.map(q => ({ packageId: packageObj!.id, questionId: q.id }))
+           data: newLinks.map(q => ({ packageId: packageObj!.id, questionId: q.id }))
          });
        }
     } else if (!packageObj) {

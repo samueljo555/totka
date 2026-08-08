@@ -171,14 +171,19 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         </div>
 
         <div style={{ fontSize: '1.2rem', marginBottom: '2rem', lineHeight: '1.8' }}>
-          {q.text}
+          {q.content || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>[Pertanyaan kosong...]</span>}
+          {q.imageUrl && (
+            <div className="mt-4">
+              <img src={q.imageUrl} alt="Gambar Soal" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }} />
+            </div>
+          )}
         </div>
 
-        {type.includes('Pilihan Ganda Sederhana') && (
+        {type.includes('Pilihan Ganda Sederhana') && q.options && (
           <div className="flex flex-col gap-4">
-            {['Pilihan A', 'Pilihan B', 'Pilihan C', 'Pilihan D'].map((opt, i) => (
+            {(Array.isArray(q.options) ? q.options : []).map((opt: any, i: number) => (
               <label 
-                key={i} 
+                key={opt.id || i} 
                 className="flex items-center gap-4 p-4" 
                 style={{ 
                   background: answers[currentQuestion] === i ? 'rgba(0, 82, 204, 0.05)' : 'white', 
@@ -195,7 +200,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   onChange={() => handleAnswer(currentQuestion, i)}
                   style={{ width: '20px', height: '20px' }} 
                 />
-                <span style={{ fontSize: '1.1rem' }}>{opt}</span>
+                <span style={{ fontSize: '1.1rem' }}>{opt.text || `Pilihan ${i + 1}`}</span>
               </label>
             ))}
           </div>
