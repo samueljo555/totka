@@ -82,6 +82,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       fetchSchools();
     } else if (activeTab === 'schools') {
       fetchSchools();
+    } else if (activeTab === 'packages') {
       const fetchPackages = () => {
         fetch('/api/packages')
           .then(res => res.json())
