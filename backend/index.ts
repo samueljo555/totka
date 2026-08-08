@@ -66,6 +66,45 @@ app.get('/api/packages', async (req, res) => {
   }
 });
 
+app.post('/api/packages', async (req, res) => {
+  try {
+    const { name, mapel, token, durationMinutes, navigationMode, releaseScoreMode, status, createdById, questionIds } = req.body;
+    
+    // Validate if token is already in use
+    const existing = await prisma.package.findFirst({ where: { token } });
+    if (existing) {
+      return res.status(400).json({ error: 'Token sudah digunakan' });
+    }
+
+    const newPackage = await prisma.package.create({
+      data: {
+        name,
+        mapel,
+        token,
+        durationMinutes,
+        navigationMode,
+        releaseScoreMode,
+        status,
+        createdById
+      }
+    });
+
+    if (questionIds && questionIds.length > 0) {
+      await prisma.packageQuestion.createMany({
+        data: questionIds.map((qId: string) => ({
+          packageId: newPackage.id,
+          questionId: qId
+        }))
+      });
+    }
+
+    res.json(newPackage);
+  } catch (error) {
+    console.error("Create package error:", error);
+    res.status(500).json({ error: 'Failed to create package' });
+  }
+});
+
 app.get('/api/users', async (req, res) => {
   try {
     const users = await prisma.user.findMany({
@@ -424,31 +463,8 @@ app.post('/api/sessions/start', async (req, res) => {
   try {
     let packageObj = await prisma.package.findFirst({ where: { token } });
     
-    // For development, auto-create or update mock package if token is TEST123
-    if (token === 'TEST123') {
-       if (!packageObj) {
-         packageObj = await prisma.package.create({
-           data: {
-             name: 'Paket Try Out Simulasi',
-             mapel: 'Matematika',
-             token: 'TEST123',
-             durationMinutes: 90
-           }
-         });
-       }
-       // Ensure all questions in DB are linked to this package
-       const allQuestions = await prisma.question.findMany();
-       const existingLinks = await prisma.packageQuestion.findMany({ where: { packageId: packageObj.id } });
-       const existingQuestionIds = new Set(existingLinks.map(l => l.questionId));
-       const newLinks = allQuestions.filter(q => !existingQuestionIds.has(q.id));
-       
-       if (newLinks.length > 0) {
-         await prisma.packageQuestion.createMany({
-           data: newLinks.map(q => ({ packageId: packageObj!.id, questionId: q.id }))
-         });
-       }
-    } else if (!packageObj) {
-      return res.status(404).json({ error: 'Token paket tidak valid' });
+    if (!packageObj) {
+      return res.status(404).json({ error: 'Token paket tidak valid atau tidak ditemukan' });
     }
 
     let session = await prisma.examSession.findUnique({

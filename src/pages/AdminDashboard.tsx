@@ -24,6 +24,16 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   
   const [packages, setPackages] = useState<any[]>([]);
   
+  // Package Form State
+  const [newPackageName, setNewPackageName] = useState('');
+  const [newPackageMapel, setNewPackageMapel] = useState('Matematika (Numerasi)');
+  const [newPackageDuration, setNewPackageDuration] = useState(90);
+  const [newPackageNavMode, setNewPackageNavMode] = useState('bebas');
+  const [newPackageReleaseMode, setNewPackageReleaseMode] = useState('langsung');
+  const [newPackageToken, setNewPackageToken] = useState('');
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
+  const [isSavingPackage, setIsSavingPackage] = useState(false);
+  
   const [schools, setSchools] = useState<any[]>([]);
   const [schoolPage, setSchoolPage] = useState(1);
   const schoolsPerPage = 10;
@@ -71,11 +81,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       fetchSchools();
     } else if (activeTab === 'schools') {
       fetchSchools();
-    } else if (activeTab === 'packages') {
-      fetch('/api/packages')
-        .then(res => res.json())
-        .then(data => setPackages(data))
-        .catch(err => console.error("Error fetching packages:", err));
+      const fetchPackages = () => {
+        fetch('/api/packages')
+          .then(res => res.json())
+          .then(data => setPackages(data))
+          .catch(err => console.error("Error fetching packages:", err));
+      };
+      fetchPackages();
 
       fetch('/api/questions')
         .then(res => res.json())
@@ -132,6 +144,50 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleSavePackage = async () => {
+    if (!newPackageName || !newPackageToken) {
+      alert("Nama Paket dan Token Ujian wajib diisi!");
+      return;
+    }
+    
+    setIsSavingPackage(true);
+    try {
+      const res = await fetch('/api/packages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newPackageName,
+          mapel: newPackageMapel,
+          token: newPackageToken,
+          durationMinutes: newPackageDuration,
+          navigationMode: newPackageNavMode,
+          releaseScoreMode: newPackageReleaseMode,
+          status: 'draft',
+          createdById: user?.id,
+          questionIds: selectedQuestionIds
+        })
+      });
+
+      if (res.ok) {
+        alert("Paket berhasil disimpan!");
+        setIsAddingPackage(false);
+        setNewPackageName('');
+        setNewPackageToken('');
+        setSelectedQuestionIds([]);
+        // Re-fetch packages
+        const pkgs = await fetch('/api/packages').then(r => r.json());
+        setPackages(pkgs);
+      } else {
+        const err = await res.json();
+        alert(`Gagal: ${err.error || 'Terjadi kesalahan'}`);
+      }
+    } catch (err) {
+      alert("Terjadi kesalahan jaringan");
+    } finally {
+      setIsSavingPackage(false);
+    }
   };
 
   const tabs = [
@@ -700,31 +756,35 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 <h3 className="mb-4" style={{ fontSize: '1.1rem' }}>1. Informasi & Konfigurasi</h3>
                 <div className="input-group">
                   <label className="input-label">Nama Paket</label>
-                  <input type="text" className="input-field" placeholder="Contoh: Try Out Nasional MTK 1" />
+                  <input type="text" className="input-field" placeholder="Contoh: Try Out Nasional MTK 1" value={newPackageName} onChange={e => setNewPackageName(e.target.value)} />
                 </div>
                 <div className="input-group">
                   <label className="input-label">Mata Pelajaran</label>
-                  <select className="input-field">
-                    <option>Matematika (Numerasi)</option>
-                    <option>Bahasa Indonesia (Literasi Membaca)</option>
+                  <select className="input-field" value={newPackageMapel} onChange={e => setNewPackageMapel(e.target.value)}>
+                    <option value="Matematika (Numerasi)">Matematika (Numerasi)</option>
+                    <option value="Bahasa Indonesia (Literasi Membaca)">Bahasa Indonesia (Literasi Membaca)</option>
                   </select>
                 </div>
                 <div className="input-group">
+                  <label className="input-label">Token Ujian (Opsional/Bisa Diubah)</label>
+                  <input type="text" className="input-field" placeholder="Contoh: BATCH1MTK" value={newPackageToken} onChange={e => setNewPackageToken(e.target.value)} style={{ textTransform: 'uppercase' }} />
+                </div>
+                <div className="input-group">
                   <label className="input-label">Durasi Waktu (Menit)</label>
-                  <input type="number" className="input-field" placeholder="90" defaultValue={90} />
+                  <input type="number" className="input-field" placeholder="90" value={newPackageDuration} onChange={e => setNewPackageDuration(Number(e.target.value))} />
                 </div>
                 <div className="input-group">
                   <label className="input-label">Mode Navigasi</label>
-                  <select className="input-field">
-                    <option>Bebas (Bisa mundur ke soal sebelumnya)</option>
-                    <option>Maju Terus (Tidak bisa mundur)</option>
+                  <select className="input-field" value={newPackageNavMode} onChange={e => setNewPackageNavMode(e.target.value)}>
+                    <option value="bebas">Bebas (Bisa mundur ke soal sebelumnya)</option>
+                    <option value="maju_terus">Maju Terus (Tidak bisa mundur)</option>
                   </select>
                 </div>
                 <div className="input-group">
                   <label className="input-label">Opsi Perilisan Nilai</label>
-                  <select className="input-field">
-                    <option>Langsung tampil setelah ujian selesai</option>
-                    <option>Sembunyikan (Dirilis manual nanti)</option>
+                  <select className="input-field" value={newPackageReleaseMode} onChange={e => setNewPackageReleaseMode(e.target.value)}>
+                    <option value="langsung">Langsung tampil setelah ujian selesai</option>
+                    <option value="tertunda">Sembunyikan (Dirilis manual nanti)</option>
                   </select>
                 </div>
               </div>
@@ -742,7 +802,10 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {questions.slice((questionPage - 1) * questionsPerPage, questionPage * questionsPerPage).map((q, idx) => ( 
                       <label key={q.id} className="flex items-start gap-4 p-5" style={{ borderBottom: '1px solid #e2e8f0', cursor: 'pointer', background: idx % 2 === 0 ? '#f8fafc' : 'white', transition: 'all 0.2s ease' }}>
-                        <input type="checkbox" style={{ marginTop: '5px', width: '18px', height: '18px' }} />
+                        <input type="checkbox" style={{ marginTop: '5px', width: '18px', height: '18px' }} checked={selectedQuestionIds.includes(q.id)} onChange={(e) => {
+                          if (e.target.checked) setSelectedQuestionIds([...selectedQuestionIds, q.id]);
+                          else setSelectedQuestionIds(selectedQuestionIds.filter(id => id !== q.id));
+                        }} />
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-color)', marginBottom: '4px' }}>ID: {q.id.substring(0, 8)}</div>
                           <div style={{ fontSize: '0.95rem', lineHeight: '1.5', color: '#334155', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
@@ -774,9 +837,11 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 <div className="flex justify-between items-center mt-4 p-4" style={{ background: 'rgba(0, 82, 204, 0.05)', borderRadius: '8px' }}>
                   <div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Total Soal Terpilih</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-color)' }}>0 / 40</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-color)' }}>{selectedQuestionIds.length} / {questions.length}</div>
                   </div>
-                  <button className="btn" onClick={() => setIsAddingPackage(false)}>Simpan Paket Try Out</button>
+                  <button className="btn" disabled={isSavingPackage} style={{ opacity: isSavingPackage ? 0.7 : 1 }} onClick={handleSavePackage}>
+                    {isSavingPackage ? 'Menyimpan...' : 'Simpan Paket Try Out'}
+                  </button>
                 </div>
               </div>
             </div>

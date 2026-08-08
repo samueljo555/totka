@@ -127,14 +127,14 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           {errorMsg && <div className="p-3 mb-4 text-sm text-red-600 bg-red-100 rounded-lg">{errorMsg}</div>}
           
           <div className="input-group text-left">
-            <label className="input-label">Token Ujian (Ketik TEST123 untuk ujicoba)</label>
+            <label className="input-label">Token Ujian</label>
             <input 
               type="text" 
               className="input-field" 
               style={{ fontSize: '1.5rem', textAlign: 'center', letterSpacing: '4px', textTransform: 'uppercase' }}
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="XXXXXX"
+              placeholder="Masukkan Token dari Admin"
             />
           </div>
           
