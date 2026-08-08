@@ -73,6 +73,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
     { id: 3, text: '' }, 
     { id: 4, text: '' }
   ]);
+  const [correctAnswer, setCorrectAnswer] = useState<number[]>([]);
   const [questionText, setQuestionText] = useState('');
   const [selectedMapel, setSelectedMapel] = useState('Matematika (Numerasi)');
   const [selectedReadingId, setSelectedReadingId] = useState('');
@@ -114,7 +115,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
           content: questionText,
           imageUrl: finalImageUrl,
           options: options,
-          correctAnswer: [], // currently mocked correct answer logic
+          correctAnswer: correctAnswer,
           authorId: user?.id,
           ...(selectedReadingId && { readingId: selectedReadingId })
         })
@@ -124,6 +125,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         setQuestionText('');
         setQuestionImage(null);
         setQuestionImageUrl('');
+        setCorrectAnswer([]);
         setOptions([{ id: 1, text: '' }, { id: 2, text: '' }, { id: 3, text: '' }, { id: 4, text: '' }]);
         const data = await fetch('/api/questions').then(r => r.json());
         setQuestions(data);
@@ -427,7 +429,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                       <label className="input-label">Pilihan Jawaban (Beri centang pada kunci yang benar)</label>
                       {options.map((opt, index) => (
                         <div key={opt.id} className="flex items-center gap-4 mb-2">
-                          <input type="radio" name="correct_answer" style={{ width: '20px', height: '20px' }} />
+                          <input type="radio" name="correct_answer" checked={correctAnswer.includes(index)} onChange={() => setCorrectAnswer([index])} style={{ width: '20px', height: '20px' }} />
                           <input type="text" className="input-field" placeholder={`Pilihan ${index + 1}`} value={opt.text} onChange={(e) => handleOptionChange(opt.id, e.target.value)} />
                           <button className="btn-secondary" onClick={() => handleDeleteOption(opt.id)} style={{ padding: '8px', color: '#d32f2f' }} title="Hapus Opsi"><Trash2 size={16}/></button>
                         </div>
@@ -440,7 +442,10 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                       <label className="input-label">Pilihan Jawaban (Bisa pilih lebih dari satu jawaban benar)</label>
                       {options.map((opt, index) => (
                         <div key={opt.id} className="flex items-center gap-4 mb-2">
-                          <input type="checkbox" name={`correct_answer_${opt.id}`} style={{ width: '20px', height: '20px' }} />
+                          <input type="checkbox" name={`correct_answer_${opt.id}`} checked={correctAnswer.includes(index)} onChange={(e) => {
+                            if (e.target.checked) setCorrectAnswer([...correctAnswer, index]);
+                            else setCorrectAnswer(correctAnswer.filter(i => i !== index));
+                          }} style={{ width: '20px', height: '20px' }} />
                           <input type="text" className="input-field" placeholder={`Pernyataan ${index + 1}`} value={opt.text} onChange={(e) => handleOptionChange(opt.id, e.target.value)} />
                           <button className="btn-secondary" onClick={() => handleDeleteOption(opt.id)} style={{ padding: '8px', color: '#d32f2f' }} title="Hapus Opsi"><Trash2 size={16}/></button>
                         </div>

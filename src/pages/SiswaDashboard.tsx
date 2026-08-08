@@ -15,6 +15,8 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [answers, setAnswers] = useState<Record<number, any>>({});
   const [timeLeft, setTimeLeft] = useState(90 * 60); // 90 minutes
   const [isFinished, setIsFinished] = useState(false);
+  const [finalScore, setFinalScore] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Timer effect
   useEffect(() => {
@@ -24,7 +26,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       }, 1000);
       return () => clearInterval(timer);
     } else if (timeLeft === 0 && !isFinished) {
-      setIsFinished(true); // Auto-submit
+      handleFinishExam(); // Auto-submit
     }
   }, [hasEnteredToken, timeLeft, isFinished]);
 
@@ -82,10 +84,34 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       setTimeLeft(Math.max(0, durationSecs - elapsedSecs));
 
       setHasEnteredToken(true);
+      if (data.session.status === 'selesai') {
+        setFinalScore(data.session.totalScore ? parseFloat(data.session.totalScore) : 0);
+        setIsFinished(true);
+      }
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFinishExam = async () => {
+    if (!sessionId || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/finish`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setFinalScore(data.totalScore ? parseFloat(data.totalScore) : 0);
+        setIsFinished(true);
+      } else {
+        alert("Gagal mengakhiri sesi ujian.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Terjadi kesalahan jaringan.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -136,8 +162,10 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           <p className="mb-6">Terima kasih, jawaban Anda telah berhasil disimpan di sistem.</p>
           
           <div className="card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
-            <h3 style={{ fontSize: '2.5rem', margin: 0, color: 'var(--primary-color)' }}>85 / 100</h3>
-            <p>Skor Total (Sesi Matematika)</p>
+            <h3 style={{ fontSize: '2.5rem', margin: 0, color: 'var(--primary-color)' }}>
+              {finalScore !== null ? Math.round(finalScore) : '---'} / 100
+            </h3>
+            <p>Skor Total (Sesi Ujian)</p>
             <small style={{ color: 'var(--text-muted)' }}>*Sistem diatur untuk menampilkan nilai secara langsung.</small>
           </div>
 
@@ -232,7 +260,13 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               <Clock size={20} />
               <span>{formatTime(timeLeft)}</span>
             </div>
-            <button className="btn" style={{ background: '#d32f2f' }} onClick={() => setIsFinished(true)}>Selesai Ujian</button>
+            <button className="btn" style={{ background: '#d32f2f', opacity: isSubmitting ? 0.7 : 1 }} disabled={isSubmitting} onClick={() => {
+              if (confirm("Apakah Anda yakin ingin menyelesaikan ujian? Jawaban tidak bisa diubah lagi.")) {
+                handleFinishExam();
+              }
+            }}>
+              {isSubmitting ? 'Menyimpan...' : 'Selesai Ujian'}
+            </button>
           </div>
         </header>
 

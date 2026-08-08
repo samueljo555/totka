@@ -436,6 +436,79 @@ app.post('/api/sessions/:sessionId/answer', async (req, res) => {
   }
 });
 
+app.post('/api/sessions/:sessionId/finish', async (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    const session = await prisma.examSession.findUnique({
+      where: { id: sessionId },
+      include: { package: true }
+    });
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    
+    // Fetch all answers and their related questions
+    const answers = await prisma.answer.findMany({
+      where: { sessionId },
+      include: { question: true }
+    });
+
+    // Auto-Grading Logic (Equal weight)
+    let correctCount = 0;
+    for (const ans of answers) {
+      const q = ans.question;
+      const studentAnswer = ans.answerData;
+      const correctAnswer = q.correctAnswer;
+      
+      let isCorrect = false;
+      
+      if (q.type === 'Pilihan Ganda Sederhana') {
+        // studentAnswer is an index (number), correctAnswer is an array [index]
+        if (Array.isArray(correctAnswer) && correctAnswer.length > 0) {
+          if (studentAnswer === correctAnswer[0]) isCorrect = true;
+        }
+      } else if (q.type === 'Pilihan Ganda Kompleks') {
+        // studentAnswer is an array of selected indexes
+        if (Array.isArray(correctAnswer) && Array.isArray(studentAnswer)) {
+          // Check if arrays have same elements
+          if (correctAnswer.length === studentAnswer.length && 
+              correctAnswer.every(val => studentAnswer.includes(val))) {
+            isCorrect = true;
+          }
+        }
+      }
+      // Pilihan Ganda Kompleks Kategori is skipped for now since UI isn't fully bound yet
+      
+      if (isCorrect) correctCount++;
+      
+      // Update individual answer correctness (optional, but good for granular analysis later)
+      await prisma.answer.update({
+        where: { id: ans.id },
+        data: { isCorrect }
+      });
+    }
+
+    // Get total questions for this package
+    const totalQuestions = await prisma.packageQuestion.count({
+      where: { packageId: session.packageId }
+    });
+
+    const finalScore = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
+
+    const finishedSession = await prisma.examSession.update({
+      where: { id: sessionId },
+      data: {
+        status: 'selesai',
+        endTime: new Date(),
+        totalScore: finalScore
+      }
+    });
+
+    res.json(finishedSession);
+  } catch (error) {
+    console.error("Finish session error:", error);
+    res.status(500).json({ error: 'Failed to finish session' });
+  }
+});
+
 app.post('/api/users/siswa', async (req, res) => {
   const { nisn, fullName, className, schoolNpsn } = req.body;
   if (!nisn || !fullName) {
