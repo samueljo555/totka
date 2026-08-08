@@ -75,6 +75,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   ]);
   const [correctAnswer, setCorrectAnswer] = useState<number[]>([]);
   const [questionText, setQuestionText] = useState('');
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [selectedMapel, setSelectedMapel] = useState('Matematika (Numerasi)');
   const [selectedReadingId, setSelectedReadingId] = useState('');
   const [questionImage, setQuestionImage] = useState<File | null>(null);
@@ -105,8 +106,11 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         }
       }
 
-      const res = await fetch('/api/questions', {
-        method: 'POST',
+      const url = editingQuestionId ? `/api/questions/${editingQuestionId}` : '/api/questions';
+      const method = editingQuestionId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: questionType,
@@ -120,12 +124,15 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
           ...(selectedReadingId && { readingId: selectedReadingId })
         })
       });
+
       if (res.ok) {
-        setIsAdding(false);
+        alert(editingQuestionId ? "Soal berhasil diperbarui!" : "Soal berhasil disimpan!");
         setQuestionText('');
         setQuestionImage(null);
         setQuestionImageUrl('');
         setCorrectAnswer([]);
+        setEditingQuestionId(null);
+        setIsAdding(false);
         setOptions([{ id: 1, text: '' }, { id: 2, text: '' }, { id: 3, text: '' }, { id: 4, text: '' }]);
         const data = await fetch('/api/questions').then(r => r.json());
         setQuestions(data);
@@ -306,7 +313,21 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                       }}>
                         <Eye size={16}/>
                       </button>
-                      <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px' }} title="Edit"><Edit size={16}/></button>
+                      <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px' }} title="Edit" onClick={() => {
+                        setIsAdding(true);
+                        setEditingQuestionId(soal.id);
+                        setQuestionType(soal.type || 'Pilihan Ganda Sederhana');
+                        setSelectedMapel(soal.mapel || 'Matematika (Numerasi)');
+                        setSelectedElement(soal.element || elements[0]);
+                        setQuestionText(soal.content);
+                        setQuestionImageUrl(soal.imageUrl || '');
+                        setOptions(soal.options && soal.options.length ? soal.options : [{ id: 1, text: '' }, { id: 2, text: '' }]);
+                        setCorrectAnswer(soal.correctAnswer || []);
+                        setSelectedReadingId(soal.readingId || '');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}>
+                        <Edit size={16}/>
+                      </button>
                       <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: '#d32f2f' }} title="Hapus" onClick={async () => {
                         if (window.confirm('Yakin ingin menghapus soal ini?')) {
                           await fetch(`/api/questions/${soal.id}`, { method: 'DELETE' });

@@ -332,6 +332,30 @@ app.post('/api/questions', async (req, res) => {
   }
 });
 
+app.put('/api/questions/:id', async (req, res) => {
+  try {
+    const { type, mapel, element, content, imageUrl, options, correctAnswer, authorId, readingId } = req.body;
+    const question = await prisma.question.update({
+      where: { id: req.params.id },
+      data: {
+        type,
+        mapel,
+        element,
+        content,
+        imageUrl: imageUrl || null,
+        options: options || [],
+        correctAnswer: correctAnswer || [],
+        ...(authorId && { authorId }),
+        ...(readingId && { readingId }),
+      }
+    });
+    res.json(question);
+  } catch (error) {
+    console.error("Update question error:", error);
+    res.status(500).json({ error: 'Failed to update question' });
+  }
+});
+
 app.delete('/api/questions/:id', async (req, res) => {
   try {
     await prisma.question.delete({ where: { id: req.params.id } });
