@@ -14,7 +14,8 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const [isAddingSiswa, setIsAddingSiswa] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
-  const [activePackages, setActivePackages] = useState<any[]>([]);
+  const [allPackages, setAllPackages] = useState<any[]>([]);
+  const [selectedHistoryPackage, setSelectedHistoryPackage] = useState<any | null>(null);
 
   // State for new siswa form
   const [newNisn, setNewNisn] = useState('');
@@ -36,8 +37,8 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   useEffect(() => {
     if (activeTab === 'students') {
       fetchStudents();
-    } else if (activeTab === 'monitoring') {
-      fetchStudents(); // Need students for 'Belum Mengerjakan' stats
+    } else if (activeTab === 'monitoring' || activeTab === 'history') {
+      fetchStudents(); 
       
       const npsn = user?.school?.npsn || '';
       fetch(`/api/sessions?schoolNpsn=${npsn}`)
@@ -48,7 +49,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
       fetch('/api/packages')
         .then(res => res.json())
         .then(data => {
-          setActivePackages(data.filter((p: any) => p.status === 'aktif'));
+          setAllPackages(data);
         })
         .catch(err => console.error(err));
     }
@@ -105,6 +106,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const tabs = [
     { id: 'students', name: 'Manajemen Siswa', icon: <Users size={20} /> },
     { id: 'monitoring', name: 'Pantau Ujian', icon: <Activity size={20} /> },
+    { id: 'history', name: 'Riwayat Ujian', icon: <Download size={20} /> },
   ];
 
   return (
@@ -317,74 +319,187 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
         )}
 
         {activeTab === 'monitoring' && (() => {
-          const finished = sessions.filter(s => s.status === 'selesai').length;
-          const ongoing = sessions.filter(s => s.status === 'berlangsung').length;
-          const notStarted = Math.max(0, students.length - finished - ongoing);
-          const activeTokens = activePackages.map(p => p.token).join(', ') || 'Tidak Ada';
-
+          const activePackages = allPackages.filter(p => p.status === 'aktif');
+          
           return (
             <div className="animate-fade-in glass-panel p-8">
               <div className="flex justify-between items-center mb-8">
                 <div>
                   <h2>Pantau Pengerjaan Ujian</h2>
-                  <p>Monitor status try out siswa secara real-time.</p>
-                </div>
-                <div className="flex gap-4">
-                  <div style={{ padding: '8px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Token Aktif Saat Ini</div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 'bold', letterSpacing: '2px', color: 'var(--primary-dark)' }}>{activeTokens}</div>
-                  </div>
+                  <p>Monitor status try out siswa secara real-time untuk paket ujian yang sedang aktif.</p>
                 </div>
               </div>
 
-              <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 0, marginBottom: '2rem' }}>
-                <div className="card" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1.5rem' }}>
-                  <h3 style={{ fontSize: '2.5rem', color: '#64748b', margin: 0 }}>{notStarted}</h3>
-                  <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Belum Mengerjakan</p>
+              {activePackages.length === 0 ? (
+                <div className="p-8 text-center text-muted" style={{ border: '1px dashed #cbd5e1', borderRadius: '12px' }}>
+                  Tidak ada paket ujian yang sedang aktif saat ini.
                 </div>
-                <div className="card" style={{ background: 'rgba(0, 184, 217, 0.1)', border: '1px solid rgba(0, 184, 217, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
-                  <h3 style={{ fontSize: '2.5rem', color: '#00b8d9', margin: 0 }}>{ongoing}</h3>
-                  <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Sedang Mengerjakan</p>
-                </div>
-                <div className="card" style={{ background: 'rgba(0, 128, 0, 0.1)', border: '1px solid rgba(0, 128, 0, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
-                  <h3 style={{ fontSize: '2.5rem', color: 'green', margin: 0 }}>{finished}</h3>
-                  <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Selesai Ujian</p>
-                </div>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  {activePackages.map(pkg => {
+                    const pkgSessions = sessions.filter(s => s.packageId === pkg.id);
+                    const finished = pkgSessions.filter(s => s.status === 'selesai').length;
+                    const ongoing = pkgSessions.filter(s => s.status === 'berlangsung').length;
+                    const notStarted = Math.max(0, students.length - finished - ongoing);
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
-                  <th className="p-4">Nama Siswa</th>
-                  <th className="p-4">Kelas</th>
-                  <th className="p-4">Sesi Try Out Aktif</th>
-                  <th className="p-4">Status Pengerjaan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.length > 0 ? sessions.map((session, i) => (
-                  <tr key={session.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td className="p-4 font-semibold text-main">{session.student?.fullName || '-'}</td>
-                    <td className="p-4">{session.student?.className || '-'}</td>
-                    <td className="p-4 text-muted">{session.package?.name || '-'}</td>
-                    <td className="p-4">
-                      {session.status === 'selesai' ? (
-                        <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green' }}>Selesai</span>
-                      ) : (
-                        <span className="tag" style={{ background: 'rgba(0, 184, 217, 0.1)', color: '#00b8d9', border: '1px solid #00b8d9' }}>Sedang Mengerjakan</span>
-                      )}
-                    </td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan={4} className="p-4 text-center text-muted">Belum ada siswa yang mulai ujian.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                    return (
+                      <div key={pkg.id} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                        <div style={{ padding: '1.5rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{pkg.name}</h3>
+                            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Token: <strong style={{ letterSpacing: '1px', color: 'var(--primary-color)' }}>{pkg.token}</strong></div>
+                          </div>
+                          <span className="tag" style={{ background: 'rgba(0,128,0,0.1)', color: 'green' }}>AKTIF</span>
+                        </div>
+                        
+                        <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', padding: '1.5rem', margin: 0, gap: '1rem' }}>
+                          <div className="card" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1rem' }}>
+                            <h3 style={{ fontSize: '2rem', color: '#64748b', margin: 0 }}>{notStarted}</h3>
+                            <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Belum Mengerjakan</p>
+                          </div>
+                          <div className="card" style={{ background: 'rgba(0, 184, 217, 0.1)', border: '1px solid rgba(0, 184, 217, 0.3)', borderRadius: '12px', padding: '1rem' }}>
+                            <h3 style={{ fontSize: '2rem', color: '#00b8d9', margin: 0 }}>{ongoing}</h3>
+                            <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Sedang Mengerjakan</p>
+                          </div>
+                          <div className="card" style={{ background: 'rgba(0, 128, 0, 0.1)', border: '1px solid rgba(0, 128, 0, 0.3)', borderRadius: '12px', padding: '1rem' }}>
+                            <h3 style={{ fontSize: '2rem', color: 'green', margin: 0 }}>{finished}</h3>
+                            <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Selesai Ujian</p>
+                          </div>
+                        </div>
+
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', borderTop: '1px solid #e2e8f0' }}>
+                          <thead>
+                            <tr style={{ background: '#f8fafc' }}>
+                              <th className="p-4" style={{ fontSize: '0.85rem', color: '#64748b' }}>Nama Siswa</th>
+                              <th className="p-4" style={{ fontSize: '0.85rem', color: '#64748b' }}>Kelas</th>
+                              <th className="p-4" style={{ fontSize: '0.85rem', color: '#64748b' }}>Status Pengerjaan</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pkgSessions.length > 0 ? pkgSessions.map((session, i) => (
+                              <tr key={session.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                                <td className="p-4 font-semibold text-main">{session.student?.fullName || '-'}</td>
+                                <td className="p-4">{session.student?.className || '-'}</td>
+                                <td className="p-4">
+                                  {session.status === 'selesai' ? (
+                                    <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green', fontSize: '0.75rem' }}>Selesai</span>
+                                  ) : (
+                                    <span className="tag" style={{ background: 'rgba(0, 184, 217, 0.1)', color: '#00b8d9', border: '1px solid #00b8d9', fontSize: '0.75rem' }}>Sedang Mengerjakan</span>
+                                  )}
+                                </td>
+                              </tr>
+                            )) : (
+                              <tr>
+                                <td colSpan={3} className="p-4 text-center text-muted" style={{ fontSize: '0.9rem' }}>Belum ada siswa yang mulai ujian ini.</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })()}
+
+        {activeTab === 'history' && (
+          <div className="animate-fade-in glass-panel p-8">
+            {selectedHistoryPackage ? (
+              <div>
+                <div className="flex items-center gap-4 mb-6">
+                  <button className="btn-secondary" onClick={() => setSelectedHistoryPackage(null)}>← Kembali</button>
+                  <h2 style={{ margin: 0 }}>Riwayat Ujian: {selectedHistoryPackage.name}</h2>
+                </div>
+                
+                {(() => {
+                  const pkgSessions = sessions.filter(s => s.packageId === selectedHistoryPackage.id);
+                  const finished = pkgSessions.filter(s => s.status === 'selesai').length;
+                  const notStarted = Math.max(0, students.length - pkgSessions.length);
+
+                  return (
+                    <>
+                      <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 0, marginBottom: '2rem' }}>
+                        <div className="card" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1.5rem' }}>
+                          <h3 style={{ fontSize: '2.5rem', color: '#64748b', margin: 0 }}>{notStarted}</h3>
+                          <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Tidak Mengerjakan</p>
+                        </div>
+                        <div className="card" style={{ background: 'rgba(0, 128, 0, 0.1)', border: '1px solid rgba(0, 128, 0, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
+                          <h3 style={{ fontSize: '2.5rem', color: 'green', margin: 0 }}>{finished}</h3>
+                          <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Selesai Mengerjakan</p>
+                        </div>
+                      </div>
+
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                        <thead>
+                          <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--glass-border)' }}>
+                            <th className="p-4">Nama Siswa</th>
+                            <th className="p-4">Kelas</th>
+                            <th className="p-4">Nilai</th>
+                            <th className="p-4">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pkgSessions.length > 0 ? pkgSessions.map((session, i) => (
+                            <tr key={session.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                              <td className="p-4 font-semibold text-main">{session.student?.fullName || '-'}</td>
+                              <td className="p-4">{session.student?.className || '-'}</td>
+                              <td className="p-4 font-bold">{session.finalScore !== null ? session.finalScore : '-'}</td>
+                              <td className="p-4">
+                                {session.status === 'selesai' ? (
+                                  <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green', fontSize: '0.75rem' }}>Selesai</span>
+                                ) : (
+                                  <span className="tag" style={{ background: 'rgba(255, 165, 0, 0.1)', color: 'orange', border: '1px solid orange', fontSize: '0.75rem' }}>Tidak Selesai</span>
+                                )}
+                              </td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan={4} className="p-4 text-center text-muted">Tidak ada rekaman sesi untuk ujian ini.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-8">
+                  <div>
+                    <h2>Riwayat Semua Ujian</h2>
+                    <p>Lihat daftar paket ujian yang pernah dikerjakan oleh sekolah Anda.</p>
+                  </div>
+                </div>
+
+                <div className="dashboard-grid">
+                  {allPackages.length > 0 ? allPackages.map(pkg => (
+                    <div key={pkg.id} className="glass-panel card flex flex-col hover:shadow-lg transition-all" style={{ cursor: 'pointer' }} onClick={() => setSelectedHistoryPackage(pkg)}>
+                      <div className="flex justify-between mb-4">
+                        <span className="tag">{pkg.mapel}</span>
+                        <span style={{ 
+                          color: pkg.status === 'aktif' ? 'green' : '#64748b',
+                          background: pkg.status === 'aktif' ? 'rgba(0,128,0,0.1)' : '#f1f5f9',
+                          padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600
+                        }}>
+                          {pkg.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{pkg.name}</h3>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Token: {pkg.token}</p>
+                    </div>
+                  )) : (
+                    <div className="p-8 text-center text-muted col-span-full">
+                      Belum ada paket ujian yang tersedia.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
