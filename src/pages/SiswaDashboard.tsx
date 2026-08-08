@@ -16,6 +16,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [timeLeft, setTimeLeft] = useState(90 * 60); // 90 minutes
   const [isFinished, setIsFinished] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
+  const [releaseScoreMode, setReleaseScoreMode] = useState<string>('langsung');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Timer effect
@@ -66,6 +67,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
       setSessionId(data.session.id);
       setQuestions(data.questions || []);
+      setReleaseScoreMode(data.package?.releaseScoreMode || 'langsung');
       
       // Map existing answers to our qNumber format
       const loadedAnswers: Record<number, any> = {};
@@ -162,11 +164,23 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           <p className="mb-6">Terima kasih, jawaban Anda telah berhasil disimpan di sistem.</p>
           
           <div className="card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
-            <h3 style={{ fontSize: '2.5rem', margin: 0, color: 'var(--primary-color)' }}>
-              {finalScore !== null ? Math.round(finalScore) : '---'} / 100
-            </h3>
-            <p>Skor Total (Sesi Ujian)</p>
-            <small style={{ color: 'var(--text-muted)' }}>*Sistem diatur untuk menampilkan nilai secara langsung.</small>
+            {releaseScoreMode === 'langsung' ? (
+              <>
+                <h3 style={{ fontSize: '2.5rem', margin: 0, color: 'var(--primary-color)' }}>
+                  {finalScore !== null ? Math.round(finalScore) : '---'} / 100
+                </h3>
+                <p>Skor Total (Sesi Ujian)</p>
+                <small style={{ color: 'var(--text-muted)' }}>*Sistem diatur untuk menampilkan nilai secara langsung.</small>
+              </>
+            ) : (
+              <>
+                <h3 style={{ fontSize: '1.5rem', margin: 0, color: 'var(--text-muted)', padding: '1rem 0' }}>
+                  Menunggu Rilis
+                </h3>
+                <p>Skor Anda telah terekam di sistem.</p>
+                <small style={{ color: 'var(--text-muted)' }}>*Nilai akan diumumkan kemudian oleh pihak penyelenggara.</small>
+              </>
+            )}
           </div>
 
           <button className="btn" onClick={onLogout}>Kembali ke Beranda</button>

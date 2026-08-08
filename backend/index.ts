@@ -352,6 +352,45 @@ app.get('/api/sessions', async (req, res) => {
   }
 });
 
+app.get('/api/analytics', async (req, res) => {
+  try {
+    const sessions = await prisma.examSession.findMany({
+      where: { status: 'selesai' },
+      include: {
+        student: { include: { school: true } },
+        package: true,
+        answers: { include: { question: true } }
+      }
+    });
+
+    const data = sessions.map(session => {
+      const elementBreakdown: Record<string, { total: number, correct: number }> = {};
+      session.answers.forEach(ans => {
+        const el = ans.question.element || 'Umum';
+        if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
+        elementBreakdown[el].total += 1;
+        if (ans.isCorrect) elementBreakdown[el].correct += 1;
+      });
+
+      return {
+        sessionId: session.id,
+        studentName: session.student.fullName,
+        nisn: session.student.username,
+        school: session.student.school?.name || '-',
+        mapel: session.package.mapel,
+        score: session.totalScore,
+        endTime: session.endTime,
+        elementBreakdown
+      };
+    });
+
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
 app.post('/api/sessions/start', async (req, res) => {
   const { studentId, token } = req.body;
   if (!studentId || !token) {

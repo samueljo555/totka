@@ -31,6 +31,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [questions, setQuestions] = useState<any[]>([]);
   const [questionPage, setQuestionPage] = useState(1);
   const questionsPerPage = 5;
+  
+  const [analytics, setAnalytics] = useState<any[]>([]);
 
   // School State
   const [isAddingSchool, setIsAddingSchool] = useState(false);
@@ -79,6 +81,11 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         .then(res => res.json())
         .then(data => setQuestions(data))
         .catch(err => console.error("Error fetching questions:", err));
+    } else if (activeTab === 'results') {
+      fetch('/api/analytics')
+        .then(res => res.json())
+        .then(data => setAnalytics(data))
+        .catch(err => console.error("Error fetching analytics:", err));
     }
   }, [activeTab]);
 
@@ -777,10 +784,72 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         )}
 
         {activeTab === 'results' && (
-          <div className="animate-fade-in glass-panel p-8 text-center text-muted">
-            <LineChart size={48} style={{ color: 'var(--primary-light)', margin: '0 auto 1rem auto' }} />
-            <h2>Analitik Skala Nasional</h2>
-            <p>Belum ada data analitik hasil yang masuk. (Atau sedang memuat dari API)</p>
+          <div className="animate-fade-in">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2>Analitik Hasil Try Out</h2>
+                <p className="text-muted">Data performa siswa berdasarkan elemen pembelajaran.</p>
+              </div>
+              <button className="btn flex items-center gap-2" onClick={() => {
+                const header = "NISN,Nama Siswa,Sekolah,Mata Pelajaran,Skor Total,Waktu Selesai\n";
+                const csv = analytics.map(a => `${a.nisn},"${a.studentName}","${a.school}",${a.mapel},${a.score},${a.endTime}`).join('\n');
+                const blob = new Blob([header + csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'analitik_tka.csv';
+                a.click();
+              }}>
+                <Download size={18} /> Ekspor CSV
+              </button>
+            </div>
+            
+            {analytics.length === 0 ? (
+              <div className="glass-panel p-8 text-center text-muted">
+                <LineChart size={48} style={{ color: 'var(--primary-light)', margin: '0 auto 1rem auto' }} />
+                <h3>Belum Ada Data</h3>
+                <p>Belum ada siswa yang menyelesaikan ujian.</p>
+              </div>
+            ) : (
+              <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Nama Siswa / NISN</th>
+                      <th>Sekolah</th>
+                      <th>Total Skor</th>
+                      <th>Analisis per Elemen (Benar / Total)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analytics.map((item, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{item.studentName}</div>
+                          <div className="text-muted" style={{ fontSize: '0.85rem' }}>{item.nisn}</div>
+                        </td>
+                        <td>{item.school}</td>
+                        <td>
+                          <span className="tag" style={{ background: 'var(--primary-color)', color: 'white' }}>
+                            {Math.round(item.score || 0)}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="flex flex-col gap-1">
+                            {Object.keys(item.elementBreakdown || {}).map(el => (
+                              <div key={el} style={{ fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', maxWidth: '300px', borderBottom: '1px solid #f1f5f9', paddingBottom: '2px' }}>
+                                <span>{el}:</span>
+                                <strong>{item.elementBreakdown[el].correct} / {item.elementBreakdown[el].total}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
