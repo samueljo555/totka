@@ -521,6 +521,10 @@ app.post('/api/sessions/start', async (req, res) => {
     if (!packageObj) {
       return res.status(404).json({ error: 'Token paket tidak valid atau tidak ditemukan' });
     }
+    
+    if (packageObj.status !== 'aktif') {
+      return res.status(403).json({ error: 'Ujian ini sedang tidak aktif atau sudah ditutup.' });
+    }
 
     let session = await prisma.examSession.findUnique({
       where: { studentId_packageId: { studentId, packageId: packageObj.id } }
