@@ -716,7 +716,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               <button className="btn" onClick={() => {
                 setEditingPackageId(null);
                 setNewPackageName('');
-                setNewPackageToken('');
+                setNewPackageToken(Math.random().toString(36).substring(2, 8).toUpperCase());
                 setNewPackageDuration(90);
                 setSelectedQuestionIds([]);
                 setIsAddingPackage(true);
@@ -812,7 +812,12 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </div>
                 <div className="input-group">
                   <label className="input-label">Token Ujian (Opsional/Bisa Diubah)</label>
-                  <input type="text" className="input-field" placeholder="Contoh: BATCH1MTK" value={newPackageToken} onChange={e => setNewPackageToken(e.target.value)} style={{ textTransform: 'uppercase' }} />
+                  <div className="flex gap-2">
+                    <input type="text" className="input-field" placeholder="Contoh: BATCH1MTK" value={newPackageToken} onChange={e => setNewPackageToken(e.target.value)} style={{ textTransform: 'uppercase', flex: 1 }} />
+                    <button className="btn-secondary" onClick={() => setNewPackageToken(Math.random().toString(36).substring(2, 8).toUpperCase())} title="Generate Token Baru">
+                      ⟳
+                    </button>
+                  </div>
                 </div>
                 <div className="input-group">
                   <label className="input-label">Durasi Waktu (Menit)</label>
