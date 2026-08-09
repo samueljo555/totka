@@ -22,6 +22,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   const [questions, setQuestions] = useState<any[]>([]);
   const [readings, setReadings] = useState<any[]>([]);
   const [isAddingReading, setIsAddingReading] = useState(false);
+  const [editingReadingId, setEditingReadingId] = useState<string | null>(null);
   const [readingTitle, setReadingTitle] = useState('');
   const [readingContent, setReadingContent] = useState('');
 
@@ -43,13 +44,16 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
 
   const handleSaveReading = async () => {
     try {
-      const res = await fetch('/api/readings', {
-        method: 'POST',
+      const url = editingReadingId ? `/api/readings/${editingReadingId}` : '/api/readings';
+      const method = editingReadingId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: readingTitle, content: readingContent, authorId: user?.id })
       });
       if (res.ok) {
         setIsAddingReading(false);
+        setEditingReadingId(null);
         setReadingTitle('');
         setReadingContent('');
         const data = await fetch('/api/readings').then(r => r.json());
@@ -520,7 +524,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 <h2>Manajemen Teks Bacaan Bersama</h2>
                 <p>Kelola bacaan yang dapat ditautkan ke lebih dari satu soal sekaligus.</p>
               </div>
-              <button className="btn" onClick={() => setIsAddingReading(true)}>
+              <button className="btn" onClick={() => { setIsAddingReading(true); setEditingReadingId(null); setReadingTitle(''); setReadingContent(''); }}>
                 <Plus size={18} /> Tambah Bacaan
               </button>
             </div>
@@ -541,13 +545,21 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                     <td className="p-4 text-muted">{r.content.substring(0, 50)}...</td>
                     <td className="p-4">{r._count?.questions || 0} Soal</td>
                     <td className="p-4">
-                      <button className="btn-secondary" style={{ padding: '4px 8px', color: '#d32f2f', background: 'rgba(255,0,0,0.1)' }} onClick={async () => {
-                        if (window.confirm('Hapus bacaan ini?')) {
-                          await fetch(`/api/readings/${r.id}`, { method: 'DELETE' });
-                          const data = await fetch('/api/readings').then(res => res.json());
-                          setReadings(data);
-                        }
-                      }}>Hapus</button>
+                      <div className="flex gap-2">
+                        <button className="btn-secondary" style={{ padding: '4px 8px' }} onClick={() => {
+                          setEditingReadingId(r.id);
+                          setReadingTitle(r.title);
+                          setReadingContent(r.content);
+                          setIsAddingReading(true);
+                        }}>Edit</button>
+                        <button className="btn-secondary" style={{ padding: '4px 8px', color: '#d32f2f', background: 'rgba(255,0,0,0.1)' }} onClick={async () => {
+                          if (window.confirm('Hapus bacaan ini?')) {
+                            await fetch(`/api/readings/${r.id}`, { method: 'DELETE' });
+                            const data = await fetch('/api/readings').then(res => res.json());
+                            setReadings(data);
+                          }
+                        }}>Hapus</button>
+                      </div>
                     </td>
                   </tr>
                 )) : (
@@ -560,24 +572,27 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
 
         {activeTab === 'bacaan' && isAddingReading && (
           <div className="animate-fade-in glass-panel p-8" style={{ minHeight: '400px' }}>
-            <h2>Tambah Bacaan Baru</h2>
-            <p className="text-muted mb-6">Buat wacana atau teks panjang untuk digunakan di soal-soal literasi.</p>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2>{editingReadingId ? 'Edit Teks Bacaan Bersama' : 'Tambah Teks Bacaan Bersama'}</h2>
+                <p>Tulis atau tempel teks panjang yang akan digunakan pada beberapa soal.</p>
+              </div>
+            </div>
             
-            <div className="flex flex-col gap-4 mb-6">
+            <div className="flex flex-col gap-4">
               <div className="input-group">
-                <label className="input-label">Judul Bacaan</label>
+                <label className="input-label">Judul Wacana / Teks</label>
                 <input type="text" className="input-field" value={readingTitle} onChange={e => setReadingTitle(e.target.value)} placeholder="Contoh: Peristiwa Rengasdengklok" />
               </div>
               <div className="input-group">
-                <label className="input-label">Isi Bacaan</label>
+                <label className="input-label">Isi Teks Bacaan</label>
                 <textarea className="input-field" rows={10} value={readingContent} onChange={e => setReadingContent(e.target.value)} placeholder="Masukkan teks cerita/wacana lengkap di sini..."></textarea>
               </div>
-            </div>
-
-            <div className="flex gap-4">
-              <button className="btn-secondary" onClick={() => setIsAddingReading(false)}>Batal</button>
-              <button className="btn" onClick={handleSaveReading}>Simpan Teks Bacaan</button>
-            </div>
+              
+              <div className="flex justify-end gap-4 mt-4">
+              <button className="btn-secondary" onClick={() => { setIsAddingReading(false); setEditingReadingId(null); setReadingTitle(''); setReadingContent(''); }}>Batal</button>
+              <button className="btn" onClick={handleSaveReading}>{editingReadingId ? 'Perbarui Teks' : 'Simpan Teks Bacaan'}</button>
+              </div></div>
           </div>
         )}
 
