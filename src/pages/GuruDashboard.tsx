@@ -479,18 +479,18 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                       <label className="input-label">Kategori / Pernyataan (Tentukan pasangan kategori yang benar)</label>
                       <div className="flex gap-4 mb-2">
                         <div style={{ flex: 2, fontWeight: 600, fontSize: '0.85rem' }}>Pernyataan</div>
-                        <div style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem', textAlign: 'center' }}>Kategori 1 (Mis: Benar)</div>
-                        <div style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem', textAlign: 'center' }}>Kategori 2 (Mis: Salah)</div>
+                        <div style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem', textAlign: 'center' }}>Benar</div>
+                        <div style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem', textAlign: 'center' }}>Salah</div>
                         <div style={{ width: '36px' }}></div> {/* Spacer for delete button */}
                       </div>
                       {options.map((opt, index) => (
                         <div key={opt.id} className="flex items-center gap-4 mb-2">
                           <input type="text" className="input-field" style={{ flex: 2 }} placeholder={`Pernyataan ${index + 1}`} value={opt.text} onChange={(e) => handleOptionChange(opt.id, e.target.value)} />
                           <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                            <input type="radio" name={`cat_stmt_${opt.id}`} style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
+                            <input type="radio" name={`cat_stmt_${opt.id}`} checked={correctAnswer[index] === 0} onChange={() => { const newArr = [...correctAnswer]; newArr[index] = 0; setCorrectAnswer(newArr); }} style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
                           </div>
                           <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                            <input type="radio" name={`cat_stmt_${opt.id}`} style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
+                            <input type="radio" name={`cat_stmt_${opt.id}`} checked={correctAnswer[index] === 1} onChange={() => { const newArr = [...correctAnswer]; newArr[index] = 1; setCorrectAnswer(newArr); }} style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
                           </div>
                           <button className="btn-secondary" onClick={() => handleDeleteOption(opt.id)} style={{ padding: '8px', color: '#d32f2f' }} title="Hapus Pernyataan"><Trash2 size={16}/></button>
                         </div>

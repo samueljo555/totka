@@ -608,9 +608,15 @@ app.post('/api/sessions/:sessionId/finish', async (req, res) => {
             isCorrect = true;
           }
         }
+      } else if (q.type === 'Pilihan Ganda Kompleks Kategori') {
+        // studentAnswer is an array of [0, 1, 0] corresponding to categories
+        if (Array.isArray(correctAnswer) && Array.isArray(studentAnswer)) {
+          if (correctAnswer.length > 0 && correctAnswer.length === studentAnswer.length &&
+              correctAnswer.every((val: any, index: number) => val === studentAnswer[index])) {
+            isCorrect = true;
+          }
+        }
       }
-      // Pilihan Ganda Kompleks Kategori is skipped for now since UI isn't fully bound yet
-      
       if (isCorrect) correctCount++;
       
       // Update individual answer correctness (optional, but good for granular analysis later)

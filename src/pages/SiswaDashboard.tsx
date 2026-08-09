@@ -255,11 +255,83 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           </div>
         )}
 
-        {/* Simplistic mock render for other types since we lack detailed DB fields for options currently */}
-        {!type.includes('Pilihan Ganda Sederhana') && (
-           <div className="p-4" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-              Pilihan jawaban untuk tipe soal ini akan dirender secara dinamis berdasarkan data JSON dari backend (Masih dalam pengembangan).
-           </div>
+        {type === 'Pilihan Ganda Kompleks' && q.options && (
+          <div className="flex flex-col gap-4">
+            {(Array.isArray(q.options) ? q.options : []).map((opt: any, i: number) => {
+              const currentAnswers = Array.isArray(answers[currentQuestion]) ? answers[currentQuestion] : [];
+              const isChecked = currentAnswers.includes(i);
+              return (
+                <label 
+                  key={opt.id || i} 
+                  className="flex items-center gap-4 p-4" 
+                  style={{ 
+                    background: isChecked ? 'rgba(0, 82, 204, 0.05)' : 'white', 
+                    border: isChecked ? '2px solid var(--primary-color)' : '1px solid #cbd5e1', 
+                    borderRadius: '8px', 
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={isChecked}
+                    onChange={(e) => {
+                      let newAnswers = [...currentAnswers];
+                      if (e.target.checked) newAnswers.push(i);
+                      else newAnswers = newAnswers.filter((a: number) => a !== i);
+                      handleAnswer(currentQuestion, newAnswers);
+                    }}
+                    style={{ width: '20px', height: '20px' }} 
+                  />
+                  <span style={{ fontSize: '1.1rem' }}>{opt.text || `Pernyataan ${i + 1}`}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        {type === 'Pilihan Ganda Kompleks Kategori' && q.options && (
+          <div className="flex flex-col gap-4">
+            <div className="flex gap-4 p-4" style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+               <div style={{ flex: 2, fontWeight: 600 }}>Pernyataan</div>
+               <div style={{ flex: 1, fontWeight: 600, textAlign: 'center' }}>Benar</div>
+               <div style={{ flex: 1, fontWeight: 600, textAlign: 'center' }}>Salah</div>
+            </div>
+            {(Array.isArray(q.options) ? q.options : []).map((opt: any, i: number) => {
+              const currentAnswers = Array.isArray(answers[currentQuestion]) ? answers[currentQuestion] : [];
+              return (
+                <div key={opt.id || i} className="flex items-center gap-4 p-4" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
+                  <div style={{ flex: 2, fontSize: '1.1rem' }}>{opt.text || `Pernyataan ${i + 1}`}</div>
+                  <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                    <input 
+                      type="radio" 
+                      name={`cat_stmt_${currentQuestion}_${i}`} 
+                      checked={currentAnswers[i] === 0}
+                      onChange={() => {
+                        const newAnswers = [...currentAnswers];
+                        newAnswers[i] = 0;
+                        handleAnswer(currentQuestion, newAnswers);
+                      }}
+                      style={{ width: '20px', height: '20px', cursor: 'pointer' }} 
+                    />
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                    <input 
+                      type="radio" 
+                      name={`cat_stmt_${currentQuestion}_${i}`} 
+                      checked={currentAnswers[i] === 1}
+                      onChange={() => {
+                        const newAnswers = [...currentAnswers];
+                        newAnswers[i] = 1;
+                        handleAnswer(currentQuestion, newAnswers);
+                      }}
+                      style={{ width: '20px', height: '20px', cursor: 'pointer' }} 
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     );
