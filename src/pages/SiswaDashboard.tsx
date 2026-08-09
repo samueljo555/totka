@@ -52,18 +52,23 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     }
   };
 
-  const handleStartExam = async () => {
-    if (token.length < 3) return;
+  const startExamWithToken = async (examToken: string) => {
+    if (examToken.length < 3) return;
     setIsLoading(true);
     setErrorMsg('');
     try {
       const res = await fetch('/api/sessions/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: user.id, token })
+        body: JSON.stringify({ studentId: user.id, token: examToken })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal memulai ujian');
+      if (!res.ok) {
+        sessionStorage.removeItem('activeExamToken');
+        throw new Error(data.error || 'Gagal memulai ujian');
+      }
+
+      sessionStorage.setItem('activeExamToken', examToken);
 
       setSessionId(data.session.id);
       setQuestions(data.questions || []);
@@ -87,6 +92,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
       setHasEnteredToken(true);
       if (data.session.status === 'selesai') {
+        sessionStorage.removeItem('activeExamToken');
         setFinalScore(data.session.totalScore ? parseFloat(data.session.totalScore) : 0);
         setIsFinished(true);
       }
@@ -97,6 +103,16 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     }
   };
 
+  const handleStartExam = () => startExamWithToken(token);
+
+  useEffect(() => {
+    const savedToken = sessionStorage.getItem('activeExamToken');
+    if (savedToken && !hasEnteredToken) {
+      setToken(savedToken);
+      startExamWithToken(savedToken);
+    }
+  }, []);
+
   const handleFinishExam = async () => {
     if (!sessionId || isSubmitting) return;
     setIsSubmitting(true);
@@ -104,6 +120,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       const res = await fetch(`/api/sessions/${sessionId}/finish`, { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
+        sessionStorage.removeItem('activeExamToken');
         setFinalScore(data.totalScore ? parseFloat(data.totalScore) : 0);
         setIsFinished(true);
       } else {
@@ -147,7 +164,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             {isLoading ? 'Memproses...' : 'Mulai Kerjakan'}
           </button>
           
-          <button className="btn-secondary mt-4" style={{ width: '100%' }} onClick={onLogout}>
+          <button className="btn-secondary mt-4" style={{ width: '100%' }} onClick={() => { sessionStorage.removeItem('activeExamToken'); onLogout(); }}>
             Kembali
           </button>
         </div>
@@ -183,7 +200,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             )}
           </div>
 
-          <button className="btn" onClick={onLogout}>Kembali ke Beranda</button>
+          <button className="btn" onClick={() => { sessionStorage.removeItem('activeExamToken'); onLogout(); }}>Kembali ke Beranda</button>
         </div>
       </div>
     );
