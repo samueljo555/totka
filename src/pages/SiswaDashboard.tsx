@@ -212,6 +212,13 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           <span className="tag">{type}</span>
         </div>
 
+        {q.reading && (
+          <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '1rem', color: 'var(--primary-dark)' }}>Wacana: {q.reading.title}</h3>
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.8', color: 'var(--text-main)' }}>{q.reading.content}</div>
+          </div>
+        )}
+
         <div style={{ fontSize: '1.2rem', marginBottom: '2rem', lineHeight: '1.8' }}>
           {q.content || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>[Pertanyaan kosong...]</span>}
           {q.imageUrl && (

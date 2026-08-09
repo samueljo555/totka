@@ -408,7 +408,7 @@ app.post('/api/questions', async (req, res) => {
         options: options || [],
         correctAnswer: correctAnswer || [],
         ...(authorId && { authorId }),
-        ...(readingId && { readingId }),
+        readingId: readingId !== undefined ? readingId : undefined,
       }
     });
     res.json(question);
@@ -432,7 +432,7 @@ app.put('/api/questions/:id', async (req, res) => {
         options: options || [],
         correctAnswer: correctAnswer || [],
         ...(authorId && { authorId }),
-        ...(readingId && { readingId }),
+        readingId: readingId !== undefined ? readingId : undefined,
       }
     });
     res.json(question);
@@ -538,7 +538,7 @@ app.post('/api/sessions/start', async (req, res) => {
 
     const packageQuestions = await prisma.packageQuestion.findMany({
       where: { packageId: packageObj.id },
-      include: { question: true }
+      include: { question: { include: { reading: true } } }
     });
     const questions = packageQuestions.map(pq => pq.question);
 
