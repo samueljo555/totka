@@ -48,7 +48,7 @@ body {
 }
 
 .katex-container .katex {
-  font-size: 1.25em; /* Diperbesar agar seimbang dengan teks UI biasa */
+  font-size: 1.6em; /* Diperbesar agar seimbang dengan teks UI biasa */
 }
 
 .app-container {
