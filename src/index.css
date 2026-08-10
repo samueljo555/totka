@@ -22,7 +22,7 @@
   --radius-lg: 24px;
 }
 
-* {
+* :not(.katex, .katex *) {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -145,7 +145,7 @@ h2 {
   font-weight: 700;
 }
 
-p {
+p:not(.katex):not(.katex *) {
   color: var(--text-muted);
   line-height: 1.6;
 }
@@ -192,7 +192,7 @@ p {
 .justify-center { justify-content: center; }
 .justify-between { justify-content: space-between; }
 .gap-2 { gap: 0.5rem; }
-.gap-4 { gap: 1rem; }
+.gap-4 { gap: 2rem; }
 .mt-4 { margin-top: 1rem; }
 .mb-4 { margin-bottom: 1rem; }
 .p-6 { padding: 1.5rem; }
