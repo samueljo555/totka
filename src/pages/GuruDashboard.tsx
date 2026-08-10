@@ -613,9 +613,11 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
               <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', background: '#f8fafc' }}>
                 <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', whiteSpace: 'pre-wrap' }}>
                   {questionText ? (
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {questionText}
-                    </ReactMarkdown>
+                    <div className="katex-container">
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {questionText}
+                      </ReactMarkdown>
+                    </div>
                   ) : (
                     <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>[Pertanyaan kosong...]</span>
                   )}
@@ -631,7 +633,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                     {options.map((opt, i) => (
                       <label key={opt.id} className="flex items-center gap-3 p-3" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>
                         <input type="radio" disabled /> 
-                        <span style={{ fontSize: '0.95rem' }}>
+                        <span style={{ fontSize: '0.95rem' }} className="katex-container">
                           <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pilihan ${i + 1}`}</ReactMarkdown>
                         </span>
                       </label>
@@ -644,7 +646,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                     {options.map((opt, i) => (
                       <label key={opt.id} className="flex items-center gap-3 p-3" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>
                         <input type="checkbox" disabled /> 
-                        <span style={{ fontSize: '0.95rem' }}>
+                        <span style={{ fontSize: '0.95rem' }} className="katex-container">
                           <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
                         </span>
                       </label>
@@ -661,7 +663,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                     </div>
                     {options.map((opt, i) => (
                       <div key={opt.id} className="flex items-center p-3" style={{ borderBottom: '1px solid #e2e8f0' }}>
-                        <div style={{ flex: 2, fontSize: '0.95rem' }}>
+                        <div style={{ flex: 2, fontSize: '0.95rem' }} className="katex-container">
                           <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
                         </div>
                         <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>

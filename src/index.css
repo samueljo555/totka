@@ -40,21 +40,15 @@ body {
   overflow-x: hidden;
 }
 
-/* Fix KaTeX display */
-.katex, .katex * {
-  box-sizing: content-box !important;
-  line-height: normal !important;
+/* JANGAN override line-height/box-sizing KaTeX secara global.
+   Biarkan KaTeX mengatur sendiri strukturnya. */
+
+.katex-container {
+  all: revert; /* reset dari CSS global aplikasi, biar KaTeX pakai default-nya sendiri */
 }
 
-/* Force fraction line for compatibility between rehype-katex 0.16 HTML and KaTeX 0.18 CSS */
-.katex .frac-line {
-  border-bottom: 0.04em solid currentColor !important;
-  display: inline-block !important;
-  width: 100% !important;
-}
-
-.katex .mfrac {
-  padding: 0.1em 0 !important;
+.katex-container .katex {
+  font-size: 1.1em; /* aman untuk disesuaikan */
 }
 
 .app-container {

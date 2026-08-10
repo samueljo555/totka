@@ -242,9 +242,11 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
         <div style={{ fontSize: '1.2rem', marginBottom: '2rem', lineHeight: '1.8' }}>
           {q.content ? (
-            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {q.content}
-            </ReactMarkdown>
+            <div className="katex-container">
+              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                {q.content}
+              </ReactMarkdown>
+            </div>
           ) : (
             <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>[Pertanyaan kosong...]</span>
           )}
@@ -276,7 +278,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   onChange={() => handleAnswer(currentQuestion, i)}
                   style={{ width: '20px', height: '20px' }} 
                 />
-                <span style={{ fontSize: '1.1rem' }}>
+                <span style={{ fontSize: '1.1rem' }} className="katex-container">
                   <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pilihan ${i + 1}`}</ReactMarkdown>
                 </span>
               </label>
@@ -312,7 +314,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     }}
                     style={{ width: '20px', height: '20px' }} 
                   />
-                  <span style={{ fontSize: '1.1rem' }}>
+                  <span style={{ fontSize: '1.1rem' }} className="katex-container">
                     <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
                   </span>
                 </label>
@@ -332,7 +334,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               const currentAnswers = Array.isArray(answers[currentQuestion]) ? answers[currentQuestion] : [];
               return (
                 <div key={opt.id || i} className="flex items-center gap-4 p-4" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
-                  <div style={{ flex: 2, fontSize: '1.1rem' }}>
+                  <div style={{ flex: 2, fontSize: '1.1rem' }} className="katex-container">
                     <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
                   </div>
                   <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
