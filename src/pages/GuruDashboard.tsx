@@ -15,6 +15,10 @@ import {
   AlertCircle,
   Edit2
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('bank');
@@ -426,6 +430,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
               <div>
                 <div className="input-group">
                   <label className="input-label">Pertanyaan Soal</label>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>*Gunakan format Markdown untuk tulisan tebal/miring. Untuk rumus matematika (pecahan, akar, pangkat, dll), apit dengan tanda dolar (contoh: <code>$x^2 + \frac{1}{2}$</code>).</p>
                   <textarea className="input-field" rows={5} placeholder="Ketik pertanyaan di sini..." value={questionText} onChange={(e) => setQuestionText(e.target.value)}></textarea>
                   <div className="mt-4">
                     <input type="file" id="upload-image" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
@@ -607,7 +612,13 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
               
               <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', background: '#f8fafc' }}>
                 <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', whiteSpace: 'pre-wrap' }}>
-                  {questionText || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>[Pertanyaan kosong...]</span>}
+                  {questionText ? (
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {questionText}
+                    </ReactMarkdown>
+                  ) : (
+                    <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>[Pertanyaan kosong...]</span>
+                  )}
                   {questionImageUrl && (
                     <div className="mt-4">
                       <img src={questionImageUrl} alt="Preview" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }} />
@@ -619,8 +630,10 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                   <div className="flex flex-col gap-3">
                     {options.map((opt, i) => (
                       <label key={opt.id} className="flex items-center gap-3 p-3" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>
-                        <input type="radio" name="preview_answer" style={{ width: '18px', height: '18px' }} />
-                        <span>{opt.text || `Pilihan ${i + 1}`}</span>
+                        <input type="radio" disabled /> 
+                        <span style={{ fontSize: '0.95rem' }}>
+                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pilihan ${i + 1}`}</ReactMarkdown>
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -630,8 +643,10 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                   <div className="flex flex-col gap-3">
                     {options.map((opt, i) => (
                       <label key={opt.id} className="flex items-center gap-3 p-3" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>
-                        <input type="checkbox" style={{ width: '18px', height: '18px' }} />
-                        <span>{opt.text || `Pernyataan ${i + 1}`}</span>
+                        <input type="checkbox" disabled /> 
+                        <span style={{ fontSize: '0.95rem' }}>
+                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -646,12 +661,14 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                     </div>
                     {options.map((opt, i) => (
                       <div key={opt.id} className="flex items-center p-3" style={{ borderBottom: '1px solid #e2e8f0' }}>
-                        <div style={{ flex: 2 }}>{opt.text || `Pernyataan ${i + 1}`}</div>
-                        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                          <input type="radio" name={`prev_cat_${opt.id}`} style={{ width: '18px', height: '18px' }} />
+                        <div style={{ flex: 2, fontSize: '0.95rem' }}>
+                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
                         </div>
                         <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                          <input type="radio" name={`prev_cat_${opt.id}`} style={{ width: '18px', height: '18px' }} />
+                          <input type="radio" name={`prev_cat_${opt.id}`} disabled style={{ width: '18px', height: '18px' }} />
+                        </div>
+                        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                          <input type="radio" name={`prev_cat_${opt.id}`} disabled style={{ width: '18px', height: '18px' }} />
                         </div>
                       </div>
                     ))}
