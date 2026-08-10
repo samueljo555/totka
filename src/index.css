@@ -41,8 +41,9 @@ body {
 }
 
 /* Fix KaTeX display */
-.katex {
-  line-height: 1.2 !important;
+.katex, .katex * {
+  box-sizing: content-box !important;
+  line-height: normal !important;
 }
 
 .app-container {
