@@ -75,7 +75,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
     'Bahasa Indonesia': ['Menemukan Informasi', 'Memahami (Interpretasi & Integrasi)', 'Mengevaluasi & Merefleksi']
   });
   const [selectedMapel, setSelectedMapel] = useState('Matematika');
-  const [selectedElement, setSelectedElement] = useState(subjectElements['Matematika'][0]);
+  const [selectedElement, setSelectedElement] = useState('');
   const [isAddingElement, setIsAddingElement] = useState(false);
   const [newElement, setNewElement] = useState('');
   
@@ -96,6 +96,10 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   const handleSaveQuestion = async () => {
     if (!questionText || options.length === 0) {
       alert("Pertanyaan dan opsi tidak boleh kosong!");
+      return;
+    }
+    if (!selectedElement) {
+      alert("Elemen/Kompetensi harus dipilih terlebih dahulu!");
       return;
     }
 
@@ -173,8 +177,8 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
 
   useEffect(() => {
     const currentElements = subjectElements[selectedMapel] || [];
-    if (currentElements.length > 0 && !currentElements.includes(selectedElement)) {
-      setSelectedElement(currentElements[0]);
+    if (selectedElement && !currentElements.includes(selectedElement)) {
+      setSelectedElement('');
     }
   }, [selectedMapel, subjectElements]);
 
@@ -288,7 +292,19 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 <h2>Daftar Soal</h2>
                 <p>Kelola bank soal untuk materi Matematika dan Bahasa Indonesia.</p>
               </div>
-              <button className="btn" onClick={() => setIsAdding(true)}>
+              <button className="btn" onClick={() => {
+                setEditingQuestionId(null);
+                setQuestionText('');
+                setQuestionImageUrl('');
+                setQuestionImage(null);
+                setOptions([{ id: 1, text: '' }, { id: 2, text: '' }, { id: 3, text: '' }, { id: 4, text: '' }]);
+                setCorrectAnswer([]);
+                setQuestionType('Pilihan Ganda Sederhana');
+                setSelectedMapel('Matematika');
+                setSelectedElement('');
+                setSelectedReadingId('');
+                setIsAdding(true);
+              }}>
                 <Plus size={18} /> Tambah Soal
               </button>
             </div>
@@ -401,6 +417,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                         value={selectedElement}
                         onChange={(e) => setSelectedElement(e.target.value)}
                       >
+                        <option value="" disabled>Pilih Elemen...</option>
                         {(subjectElements[selectedMapel] || []).map(el => (
                           <option key={el} value={el}>{el}</option>
                         ))}
