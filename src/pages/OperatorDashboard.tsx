@@ -20,7 +20,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   // State for new siswa form
   const [newNisn, setNewNisn] = useState('');
   const [newFullName, setNewFullName] = useState('');
-  const [newClassName, setNewClassName] = useState('6A');
+  const [newClassName, setNewClassName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -192,7 +192,12 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 <label htmlFor="csv-upload" className="btn-secondary" style={{ margin: 0 }}>
                   <Upload size={18} /> Import CSV
                 </label>
-                <button className="btn" onClick={() => setIsAddingSiswa(true)}>
+                <button className="btn" onClick={() => {
+                  setNewNisn('');
+                  setNewFullName('');
+                  setNewClassName('');
+                  setIsAddingSiswa(true);
+                }}>
                   <Plus size={18} /> Tambah Siswa
                 </button>
               </div>
@@ -261,11 +266,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
             </div>
             <div className="input-group">
               <label className="input-label">Kelas (Atribut Profil)</label>
-              <select className="input-field" value={newClassName} onChange={e => setNewClassName(e.target.value)}>
-                <option value="6A">6A</option>
-                <option value="6B">6B</option>
-                <option value="6C">6C</option>
-              </select>
+              <input type="text" className="input-field" placeholder="Ketik nama kelas (mis. 6A, VII-B)" value={newClassName} onChange={e => setNewClassName(e.target.value)} />
             </div>
             
             <div className="p-4 mt-6" style={{ background: 'rgba(0, 82, 204, 0.05)', borderRadius: '8px' }}>
@@ -305,6 +306,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                   setIsAddingSiswa(false);
                   setNewNisn('');
                   setNewFullName('');
+                  setNewClassName('');
                   fetchStudents();
                 })
                 .catch(err => {
