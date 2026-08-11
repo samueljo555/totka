@@ -1027,27 +1027,30 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
-                        <div className="absolute -right-4 -top-4 opacity-5 text-blue-500"><Users size={80} /></div>
-                        <div className="text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider text-center">Total Peserta</div>
-                        <div className="text-4xl font-black text-slate-800">{packageAnalyticsData.summary?.totalParticipants || 0}</div>
+                    <div className="glass-panel" style={{ padding: '0', overflow: 'hidden', marginBottom: '2rem' }}>
+                      <div style={{ padding: '20px', borderBottom: '1px solid var(--glass-border)' }}>
+                        <h3 className="m-0">Ringkasan Paket</h3>
                       </div>
-                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
-                        <div className="absolute -right-4 -top-4 opacity-5 text-indigo-500"><BarChart2 size={80} /></div>
-                        <div className="text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider text-center">Rata-rata Nilai</div>
-                        <div className="text-4xl font-black text-indigo-600">{packageAnalyticsData.summary?.average?.toFixed(1) || 0}</div>
-                      </div>
-                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
-                        <div className="absolute -right-4 -top-4 opacity-5 text-green-500"><TrendingUp size={80} /></div>
-                        <div className="text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider text-center">Nilai Tertinggi</div>
-                        <div className="text-4xl font-black text-green-500">{packageAnalyticsData.summary?.highest?.toFixed(1) || 0}</div>
-                      </div>
-                      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
-                        <div className="absolute -right-4 -top-4 opacity-5 text-red-500"><AlertTriangle size={80} /></div>
-                        <div className="text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider text-center">Nilai Terendah</div>
-                        <div className="text-4xl font-black text-red-500">{packageAnalyticsData.summary?.lowest?.toFixed(1) || 0}</div>
-                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <tbody>
+                          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                            <th className="p-5 text-muted" style={{ width: '30%', fontWeight: 600 }}>Total Peserta</th>
+                            <td className="p-5 font-semibold text-main" style={{ fontSize: '1.2rem' }}>{packageAnalyticsData.summary?.totalParticipants || 0}</td>
+                          </tr>
+                          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                            <th className="p-5 text-muted" style={{ fontWeight: 600 }}>Rata-rata Nilai</th>
+                            <td className="p-5 font-semibold text-main" style={{ fontSize: '1.2rem', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.average?.toFixed(1) || 0}</td>
+                          </tr>
+                          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                            <th className="p-5 text-muted" style={{ fontWeight: 600 }}>Nilai Tertinggi</th>
+                            <td className="p-5 font-semibold text-main" style={{ fontSize: '1.2rem', color: '#388e3c' }}>{packageAnalyticsData.summary?.highest?.toFixed(1) || 0}</td>
+                          </tr>
+                          <tr>
+                            <th className="p-5 text-muted" style={{ fontWeight: 600 }}>Nilai Terendah</th>
+                            <td className="p-5 font-semibold text-main" style={{ fontSize: '1.2rem', color: '#d32f2f' }}>{packageAnalyticsData.summary?.lowest?.toFixed(1) || 0}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
 
                     <div className="glass-panel" style={{ padding: '0', overflow: 'hidden', marginTop: '2rem' }}>
