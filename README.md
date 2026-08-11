@@ -35,6 +35,16 @@ Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Ba
     ```
   - **Pembuatan Akun Otomatis**: Sistem secara otomatis akan memakai NISN sebagai `username`, membuat *password* 6-karakter acak secara otomatis, serta menautkannya dengan NPSN operator saat ini.
 
+### 4. Analisis Butir Soal & Kalkulasi Indeks Kesulitan
+- **Tinjauan Kinerja Soal (Item Analysis)**: Dasbor admin menyediakan analitik mendalam pada hasil ujian/paket. Sistem secara otomatis membaca seluruh sesi siswa yang sudah memiliki status `selesai`.
+- **Kalkulasi Indeks Kesulitan**: Rasio yang menggambarkan seberapa besar populasi siswa yang mampu menjawab soal tersebut dengan benar.
+  - **Rumus Dasar**: `Indeks Kesulitan = Jumlah Menjawab Benar / Total Menjawab` (Atau Total Sesi Ujian)
+- **Kategorisasi Otomatis**:
+  - **Mudah (Indeks > 0.70)**: Menandakan bahwa > 70% siswa berhasil menjawab pertanyaan dengan benar.
+  - **Sulit (Indeks < 0.30)**: Menandakan bahwa < 30% siswa mampu memecahkan atau memahami konsep di soal ini.
+  - **Sedang (0.30 ≤ Indeks ≤ 0.70)**: Soal dianggap optimal/rata-rata dan mampu dikerjakan oleh mayoritas yang wajar.
+- **Tampilan Antarmuka**: Menampilkan kolom "Soal" (cuplikan baris dengan batasan dua baris maksimal untuk estetika) berpasangan dengan "Level Kognitif" untuk membantu guru mendeteksi miskonsepsi siswa (Misalnya soal sulit berlevel pemahaman dasar/L1 merupakan lampu merah bagi guru).
+
 ---
 
 ## 🛠️ Tech Stack
