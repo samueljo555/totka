@@ -45,6 +45,10 @@ Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Ba
   - **Sedang (0.30 ≤ Indeks ≤ 0.70)**: Soal dianggap optimal/rata-rata dan mampu dikerjakan oleh mayoritas yang wajar.
 - **Tampilan Antarmuka**: Menampilkan kolom "Soal" (cuplikan baris dengan batasan dua baris maksimal untuk estetika) berpasangan dengan "Level Kognitif" untuk membantu guru mendeteksi miskonsepsi siswa (Misalnya soal sulit berlevel pemahaman dasar/L1 merupakan lampu merah bagi guru).
 
+### 5. Penyempurnaan Dasbor Operator & Admin
+- **Input Kelas Dinamis**: Kelas siswa pada Dasbor Operator (baik input manual maupun *import* CSV) tidak lagi menggunakan *dropdown* statis, melainkan input teks dinamis untuk beradaptasi dengan berbagai standar penamaan kelas di tiap sekolah (contoh: "XII MIPA 1", "7A").
+- **Pembuatan Akun Operator Otomatis**: Saat Admin mengimpor data sekolah baru (baik massal via CSV atau satuan), sistem kini langsung memproduksi akun Operator untuk tiap sekolah secara *real-time*. *Username* dan *Password* akan disetel sesuai NPSN, dan Nama Lengkap disetel sesuai Nama Sekolah asal.
+
 ---
 
 ## 🛠️ Tech Stack
