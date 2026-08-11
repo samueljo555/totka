@@ -470,13 +470,75 @@ app.get('/api/sessions', async (req, res) => {
   }
 });
 
-app.get('/api/analytics', async (req, res) => {
+app.get('/api/analytics/packages', async (req, res) => {
+  try {
+    const packages = await prisma.package.findMany({
+      where: { examSessions: { some: { status: 'selesai' } } },
+      select: { id: true, name: true, mapel: true }
+    });
+    res.json(packages);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch analytics packages' });
+  }
+});
+
+app.get('/api/analytics/packages/:packageId', async (req, res) => {
+  const { packageId } = req.params;
   try {
     const sessions = await prisma.examSession.findMany({
-      where: { status: 'selesai' },
+      where: { packageId, status: 'selesai' },
+      include: { student: { include: { school: true } } }
+    });
+    
+    if (sessions.length === 0) return res.json({ summary: null, schools: [] });
+
+    let total = 0, highest = -1, lowest = 101;
+    const schoolGroups: Record<string, { npsn: string, name: string, count: number, sum: number }> = {};
+
+    sessions.forEach(s => {
+      const score = Number(s.totalScore || 0);
+      total += score;
+      if (score > highest) highest = score;
+      if (score < lowest) lowest = score;
+
+      const npsn = s.student.schoolNpsn || 'UNKNOWN';
+      const name = s.student.school?.name || 'Tanpa Sekolah';
+
+      if (!schoolGroups[npsn]) schoolGroups[npsn] = { npsn, name, count: 0, sum: 0 };
+      schoolGroups[npsn].count += 1;
+      schoolGroups[npsn].sum += score;
+    });
+
+    const average = total / sessions.length;
+    const schools = Object.values(schoolGroups).map(sg => ({
+      npsn: sg.npsn,
+      name: sg.name,
+      participantCount: sg.count,
+      averageScore: sg.sum / sg.count
+    }));
+
+    res.json({
+      summary: { average, highest, lowest, totalParticipants: sessions.length },
+      schools
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch package analytics' });
+  }
+});
+
+app.get('/api/analytics/packages/:packageId/schools/:schoolNpsn', async (req, res) => {
+  const { packageId, schoolNpsn } = req.params;
+  try {
+    const npsnFilter = schoolNpsn === 'UNKNOWN' ? null : schoolNpsn;
+    
+    const sessions = await prisma.examSession.findMany({
+      where: { 
+        packageId, 
+        status: 'selesai',
+        student: { schoolNpsn: npsnFilter }
+      },
       include: {
         student: { include: { school: true } },
-        package: true,
         answers: { include: { question: true } }
       }
     });
@@ -495,7 +557,6 @@ app.get('/api/analytics', async (req, res) => {
         studentName: session.student.fullName,
         nisn: session.student.username,
         school: session.student.school?.name || '-',
-        mapel: session.package.mapel,
         score: session.totalScore,
         endTime: session.endTime,
         elementBreakdown
@@ -505,7 +566,7 @@ app.get('/api/analytics', async (req, res) => {
     res.json(data);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Failed to fetch analytics' });
+    res.status(500).json({ error: 'Failed to fetch school analytics' });
   }
 });
 
