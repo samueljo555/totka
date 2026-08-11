@@ -570,6 +570,70 @@ app.get('/api/analytics/packages/:packageId/schools/:schoolNpsn', async (req, re
   }
 });
 
+app.get('/api/analytics/packages/:packageId/items', async (req, res) => {
+  const { packageId } = req.params;
+  try {
+    const pkg = await prisma.package.findUnique({
+      where: { id: packageId },
+      include: {
+        questions: {
+          include: {
+            question: true
+          },
+          orderBy: {
+            order: 'asc'
+          }
+        }
+      }
+    });
+
+    if (!pkg) return res.status(404).json({ error: 'Package not found' });
+
+    const sessions = await prisma.examSession.findMany({
+      where: { packageId, status: 'submitted' },
+      include: { answers: true }
+    });
+
+    const itemAnalytics = pkg.questions.map((pq, idx) => {
+      const qId = pq.questionId;
+      let totalAttempts = 0;
+      let correctCount = 0;
+
+      sessions.forEach(session => {
+        const answer = session.answers.find(a => a.questionId === qId);
+        if (answer) {
+          totalAttempts++;
+          if (answer.isCorrect) {
+            correctCount++;
+          }
+        }
+      });
+
+      const difficultyIndex = totalAttempts > 0 ? (correctCount / totalAttempts) : 0;
+      let category = 'Sedang';
+      if (difficultyIndex > 0.7) category = 'Mudah';
+      else if (difficultyIndex < 0.3) category = 'Sulit';
+
+      return {
+        questionId: qId,
+        order: pq.order,
+        questionNumber: idx + 1,
+        element: pq.question.element,
+        cognitiveLevel: pq.question.cognitiveLevel,
+        totalAttempts,
+        correctCount,
+        difficultyIndex,
+        category
+      };
+    });
+
+    res.json({ package: pkg.name, items: itemAnalytics });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch item analytics' });
+  }
+});
+
 app.get('/api/analytics/:sessionId', async (req, res) => {
   const { sessionId } = req.params;
   try {

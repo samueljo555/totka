@@ -12,6 +12,7 @@ import {
   Upload,
   Image as ImageIcon,
   FileText,
+  List,
   BarChart2,
   Edit2,
   Trash2,
@@ -61,6 +62,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [packageAnalyticsData, setPackageAnalyticsData] = useState<any>(null);
   const [selectedAnalyticsSchool, setSelectedAnalyticsSchool] = useState<any>(null);
   const [schoolStudentsData, setSchoolStudentsData] = useState<any[]>([]);
+  const [selectedItemAnalysisPackage, setSelectedItemAnalysisPackage] = useState<any>(null);
+  const [itemAnalysisData, setItemAnalysisData] = useState<any>(null);
 
   // School State
   const [isAddingSchool, setIsAddingSchool] = useState(false);
@@ -139,6 +142,15 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     fetch(`/api/analytics/packages/${selectedAnalyticsPackage.id}/schools/${school.npsn}`)
       .then(res => res.json())
       .then(data => setSchoolStudentsData(data))
+      .catch(err => console.error(err));
+  };
+
+  const handleViewItemAnalysis = (pkg: any) => {
+    setSelectedItemAnalysisPackage(pkg);
+    setItemAnalysisData(null);
+    fetch(`/api/analytics/packages/${pkg.id}/items`)
+      .then(res => res.json())
+      .then(data => setItemAnalysisData(data))
       .catch(err => console.error(err));
   };
 
@@ -946,7 +958,69 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               </div>
             </div>
             
-            {!selectedAnalyticsPackage ? (
+            {selectedItemAnalysisPackage ? (
+              <div className="animate-fade-in">
+                <div className="flex items-center gap-4 mb-8">
+                  <button className="btn-secondary" style={{ padding: '8px 12px' }} onClick={() => setSelectedItemAnalysisPackage(null)}>
+                    <ChevronLeft size={18} />
+                  </button>
+                  <div>
+                    <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Analisis Butir Soal</div>
+                    <h3 className="text-2xl font-bold text-slate-800 m-0">{selectedItemAnalysisPackage.name}</h3>
+                  </div>
+                </div>
+
+                {!itemAnalysisData ? (
+                  <div className="glass-panel p-12 text-center flex flex-col items-center justify-center">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p className="text-slate-500">Memuat analisis butir soal...</p>
+                  </div>
+                ) : (
+                  <div className="glass-panel" style={{ padding: '2rem' }}>
+                    <div className="mb-6">
+                      <h3 className="m-0">Distribusi Tingkat Kesulitan</h3>
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
+                            <th className="p-5" style={{ fontWeight: 600 }}>No</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Elemen / Topik</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Level Kognitif</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Menjawab Benar</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Indeks Kesulitan</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Kategori</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {itemAnalysisData.items.map((item: any) => (
+                            <tr key={item.questionId} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                              <td className="p-5 font-semibold text-main">{item.questionNumber}</td>
+                              <td className="p-5">{item.element}</td>
+                              <td className="p-5 text-muted">{item.cognitiveLevel}</td>
+                              <td className="p-5">
+                                {item.correctCount} / {item.totalAttempts} ({(item.totalAttempts > 0 ? (item.correctCount / item.totalAttempts) * 100 : 0).toFixed(0)}%)
+                              </td>
+                              <td className="p-5 font-semibold text-main">
+                                {item.difficultyIndex.toFixed(2)}
+                              </td>
+                              <td className="p-5">
+                                <span className="tag" style={{ 
+                                  background: item.category === 'Mudah' ? '#388e3c' : item.category === 'Sulit' ? '#d32f2f' : 'var(--primary-color)',
+                                  color: 'white'
+                                }}>
+                                  {item.category}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : !selectedAnalyticsPackage ? (
               // Step 1: List Packages
               <div className="glass-panel" style={{ padding: '2rem' }}>
                 <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
@@ -989,16 +1063,28 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             </td>
                             <td className="p-5 font-semibold text-muted">{pkg.mapel}</td>
                             <td className="p-5">
-                              <button 
-                                className="btn-secondary" 
-                                style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSelectAnalyticsPackage(pkg);
-                                }}
-                              >
-                                Lihat Analitik <ChevronRight size={14} />
-                              </button>
+                              <div className="flex gap-2">
+                                <button 
+                                  className="btn-secondary" 
+                                  style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectAnalyticsPackage(pkg);
+                                  }}
+                                >
+                                  Lihat Analitik <ChevronRight size={14} />
+                                </button>
+                                <button 
+                                  className="btn-secondary" 
+                                  style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewItemAnalysis(pkg);
+                                  }}
+                                >
+                                  <List size={14} /> Butir Soal
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
