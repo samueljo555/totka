@@ -30,19 +30,8 @@ async function main() {
     },
   });
 
-  console.log('Membuat Akun Operator...');
-  const operator = await prisma.user.create({
-    data: {
-      username: 'operator01',
-      password: 'operator123',
-      fullName: 'Bapak Operator Sekolah',
-      role: 'operator',
-    },
-  });
-
   console.log('--- AKUN BERHASIL DIBUAT ---');
   console.log(`[Super Admin] Username : ${admin.username} | Password : adminpassword123`);
-  console.log(`[Operator]    Username : ${operator.username} | Password : operator123`);
   console.log('----------------------------------');
 }
 

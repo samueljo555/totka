@@ -258,6 +258,18 @@ app.post('/api/schools', async (req, res) => {
 
   try {
     const school = await prisma.school.create({ data: { npsn, name, region } });
+    
+    // Auto-create operator account
+    await prisma.user.create({
+      data: {
+        username: npsn,
+        password: npsn,
+        fullName: name,
+        role: 'operator',
+        schoolNpsn: npsn
+      }
+    }).catch(() => {}); // ignore if user already exists
+
     res.json({ message: 'School created successfully', school });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create school' });
@@ -273,7 +285,21 @@ app.post('/api/schools/batch', async (req, res) => {
       data: schools,
       skipDuplicates: true
     });
-    res.json({ message: `Successfully imported ${result.count} schools` });
+
+    const operatorUsers = schools.map((s: any) => ({
+      username: s.npsn,
+      password: s.npsn,
+      fullName: s.name,
+      role: 'operator',
+      schoolNpsn: s.npsn
+    }));
+
+    await prisma.user.createMany({
+      data: operatorUsers,
+      skipDuplicates: true
+    });
+
+    res.json({ message: `Successfully imported ${result.count} schools and generated their operator accounts` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to import schools' });
   }
