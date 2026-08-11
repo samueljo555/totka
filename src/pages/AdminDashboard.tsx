@@ -1011,8 +1011,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               // Step 2: List Schools for the selected package
               <div className="animate-fade-in">
                 <div className="flex items-center gap-4 mb-8">
-                  <button className="btn-secondary" style={{ padding: '8px 16px' }} onClick={() => setSelectedAnalyticsPackage(null)}>
-                    <ChevronLeft size={18} /> Kembali
+                  <button className="btn-secondary" style={{ padding: '8px 12px' }} onClick={() => setSelectedAnalyticsPackage(null)}>
+                    <ChevronLeft size={18} />
                   </button>
                   <div>
                     <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Daftar Sekolah</div>
@@ -1109,8 +1109,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               <div className="animate-fade-in">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
                   <div className="flex items-start gap-4">
-                    <button className="btn-secondary" style={{ padding: '8px 16px', marginTop: '4px' }} onClick={() => setSelectedAnalyticsSchool(null)}>
-                      <ChevronLeft size={18} /> Kembali
+                    <button className="btn-secondary" style={{ padding: '8px 12px', marginTop: '4px' }} onClick={() => setSelectedAnalyticsSchool(null)}>
+                      <ChevronLeft size={18} />
                     </button>
                     <div>
                       <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">{selectedAnalyticsPackage.name}</div>
