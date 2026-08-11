@@ -962,27 +962,42 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </div>
                 ) : (
                   <div style={{ overflowX: 'auto' }}>
-                    <table className="w-full text-left border-collapse">
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                       <thead>
-                        <tr className="bg-white border-b border-slate-200">
-                          <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama Paket Try Out</th>
-                          <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mata Pelajaran</th>
-                          <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Aksi</th>
+                        <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
+                          <th className="p-5" style={{ fontWeight: 600 }}>Nama Paket Try Out</th>
+                          <th className="p-5" style={{ fontWeight: 600 }}>Mata Pelajaran</th>
+                          <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-slate-100">
+                      <tbody>
                         {analyticsPackages.map(pkg => (
-                          <tr key={pkg.id} className="hover:bg-blue-50/50 transition-colors group cursor-pointer" onClick={() => handleSelectAnalyticsPackage(pkg)}>
-                            <td className="p-4 text-sm font-bold text-slate-800">
+                          <tr 
+                            key={pkg.id} 
+                            style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'pointer' }} 
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} 
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            onClick={() => handleSelectAnalyticsPackage(pkg)}
+                          >
+                            <td className="p-5 font-semibold text-main">
                               <div className="flex items-center gap-3">
-                                <div className="bg-blue-50 p-2 rounded text-blue-600"><BookOpen size={18} /></div>
+                                <div style={{ background: 'rgba(0, 82, 204, 0.1)', padding: '8px', borderRadius: '4px', color: 'var(--primary-color)' }}>
+                                  <BookOpen size={18} />
+                                </div>
                                 {pkg.name}
                               </div>
                             </td>
-                            <td className="p-4 text-sm text-slate-600">{pkg.mapel}</td>
-                            <td className="p-4 text-right">
-                              <button className="text-blue-500 font-medium text-sm group-hover:underline flex items-center gap-1 justify-end w-full">
-                                Lihat Analitik <ChevronRight size={16} />
+                            <td className="p-5 font-semibold text-muted">{pkg.mapel}</td>
+                            <td className="p-5">
+                              <button 
+                                className="btn-secondary" 
+                                style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAnalyticsPackage(pkg);
+                                }}
+                              >
+                                Lihat Analitik <ChevronRight size={14} />
                               </button>
                             </td>
                           </tr>
@@ -1035,40 +1050,53 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       </div>
                     </div>
 
-                    <div className="glass-panel" style={{ padding: '0', overflow: 'hidden' }}>
-                      <div className="bg-slate-50 p-4 border-b border-slate-200">
-                        <h3 className="font-semibold text-slate-700 m-0">Distribusi per Sekolah</h3>
+                    <div className="glass-panel" style={{ padding: '0', overflow: 'hidden', marginTop: '2rem' }}>
+                      <div style={{ padding: '20px', borderBottom: '1px solid var(--glass-border)' }}>
+                        <h3 className="m-0">Distribusi per Sekolah</h3>
                       </div>
                       <div style={{ overflowX: 'auto' }}>
-                        <table className="w-full text-left border-collapse">
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                           <thead>
-                            <tr className="bg-white border-b border-slate-200">
-                              <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">NPSN</th>
-                              <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama Sekolah</th>
-                              <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Peserta</th>
-                              <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Rata-rata Sekolah</th>
-                              <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Aksi</th>
+                            <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
+                              <th className="p-5" style={{ fontWeight: 600 }}>NPSN</th>
+                              <th className="p-5" style={{ fontWeight: 600 }}>Nama Sekolah</th>
+                              <th className="p-5" style={{ fontWeight: 600 }}>Peserta</th>
+                              <th className="p-5" style={{ fontWeight: 600 }}>Rata-rata Sekolah</th>
+                              <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                             </tr>
                           </thead>
-                          <tbody className="bg-white divide-y divide-slate-100">
+                          <tbody>
                             {packageAnalyticsData.schools.map((sch: any) => (
-                              <tr key={sch.npsn} className="hover:bg-blue-50/50 transition-colors group cursor-pointer" onClick={() => handleSelectAnalyticsSchool(sch)}>
-                                <td className="p-4 text-sm text-slate-500">{sch.npsn}</td>
-                                <td className="p-4 text-sm font-bold text-slate-800">{sch.name}</td>
-                                <td className="p-4 text-sm text-slate-600">
+                              <tr 
+                                key={sch.npsn} 
+                                style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'pointer' }} 
+                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} 
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                onClick={() => handleSelectAnalyticsSchool(sch)}
+                              >
+                                <td className="p-5 font-semibold text-muted">{sch.npsn}</td>
+                                <td className="p-5 font-semibold text-main">{sch.name}</td>
+                                <td className="p-5">
                                   <div className="flex items-center gap-2">
-                                    <Users size={16} className="text-slate-400" />
+                                    <Users size={16} className="text-muted" />
                                     {sch.participantCount} Siswa
                                   </div>
                                 </td>
-                                <td className="p-4">
-                                  <span className="inline-flex items-center justify-center px-3 py-1 text-sm font-bold rounded-full bg-indigo-100 text-indigo-700">
+                                <td className="p-5">
+                                  <span className="tag" style={{ background: 'var(--primary-color)', color: 'white' }}>
                                     {sch.averageScore?.toFixed(1)}
                                   </span>
                                 </td>
-                                <td className="p-4 text-right">
-                                  <button className="text-blue-500 font-medium text-sm group-hover:underline flex items-center gap-1 justify-end w-full">
-                                    Lihat Siswa <ChevronRight size={16} />
+                                <td className="p-5">
+                                  <button 
+                                    className="btn-secondary" 
+                                    style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSelectAnalyticsSchool(sch);
+                                    }}
+                                  >
+                                    Lihat Siswa <ChevronRight size={14} />
                                   </button>
                                 </td>
                               </tr>
@@ -1108,7 +1136,10 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </button>
                 </div>
 
-                <div className="glass-panel" style={{ padding: '0', overflow: 'hidden' }}>
+                <div className="glass-panel" style={{ padding: '0', overflow: 'hidden', marginTop: '2rem' }}>
+                  <div style={{ padding: '20px', borderBottom: '1px solid var(--glass-border)' }}>
+                    <h3 className="m-0">Daftar Nilai Siswa</h3>
+                  </div>
                   {schoolStudentsData.length === 0 ? (
                     <div className="p-12 flex flex-col items-center justify-center">
                       <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -1116,50 +1147,56 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     </div>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
-                      <table className="w-full text-left border-collapse">
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                         <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Peserta Didik</th>
-                            <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Skor Akhir</th>
-                            <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Penguasaan Elemen</th>
-                            <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Tindakan</th>
+                          <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Peserta Didik</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Skor Akhir</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Penguasaan Elemen</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-slate-100">
+                        <tbody>
                           {schoolStudentsData.map((item: any, idx: number) => (
-                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                              <td className="p-4">
-                                <div className="font-bold text-slate-800 text-sm">{item.studentName}</div>
-                                <div className="text-slate-500 text-xs mt-1 font-mono">{item.nisn}</div>
+                            <tr 
+                              key={idx} 
+                              style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} 
+                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} 
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                              <td className="p-5">
+                                <div className="font-semibold text-main">{item.studentName}</div>
+                                <div className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>{item.nisn}</div>
                               </td>
-                              <td className="p-4">
-                                <span className="inline-flex items-center justify-center px-3 py-1 text-sm font-bold rounded bg-blue-500 text-white shadow-sm">
+                              <td className="p-5">
+                                <span className="tag" style={{ background: 'var(--primary-color)', color: 'white' }}>
                                   {Math.round(item.score || 0)}
                                 </span>
                               </td>
-                              <td className="p-4">
-                                <div className="flex flex-col gap-2 max-w-sm">
+                              <td className="p-5">
+                                <div className="flex flex-col gap-2" style={{ maxWidth: '300px' }}>
                                   {Object.keys(item.elementBreakdown || {}).map(el => {
                                     const stat = item.elementBreakdown[el];
                                     const pct = (stat.correct / stat.total) * 100;
                                     return (
                                       <div key={el} className="flex items-center gap-3">
-                                        <div className="w-24 text-xs text-slate-600 truncate" title={el}>{el}</div>
+                                        <div className="w-24 text-xs font-semibold text-muted truncate" title={el}>{el}</div>
                                         <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                                           <div className={`h-full rounded-full ${pct >= 75 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${pct}%` }}></div>
                                         </div>
-                                        <div className="w-8 text-right text-xs font-semibold text-slate-600">{stat.correct}/{stat.total}</div>
+                                        <div className="w-8 text-right text-xs font-semibold text-muted">{stat.correct}/{stat.total}</div>
                                       </div>
                                     );
                                   })}
                                 </div>
                               </td>
-                              <td className="p-4 text-right">
+                              <td className="p-5">
                                 <button 
-                                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors focus:ring-2 focus:ring-blue-300 outline-none"
+                                  className="btn-secondary" 
+                                  style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                                   onClick={() => setSelectedSessionId(item.sessionId)}
                                 >
-                                  <Eye size={16} /> Laporan Detail
+                                  <Eye size={14} /> Laporan Detail
                                 </button>
                               </td>
                             </tr>
