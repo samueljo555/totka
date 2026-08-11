@@ -1046,8 +1046,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       </div>
                     </div>
 
-                    <div className="glass-panel" style={{ padding: '0', overflow: 'hidden', marginTop: '2rem' }}>
-                      <div style={{ padding: '20px', borderBottom: '1px solid var(--glass-border)' }}>
+                    <div className="glass-panel" style={{ padding: '2rem', marginTop: '2rem' }}>
+                      <div className="mb-6">
                         <h3 className="m-0">Distribusi per Sekolah</h3>
                       </div>
                       <div style={{ overflowX: 'auto' }}>
@@ -1132,8 +1132,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </button>
                 </div>
 
-                <div className="glass-panel" style={{ padding: '0', overflow: 'hidden', marginTop: '2rem' }}>
-                  <div style={{ padding: '20px', borderBottom: '1px solid var(--glass-border)' }}>
+                <div className="glass-panel" style={{ padding: '2rem', marginTop: '2rem' }}>
+                  <div className="mb-6">
                     <h3 className="m-0">Daftar Nilai Siswa</h3>
                   </div>
                   {schoolStudentsData.length === 0 ? (
