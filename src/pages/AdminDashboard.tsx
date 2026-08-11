@@ -21,8 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  AlertTriangle,
-  BookOpen
+  AlertTriangle
 } from 'lucide-react';
 import AnalysisDetailModal from '../components/AnalysisDetailModal';
 
