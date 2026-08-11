@@ -509,6 +509,43 @@ app.get('/api/analytics', async (req, res) => {
   }
 });
 
+app.get('/api/analytics/:sessionId', async (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    const session = await prisma.examSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        student: { include: { school: true } },
+        package: { include: { questions: { include: { question: { include: { reading: true } } } } } },
+        answers: { include: { question: { include: { reading: true } } } }
+      }
+    });
+
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    // We also want to compute average score for this package to show comparison
+    const packageSessions = await prisma.examSession.findMany({
+      where: { packageId: session.packageId, status: 'selesai' },
+      select: { totalScore: true }
+    });
+    
+    let totalScoreSum = 0;
+    let validCount = 0;
+    packageSessions.forEach(s => {
+      if (s.totalScore !== null) {
+        totalScoreSum += Number(s.totalScore);
+        validCount++;
+      }
+    });
+    const averageScore = validCount > 0 ? totalScoreSum / validCount : 0;
+
+    res.json({ session, averageScore, rank: 0 }); // rank can be computed if needed
+  } catch (error) {
+    console.error("Detailed analytics error:", error);
+    res.status(500).json({ error: 'Failed to fetch session detail' });
+  }
+});
+
 app.post('/api/sessions/start', async (req, res) => {
   const { studentId, token } = req.body;
   if (!studentId || !token) {

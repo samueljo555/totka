@@ -10,8 +10,16 @@ import {
   LineChart,
   Download,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  FileText,
+  BarChart2,
+  Edit2,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  Eye
 } from 'lucide-react';
+import AnalysisDetailModal from '../components/AnalysisDetailModal';
 
 const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -52,6 +60,9 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [schoolRegionInput, setSchoolRegionInput] = useState('');
   const [schoolNpsnInput, setSchoolNpsnInput] = useState('');
   const [isSavingSchool, setIsSavingSchool] = useState(false);
+  
+  // Analysis Detail State
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
   // Add User State
   const [newUsername, setNewUsername] = useState('');
@@ -933,7 +944,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       <th>Nama Siswa / NISN</th>
                       <th>Sekolah</th>
                       <th>Total Skor</th>
-                      <th>Analisis per Elemen (Benar / Total)</th>
+                      <th>Analisis per Elemen</th>
+                      <th>Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -959,11 +971,28 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             ))}
                           </div>
                         </td>
+                        <td>
+                          <button 
+                            className="btn btn-outline" 
+                            style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                            onClick={() => setSelectedSessionId(item.sessionId)}
+                          >
+                            <Eye size={16} /> Lihat Detail
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            )}
+            
+            {/* Modal Detail Analisis */}
+            {selectedSessionId && (
+              <AnalysisDetailModal 
+                sessionId={selectedSessionId} 
+                onClose={() => setSelectedSessionId(null)} 
+              />
             )}
           </div>
         )}
