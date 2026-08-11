@@ -17,7 +17,12 @@ import {
   Trash2,
   CheckCircle,
   XCircle,
-  Eye
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
+  AlertTriangle,
+  BookOpen
 } from 'lucide-react';
 import AnalysisDetailModal from '../components/AnalysisDetailModal';
 
