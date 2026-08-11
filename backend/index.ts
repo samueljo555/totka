@@ -579,9 +579,6 @@ app.get('/api/analytics/packages/:packageId/items', async (req, res) => {
         questions: {
           include: {
             question: true
-          },
-          orderBy: {
-            order: 'asc'
           }
         }
       }
@@ -616,7 +613,6 @@ app.get('/api/analytics/packages/:packageId/items', async (req, res) => {
 
       return {
         questionId: qId,
-        order: pq.order,
         questionNumber: idx + 1,
         element: pq.question.element,
         cognitiveLevel: pq.question.cognitiveLevel,
