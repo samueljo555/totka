@@ -104,7 +104,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   };
 
   useEffect(() => {
-    if (activeTab === 'accounts') {
+    if (activeTab === 'overview') {
+      fetchUsers();
+      fetch('/api/packages')
+        .then(res => res.json())
+        .then(data => setPackages(data))
+        .catch(err => console.error("Error fetching packages:", err));
+    } else if (activeTab === 'accounts') {
       fetchUsers();
       fetchSchools();
     } else if (activeTab === 'schools') {
