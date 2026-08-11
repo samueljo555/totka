@@ -1027,30 +1027,23 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </div>
                 ) : (
                   <>
-                    <div className="glass-panel" style={{ padding: '0', overflow: 'hidden', marginBottom: '2rem' }}>
-                      <div style={{ padding: '20px', borderBottom: '1px solid var(--glass-border)' }}>
-                        <h3 className="m-0">Ringkasan Paket</h3>
+                    <div className="dashboard-grid" style={{ marginTop: 0, marginBottom: '2rem' }}>
+                      <div className="glass-panel card flex flex-col justify-center">
+                        <p>Total Peserta</p>
+                        <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.totalParticipants || 0}</h2>
                       </div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <tbody>
-                          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                            <th className="p-5 text-muted" style={{ width: '30%', fontWeight: 600 }}>Total Peserta</th>
-                            <td className="p-5 font-semibold text-main" style={{ fontSize: '1.2rem' }}>{packageAnalyticsData.summary?.totalParticipants || 0}</td>
-                          </tr>
-                          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                            <th className="p-5 text-muted" style={{ fontWeight: 600 }}>Rata-rata Nilai</th>
-                            <td className="p-5 font-semibold text-main" style={{ fontSize: '1.2rem', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.average?.toFixed(1) || 0}</td>
-                          </tr>
-                          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                            <th className="p-5 text-muted" style={{ fontWeight: 600 }}>Nilai Tertinggi</th>
-                            <td className="p-5 font-semibold text-main" style={{ fontSize: '1.2rem', color: '#388e3c' }}>{packageAnalyticsData.summary?.highest?.toFixed(1) || 0}</td>
-                          </tr>
-                          <tr>
-                            <th className="p-5 text-muted" style={{ fontWeight: 600 }}>Nilai Terendah</th>
-                            <td className="p-5 font-semibold text-main" style={{ fontSize: '1.2rem', color: '#d32f2f' }}>{packageAnalyticsData.summary?.lowest?.toFixed(1) || 0}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                      <div className="glass-panel card flex flex-col justify-center">
+                        <p>Rata-rata Nilai</p>
+                        <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.average?.toFixed(1) || 0}</h2>
+                      </div>
+                      <div className="glass-panel card flex flex-col justify-center">
+                        <p>Nilai Tertinggi</p>
+                        <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.highest?.toFixed(1) || 0}</h2>
+                      </div>
+                      <div className="glass-panel card flex flex-col justify-center">
+                        <p>Nilai Terendah</p>
+                        <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.lowest?.toFixed(1) || 0}</h2>
+                      </div>
                     </div>
 
                     <div className="glass-panel" style={{ padding: '0', overflow: 'hidden', marginTop: '2rem' }}>
