@@ -380,7 +380,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         {/* Header */}
         <header className="glass-panel" style={{ borderRadius: 0, padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
           <div className="flex items-center gap-4">
-            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>TKA Matematika (Numerasi)</h2>
+            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>TKA {session?.package?.mapel || ''}</h2>
           </div>
           
           <div className="flex items-center gap-6">

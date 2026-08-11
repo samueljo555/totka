@@ -70,8 +70,12 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
 
   const [questionType, setQuestionType] = useState('Pilihan Ganda Sederhana');
   
-  const [elements, setElements] = useState(['Bilangan', 'Geometri & Pengukuran', 'Data']);
-  const [selectedElement, setSelectedElement] = useState(elements[0]);
+  const [subjectElements, setSubjectElements] = useState<{ [key: string]: string[] }>({
+    'Matematika': ['Bilangan', 'Aljabar', 'Geometri & Pengukuran', 'Data & Ketidakpastian'],
+    'Bahasa Indonesia': ['Menemukan Informasi', 'Memahami (Interpretasi & Integrasi)', 'Mengevaluasi & Merefleksi']
+  });
+  const [selectedMapel, setSelectedMapel] = useState('Matematika');
+  const [selectedElement, setSelectedElement] = useState(subjectElements['Matematika'][0]);
   const [isAddingElement, setIsAddingElement] = useState(false);
   const [newElement, setNewElement] = useState('');
   
@@ -84,7 +88,6 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   const [correctAnswer, setCorrectAnswer] = useState<number[]>([]);
   const [questionText, setQuestionText] = useState('');
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
-  const [selectedMapel, setSelectedMapel] = useState('Matematika (Numerasi)');
   const [selectedReadingId, setSelectedReadingId] = useState('');
   const [questionImage, setQuestionImage] = useState<File | null>(null);
   const [questionImageUrl, setQuestionImageUrl] = useState('');
@@ -168,9 +171,20 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
     }
   };
 
+  useEffect(() => {
+    const currentElements = subjectElements[selectedMapel] || [];
+    if (currentElements.length > 0 && !currentElements.includes(selectedElement)) {
+      setSelectedElement(currentElements[0]);
+    }
+  }, [selectedMapel, subjectElements]);
+
   const handleAddElement = () => {
+    const elements = subjectElements[selectedMapel] || [];
     if (newElement.trim() && !elements.includes(newElement.trim())) {
-      setElements([...elements, newElement.trim()]);
+      setSubjectElements(prev => ({
+        ...prev,
+        [selectedMapel]: [...elements, newElement.trim()]
+      }));
       setSelectedElement(newElement.trim());
     }
     setNewElement('');
@@ -178,9 +192,13 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   };
 
   const handleDeleteElement = () => {
+    const elements = subjectElements[selectedMapel] || [];
     if (elements.length > 1) {
       const newElements = elements.filter(el => el !== selectedElement);
-      setElements(newElements);
+      setSubjectElements(prev => ({
+        ...prev,
+        [selectedMapel]: newElements
+      }));
       setSelectedElement(newElements[0]);
     } else {
       alert("Harus menyisakan minimal 1 elemen.");
@@ -324,9 +342,10 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                       <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px' }} title="Edit" onClick={() => {
                         setIsAdding(true);
                         setEditingQuestionId(soal.id);
-                        setQuestionType(soal.type || 'Pilihan Ganda Sederhana');
-                        setSelectedMapel(soal.mapel || 'Matematika (Numerasi)');
-                        setSelectedElement(soal.element || elements[0]);
+                        setQuestionType(soal.type);
+                        setSelectedMapel(soal.mapel || 'Matematika');
+                        const mapelElements = subjectElements[soal.mapel || 'Matematika'] || [];
+                        setSelectedElement(soal.element || mapelElements[0]);
                         setQuestionText(soal.content);
                         setQuestionImageUrl(soal.imageUrl || '');
                         setOptions(soal.options && soal.options.length ? soal.options : [{ id: 1, text: '' }, { id: 2, text: '' }]);
@@ -369,8 +388,8 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 <div className="input-group">
                   <label className="input-label">Mata Pelajaran</label>
                   <select className="input-field" value={selectedMapel} onChange={e => setSelectedMapel(e.target.value)}>
-                    <option value="Matematika (Numerasi)">Matematika (Numerasi)</option>
-                    <option value="Bahasa Indonesia (Literasi Membaca)">Bahasa Indonesia (Literasi Membaca)</option>
+                    <option value="Matematika">Matematika</option>
+                    <option value="Bahasa Indonesia">Bahasa Indonesia</option>
                   </select>
                 </div>
                 <div className="input-group">
@@ -382,7 +401,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                         value={selectedElement}
                         onChange={(e) => setSelectedElement(e.target.value)}
                       >
-                        {elements.map(el => (
+                        {(subjectElements[selectedMapel] || []).map(el => (
                           <option key={el} value={el}>{el}</option>
                         ))}
                       </select>

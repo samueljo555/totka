@@ -39,7 +39,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   
   // Package Form State
   const [newPackageName, setNewPackageName] = useState('');
-  const [newPackageMapel, setNewPackageMapel] = useState('Matematika (Numerasi)');
+  const [newPackageMapel, setNewPackageMapel] = useState('Matematika');
   const [newPackageDuration, setNewPackageDuration] = useState(90);
   const [newPackageNavMode, setNewPackageNavMode] = useState('bebas');
   const [newPackageReleaseMode, setNewPackageReleaseMode] = useState('langsung');
@@ -857,8 +857,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 <div className="input-group">
                   <label className="input-label">Mata Pelajaran</label>
                   <select className="input-field" value={newPackageMapel} onChange={e => setNewPackageMapel(e.target.value)}>
-                    <option value="Matematika (Numerasi)">Matematika (Numerasi)</option>
-                    <option value="Bahasa Indonesia (Literasi Membaca)">Bahasa Indonesia (Literasi Membaca)</option>
+                    <option value="Matematika">Matematika</option>
+                    <option value="Bahasa Indonesia">Bahasa Indonesia</option>
                   </select>
                 </div>
                 <div className="input-group">
