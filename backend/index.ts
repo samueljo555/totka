@@ -587,7 +587,7 @@ app.get('/api/analytics/packages/:packageId/items', async (req, res) => {
     if (!pkg) return res.status(404).json({ error: 'Package not found' });
 
     const sessions = await prisma.examSession.findMany({
-      where: { packageId, status: 'submitted' },
+      where: { packageId, status: 'selesai' },
       include: { answers: true }
     });
 
@@ -614,7 +614,7 @@ app.get('/api/analytics/packages/:packageId/items', async (req, res) => {
       return {
         questionId: qId,
         questionNumber: idx + 1,
-        element: pq.question.element,
+        content: pq.question.content,
         cognitiveLevel: pq.question.cognitiveLevel,
         totalAttempts,
         correctCount,

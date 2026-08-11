@@ -985,7 +985,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         <thead>
                           <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
                             <th className="p-5" style={{ fontWeight: 600 }}>No</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Elemen / Topik</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Soal</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Level Kognitif</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Menjawab Benar</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Indeks Kesulitan</th>
@@ -996,7 +996,9 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                           {itemAnalysisData.items.map((item: any) => (
                             <tr key={item.questionId} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                               <td className="p-5 font-semibold text-main">{item.questionNumber}</td>
-                              <td className="p-5">{item.element}</td>
+                              <td className="p-5">
+                                <div className="katex-container" dangerouslySetInnerHTML={{ __html: item.content }} style={{ maxHeight: '60px', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', fontSize: '0.9rem' }} />
+                              </td>
                               <td className="p-5 text-muted">{item.cognitiveLevel}</td>
                               <td className="p-5">
                                 {item.correctCount} / {item.totalAttempts} ({(item.totalAttempts > 0 ? (item.correctCount / item.totalAttempts) * 100 : 0).toFixed(0)}%)
