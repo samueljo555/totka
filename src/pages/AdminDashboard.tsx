@@ -961,24 +961,34 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     <p className="text-sm">Siswa harus menyelesaikan ujian terlebih dahulu.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {analyticsPackages.map(pkg => (
-                      <div 
-                        key={pkg.id} 
-                        className="group bg-white p-6 border border-slate-200 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-blue-300 hover:-translate-y-1 relative overflow-hidden" 
-                        onClick={() => handleSelectAnalyticsPackage(pkg)}
-                      >
-                        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 transform origin-bottom scale-y-0 group-hover:scale-y-100 transition-transform duration-300"></div>
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
-                            <BookOpen size={24} />
-                          </div>
-                          <span className="bg-slate-100 text-slate-500 text-xs px-3 py-1 rounded-full font-medium">Paket Aktif</span>
-                        </div>
-                        <h4 className="font-bold text-lg text-slate-800 mb-1 line-clamp-2">{pkg.name}</h4>
-                        <p className="text-sm text-slate-500 font-medium">{pkg.mapel}</p>
-                      </div>
-                    ))}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-white border-b border-slate-200">
+                          <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama Paket Try Out</th>
+                          <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mata Pelajaran</th>
+                          <th className="p-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-slate-100">
+                        {analyticsPackages.map(pkg => (
+                          <tr key={pkg.id} className="hover:bg-blue-50/50 transition-colors group cursor-pointer" onClick={() => handleSelectAnalyticsPackage(pkg)}>
+                            <td className="p-4 text-sm font-bold text-slate-800">
+                              <div className="flex items-center gap-3">
+                                <div className="bg-blue-50 p-2 rounded text-blue-600"><BookOpen size={18} /></div>
+                                {pkg.name}
+                              </div>
+                            </td>
+                            <td className="p-4 text-sm text-slate-600">{pkg.mapel}</td>
+                            <td className="p-4 text-right">
+                              <button className="text-blue-500 font-medium text-sm group-hover:underline flex items-center gap-1 justify-end w-full">
+                                Lihat Analitik <ChevronRight size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
