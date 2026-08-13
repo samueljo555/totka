@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   FileText, 
   Library, 
@@ -8,12 +8,7 @@ import {
   Image as ImageIcon,
   Edit,
   Trash2,
-  Eye,
-  BookOpen,
-  BarChart2,
-  CheckCircle2,
-  AlertCircle,
-  Edit2
+  Eye
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -333,7 +328,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 </tr>
               </thead>
               <tbody>
-                {questions.length > 0 ? questions.map((soal, i) => (
+                {questions.length > 0 ? questions.map((soal) => (
                   <tr key={soal.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                     <td className="p-4">
                       <span className="tag">{soal.mapel || 'Mapel'}</span>

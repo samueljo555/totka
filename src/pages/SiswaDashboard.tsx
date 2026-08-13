@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Clock, LogOut, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Clock, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';

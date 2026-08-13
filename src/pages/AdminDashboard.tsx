@@ -18,15 +18,9 @@ import {
   FileText,
   List,
   BarChart2,
-  Edit2,
-  Trash2,
-  CheckCircle,
-  XCircle,
   Eye,
   ChevronLeft,
-  ChevronRight,
-  TrendingUp,
-  AlertTriangle
+  ChevronRight
 } from 'lucide-react';
 import AnalysisDetailModal from '../components/AnalysisDetailModal';
 
@@ -383,7 +377,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </tr>
               </thead>
               <tbody>
-                {users.length > 0 ? users.slice((userPage - 1) * usersPerPage, userPage * usersPerPage).map((u, i) => (
+                {users.length > 0 ? users.slice((userPage - 1) * usersPerPage, userPage * usersPerPage).map((u) => (
                   <tr key={u.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td className="p-5 font-semibold text-main">
                       {u.fullName} <br/>
@@ -668,7 +662,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </tr>
               </thead>
               <tbody>
-                {schools.length > 0 ? schools.slice((schoolPage - 1) * schoolsPerPage, schoolPage * schoolsPerPage).map((s, i) => (
+                {schools.length > 0 ? schools.slice((schoolPage - 1) * schoolsPerPage, schoolPage * schoolsPerPage).map((s) => (
                   <tr key={s.npsn} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td className="p-5 font-semibold text-muted">{s.npsn}</td>
                     <td className="p-5 font-semibold text-main">{s.name}</td>
@@ -789,7 +783,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             </div>
             
             <div className="dashboard-grid" style={{ marginTop: 0 }}>
-              {packages.length > 0 ? packages.map((pkg, i) => (
+              {packages.length > 0 ? packages.map((pkg) => (
                 <div key={pkg.id} className="glass-panel card flex flex-col">
                   <div className="flex justify-between mb-4">
                     <span className="tag">{pkg.mapel}</span>

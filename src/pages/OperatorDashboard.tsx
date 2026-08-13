@@ -222,7 +222,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 </tr>
               </thead>
               <tbody>
-                {students.length > 0 ? students.map((siswa, i) => (
+                {students.length > 0 ? students.map((siswa) => (
                   <tr key={siswa.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                     <td className="p-4 font-semibold">{siswa.nisn || '-'}</td>
                     <td className="p-4 text-main">{siswa.fullName}</td>
@@ -378,7 +378,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                             </tr>
                           </thead>
                           <tbody>
-                            {students.length > 0 ? students.map((student, i) => {
+                            {students.length > 0 ? students.map((student) => {
                               const session = pkgSessions.find(s => s.studentId === student.id);
                               return (
                                 <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
@@ -448,7 +448,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                           </tr>
                         </thead>
                         <tbody>
-                          {students.length > 0 ? students.map((student, i) => {
+                          {students.length > 0 ? students.map((student) => {
                             const session = pkgSessions.find(s => s.studentId === student.id);
                             return (
                               <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>

@@ -73,7 +73,6 @@ const AnalysisDetailModal: React.FC<AnalysisDetailModalProps> = ({ sessionId, on
     }
   });
 
-  const totalQuestions = questions.length;
   const score = session.totalScore ? parseFloat(session.totalScore) : 0;
   
   let predikat = 'Perlu Latihan';
