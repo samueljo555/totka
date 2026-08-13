@@ -511,31 +511,36 @@ app.get('/api/analytics/packages', async (req, res) => {
 app.get('/api/analytics/packages/:packageId', async (req, res) => {
   const { packageId } = req.params;
   try {
-    const sessions = await prisma.examSession.findMany({
-      where: { packageId, status: 'selesai' },
-      include: { student: { include: { school: true } } }
+    const allStudents = await prisma.user.findMany({
+      where: { role: 'siswa' },
+      include: { 
+        school: true,
+        examSessions: { where: { packageId } }
+      }
     });
     
-    if (sessions.length === 0) return res.json({ summary: null, schools: [] });
+    if (allStudents.length === 0) return res.json({ summary: null, schools: [] });
 
     let total = 0, highest = -1, lowest = 101;
     const schoolGroups: Record<string, { npsn: string, name: string, count: number, sum: number }> = {};
 
-    sessions.forEach(s => {
-      const score = Number(s.totalScore || 0);
+    allStudents.forEach(student => {
+      const session = student.examSessions[0];
+      const score = (session && session.status === 'selesai') ? Number(session.totalScore || 0) : 0;
+      
       total += score;
       if (score > highest) highest = score;
       if (score < lowest) lowest = score;
 
-      const npsn = s.student.schoolNpsn || 'UNKNOWN';
-      const name = s.student.school?.name || 'Tanpa Sekolah';
+      const npsn = student.schoolNpsn || 'UNKNOWN';
+      const name = student.school?.name || 'Tanpa Sekolah';
 
       if (!schoolGroups[npsn]) schoolGroups[npsn] = { npsn, name, count: 0, sum: 0 };
       schoolGroups[npsn].count += 1;
       schoolGroups[npsn].sum += score;
     });
 
-    const average = total / sessions.length;
+    const average = total / allStudents.length;
     const schools = Object.values(schoolGroups).map(sg => ({
       npsn: sg.npsn,
       name: sg.name,
@@ -544,7 +549,7 @@ app.get('/api/analytics/packages/:packageId', async (req, res) => {
     }));
 
     res.json({
-      summary: { average, highest, lowest, totalParticipants: sessions.length },
+      summary: { average, highest: highest === -1 ? 0 : highest, lowest: lowest === 101 ? 0 : lowest, totalParticipants: allStudents.length },
       schools
     });
   } catch (error) {
@@ -557,35 +562,42 @@ app.get('/api/analytics/packages/:packageId/schools/:schoolNpsn', async (req, re
   try {
     const npsnFilter = schoolNpsn === 'UNKNOWN' ? null : schoolNpsn;
     
-    const sessions = await prisma.examSession.findMany({
-      where: { 
-        packageId, 
-        status: 'selesai',
-        student: { schoolNpsn: npsnFilter }
-      },
-      include: {
-        student: { include: { school: true } },
-        answers: { include: { question: true } }
+    const allStudents = await prisma.user.findMany({
+      where: { role: 'siswa', schoolNpsn: npsnFilter },
+      include: { 
+        school: true,
+        examSessions: {
+          where: { packageId },
+          include: { answers: { include: { question: true } } }
+        }
       }
     });
 
-    const data = sessions.map(session => {
+    const data = allStudents.map(student => {
+      const session = student.examSessions[0];
+      const isFinished = session && session.status === 'selesai';
       const elementBreakdown: Record<string, { total: number, correct: number }> = {};
-      session.answers.forEach(ans => {
-        const el = ans.question.element || 'Umum';
-        if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
-        elementBreakdown[el].total += 1;
-        if (ans.isCorrect) elementBreakdown[el].correct += 1;
-      });
+      
+      if (isFinished && session.answers) {
+        session.answers.forEach((ans: any) => {
+          const el = ans.question.element || 'Umum';
+          if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
+          elementBreakdown[el].total += 1;
+          if (ans.isCorrect) elementBreakdown[el].correct += 1;
+        });
+      }
 
       return {
-        sessionId: session.id,
-        studentName: session.student.fullName,
-        nisn: session.student.username,
-        school: session.student.school?.name || '-',
-        score: session.totalScore,
-        endTime: session.endTime,
-        elementBreakdown
+        sessionId: session?.id || null,
+        studentName: student.fullName,
+        nisn: student.username,
+        npsn: student.schoolNpsn || '-',
+        school: student.school?.name || '-',
+        score: isFinished ? session.totalScore : 0,
+        endTime: isFinished ? session.endTime : null,
+        startTime: session ? session.startTime : null,
+        elementBreakdown,
+        status: isFinished ? 'Selesai' : (session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan')
       };
     });
 
@@ -593,6 +605,55 @@ app.get('/api/analytics/packages/:packageId/schools/:schoolNpsn', async (req, re
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch school analytics' });
+  }
+});
+
+app.get('/api/analytics/packages/:packageId/all-students', async (req, res) => {
+  const { packageId } = req.params;
+  try {
+    const allStudents = await prisma.user.findMany({
+      where: { role: 'siswa' },
+      include: { 
+        school: true,
+        examSessions: { 
+          where: { packageId },
+          include: { answers: { include: { question: true } } }
+        }
+      }
+    });
+
+    const data = allStudents.map(student => {
+      const session = student.examSessions[0];
+      const isFinished = session && session.status === 'selesai';
+      const elementBreakdown: Record<string, { total: number, correct: number }> = {};
+      
+      if (isFinished && session.answers) {
+        session.answers.forEach((ans: any) => {
+          const el = ans.question.element || 'Umum';
+          if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
+          elementBreakdown[el].total += 1;
+          if (ans.isCorrect) elementBreakdown[el].correct += 1;
+        });
+      }
+      
+      return {
+        sessionId: session?.id || null,
+        studentName: student.fullName,
+        nisn: student.username,
+        npsn: student.schoolNpsn || '-',
+        school: student.school?.name || '-',
+        score: isFinished ? session.totalScore : 0,
+        startTime: session ? session.startTime : null,
+        endTime: isFinished ? session.endTime : null,
+        elementBreakdown,
+        status: isFinished ? 'Selesai' : (session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan')
+      };
+    });
+
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch all students analytics' });
   }
 });
 

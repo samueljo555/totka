@@ -66,6 +66,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [packageAnalyticsData, setPackageAnalyticsData] = useState<any>(null);
   const [selectedAnalyticsSchool, setSelectedAnalyticsSchool] = useState<any>(null);
   const [schoolStudentsData, setSchoolStudentsData] = useState<any[]>([]);
+  const [analyticsStudentPage, setAnalyticsStudentPage] = useState(1);
+  const analyticsStudentsPerPage = 15;
   const [selectedItemAnalysisPackage, setSelectedItemAnalysisPackage] = useState<any>(null);
   const [itemAnalysisData, setItemAnalysisData] = useState<any>(null);
 
@@ -323,7 +325,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
       {/* Main Content */}
       <main style={{ flex: 1, padding: '2rem', height: '100vh', overflowY: 'auto' }}>
-        <header className="flex justify-between items-center mb-8">
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <h1>{tabs.find(t => t.id === activeTab)?.name}</h1>
           <div className="flex items-center gap-4">
             <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
@@ -963,12 +965,6 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
         {activeTab === 'results' && (
           <div className="animate-fade-in" style={{ paddingBottom: '2rem' }}>
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Analitik Hasil Try Out</h2>
-                <p className="text-slate-500 mt-1">Telusuri performa siswa berdasarkan hirarki Paket &rarr; Sekolah &rarr; Siswa.</p>
-              </div>
-            </div>
             
             {selectedItemAnalysisPackage ? (
               <div className="animate-fade-in">
@@ -1102,6 +1098,36 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                                 >
                                   <List size={14} /> Butir Soal
                                 </button>
+                                <button 
+                                  className="btn-secondary" 
+                                  style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      const res = await fetch(`/api/analytics/packages/${pkg.id}/all-students`);
+                                      const data = await res.json();
+                                      const header = "NISN,Nama Siswa,NPSN,Sekolah,Skor Total,Lama Mengerjakan (Menit),Status,Catatan\n";
+                                      const csv = data.map((a: any) => {
+                                        let timeStr = '';
+                                        if (a.startTime && a.endTime) {
+                                          timeStr = String(Math.round((new Date(a.endTime).getTime() - new Date(a.startTime).getTime()) / 60000));
+                                        }
+                                        const catatan = Object.keys(a.elementBreakdown || {}).map(k => `${k}: ${a.elementBreakdown[k].correct}/${a.elementBreakdown[k].total}`).join(', ');
+                                        return `${a.nisn},"${a.studentName}","${a.npsn}","${a.school}",${a.score},"${timeStr}","${a.status}","${catatan}"`;
+                                      }).join('\n');
+                                      const blob = new Blob([header + csv], { type: 'text/csv' });
+                                      const url = window.URL.createObjectURL(blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = `analitik_semua_siswa_${pkg.id}.csv`;
+                                      a.click();
+                                    } catch(err) {
+                                      alert("Gagal mengunduh data seluruh siswa");
+                                    }
+                                  }}
+                                >
+                                  <Download size={14} /> Unduh CSV
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1223,8 +1249,15 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     </div>
                   </div>
                   <button className="btn-secondary" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => {
-                    const header = "NISN,Nama Siswa,Skor Total,Waktu Selesai\n";
-                    const csv = schoolStudentsData.map((a: any) => `${a.nisn},"${a.studentName}",${a.score},${a.endTime}`).join('\n');
+                    const header = "NISN,Nama Siswa,NPSN,Skor Total,Lama Mengerjakan (Menit),Status,Catatan\n";
+                    const csv = schoolStudentsData.map((a: any) => {
+                      let timeStr = '';
+                      if (a.startTime && a.endTime) {
+                        timeStr = String(Math.round((new Date(a.endTime).getTime() - new Date(a.startTime).getTime()) / 60000));
+                      }
+                      const catatan = Object.keys(a.elementBreakdown || {}).map(k => `${k}: ${a.elementBreakdown[k].correct}/${a.elementBreakdown[k].total}`).join(', ');
+                      return `${a.nisn},"${a.studentName}","${a.npsn}",${a.score},"${timeStr}","${a.status}","${catatan}"`;
+                    }).join('\n');
                     const blob = new Blob([header + csv], { type: 'text/csv' });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -1251,13 +1284,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         <thead>
                           <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
                             <th className="p-5" style={{ fontWeight: 600 }}>Peserta Didik</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Status</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Skor Akhir</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Penguasaan Elemen</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {schoolStudentsData.map((item: any, idx: number) => (
+                          {schoolStudentsData.slice((analyticsStudentPage - 1) * analyticsStudentsPerPage, analyticsStudentPage * analyticsStudentsPerPage).map((item: any, idx: number) => (
                             <tr 
                               key={idx} 
                               style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} 
@@ -1269,26 +1302,14 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                                 <div className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>{item.nisn}</div>
                               </td>
                               <td className="p-5">
-                                <span className="tag" style={{ background: 'var(--primary-color)', color: 'white' }}>
-                                  {Math.round(item.score || 0)}
+                                <span className={`tag ${item.status === 'Selesai' ? 'bg-green-100 text-green-700' : item.status === 'Sedang Mengerjakan' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                                  {item.status}
                                 </span>
                               </td>
                               <td className="p-5">
-                                <div className="flex flex-col gap-2" style={{ maxWidth: '300px' }}>
-                                  {Object.keys(item.elementBreakdown || {}).map(el => {
-                                    const stat = item.elementBreakdown[el];
-                                    const pct = (stat.correct / stat.total) * 100;
-                                    return (
-                                      <div key={el} className="flex items-center gap-3">
-                                        <div className="w-24 text-xs font-semibold text-muted truncate" title={el}>{el}</div>
-                                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                          <div className={`h-full rounded-full ${pct >= 75 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${pct}%` }}></div>
-                                        </div>
-                                        <div className="w-8 text-right text-xs font-semibold text-muted">{stat.correct}/{stat.total}</div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                <span className="tag" style={{ background: 'var(--primary-color)', color: 'white' }}>
+                                  {Math.round(item.score || 0)}
+                                </span>
                               </td>
                               <td className="p-5">
                                 <button 
@@ -1303,6 +1324,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  )}
+                  {schoolStudentsData.length > analyticsStudentsPerPage && (
+                    <div className="flex justify-between items-center mt-6 p-4 bg-slate-50 rounded-lg">
+                      <button className="btn-secondary" disabled={analyticsStudentPage === 1} onClick={() => setAnalyticsStudentPage(p => Math.max(1, p - 1))} style={{ padding: '6px 12px', fontSize: '0.85rem', opacity: analyticsStudentPage === 1 ? 0.5 : 1 }}>Sebelumnya</button>
+                      <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Halaman {analyticsStudentPage} dari {Math.ceil(schoolStudentsData.length / analyticsStudentsPerPage)}</span>
+                      <button className="btn-secondary" disabled={analyticsStudentPage >= Math.ceil(schoolStudentsData.length / analyticsStudentsPerPage)} onClick={() => setAnalyticsStudentPage(p => Math.min(Math.ceil(schoolStudentsData.length / analyticsStudentsPerPage), p + 1))} style={{ padding: '6px 12px', fontSize: '0.85rem', opacity: analyticsStudentPage >= Math.ceil(schoolStudentsData.length / analyticsStudentsPerPage) ? 0.5 : 1 }}>Selanjutnya</button>
                     </div>
                   )}
                 </div>

@@ -272,7 +272,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
 
       {/* Main Content */}
       <main style={{ flex: 1, padding: '2rem', height: '100vh', overflowY: 'auto' }}>
-        <header className="flex justify-between items-center mb-8">
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <h1>{tabs.find(t => t.id === activeTab)?.name}</h1>
           <div className="flex items-center gap-4">
             <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
