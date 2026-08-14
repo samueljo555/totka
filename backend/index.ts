@@ -962,6 +962,16 @@ app.post('/api/users/siswa/batch', async (req, res) => {
   }
 });
 
+import path from 'path';
+
+// Serve static frontend files in production
+const frontendDistPath = path.join(__dirname, '../dist');
+app.use(express.static(frontendDistPath));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
