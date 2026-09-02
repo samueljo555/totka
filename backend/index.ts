@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-
+import { getOrSetCache, deleteCache } from './cache';
 dotenv.config();
 
 const app = express();
@@ -101,13 +101,13 @@ app.get('/api/health', (req, res) => {
 // Example route: Get all packages
 app.get('/api/packages', async (req, res) => {
   try {
-    const packages = await prisma.package.findMany({
-      include: {
-        _count: {
-          select: { questions: true }
-        },
-        questions: true // Include relation to questions
-      }
+    const packages = await getOrSetCache('api:packages', 60, async () => {
+      return await prisma.package.findMany({
+        include: {
+          _count: { select: { questions: true } },
+          questions: true
+        }
+      });
     });
     res.json(packages);
   } catch (error) {
@@ -147,6 +147,7 @@ app.post('/api/packages', async (req, res) => {
       });
     }
 
+    await deleteCache('api:packages');
     res.json(newPackage);
   } catch (error) {
     console.error("Create package error:", error);
