@@ -194,6 +194,7 @@ app.put('/api/packages/:id', async (req, res) => {
       }
     }
 
+    await deleteCache('api:packages');
     res.json(updatedPackage);
   } catch (error) {
     console.error("Update package error:", error);
@@ -290,10 +291,12 @@ app.delete('/api/users/:id', async (req, res) => {
 // School CRUD
 app.get('/api/schools', async (req, res) => {
   try {
-    const schools = await prisma.school.findMany({
-      include: {
-        _count: { select: { users: true } }
-      }
+    const schools = await getOrSetCache('api:schools', 3600, async () => {
+      return await prisma.school.findMany({
+        include: {
+          _count: { select: { users: true } }
+        }
+      });
     });
     res.json(schools);
   } catch (error) {
@@ -319,6 +322,7 @@ app.post('/api/schools', async (req, res) => {
       }
     }).catch(() => {}); // ignore if user already exists
 
+    await deleteCache('api:schools');
     res.json({ message: 'School created successfully', school });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create school' });
@@ -348,6 +352,7 @@ app.post('/api/schools/batch', async (req, res) => {
       skipDuplicates: true
     });
 
+    await deleteCache('api:schools');
     res.json({ message: `Successfully imported ${result.count} schools and generated their operator accounts` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to import schools' });
@@ -363,6 +368,7 @@ app.put('/api/schools/:npsn', async (req, res) => {
       where: { npsn },
       data: { name, region }
     });
+    await deleteCache('api:schools');
     res.json({ message: 'School updated successfully', school });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update school' });
@@ -373,6 +379,7 @@ app.delete('/api/schools/:npsn', async (req, res) => {
   const { npsn } = req.params;
   try {
     await prisma.school.delete({ where: { npsn } });
+    await deleteCache('api:schools');
     res.json({ message: 'School deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete school' });
@@ -382,8 +389,10 @@ app.delete('/api/schools/:npsn', async (req, res) => {
 // Reading Text CRUD
 app.get('/api/readings', async (req, res) => {
   try {
-    const readings = await prisma.readingText.findMany({
-      include: { _count: { select: { questions: true } } }
+    const readings = await getOrSetCache('api:readings', 1800, async () => {
+      return await prisma.readingText.findMany({
+        include: { _count: { select: { questions: true } } }
+      });
     });
     res.json(readings);
   } catch (error) {
@@ -396,6 +405,7 @@ app.post('/api/readings', async (req, res) => {
   if (!title || !content) return res.status(400).json({ error: 'Title and content are required' });
   try {
     const reading = await prisma.readingText.create({ data: { title, content, authorId } });
+    await deleteCache('api:readings');
     res.json(reading);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create reading' });
@@ -409,6 +419,7 @@ app.put('/api/readings/:id', async (req, res) => {
       where: { id: req.params.id },
       data: { title, content }
     });
+    await deleteCache('api:readings');
     res.json(reading);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update reading' });
@@ -418,6 +429,7 @@ app.put('/api/readings/:id', async (req, res) => {
 app.delete('/api/readings/:id', async (req, res) => {
   try {
     await prisma.readingText.delete({ where: { id: req.params.id } });
+    await deleteCache('api:readings');
     res.json({ message: 'Deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete reading' });
@@ -459,7 +471,9 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/questions', async (req, res) => {
   try {
-    const questions = await prisma.question.findMany();
+    const questions = await getOrSetCache('api:questions', 1800, async () => {
+      return await prisma.question.findMany();
+    });
     res.json(questions);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch questions' });
@@ -486,6 +500,7 @@ app.post('/api/questions', async (req, res) => {
         readingId: readingId !== undefined ? readingId : undefined,
       }
     });
+    await deleteCache('api:questions');
     res.json(question);
   } catch (error) {
     console.error("Create question error:", error);
@@ -510,6 +525,7 @@ app.put('/api/questions/:id', async (req, res) => {
         readingId: readingId !== undefined ? readingId : undefined,
       }
     });
+    await deleteCache('api:questions');
     res.json(question);
   } catch (error) {
     console.error("Update question error:", error);
@@ -520,6 +536,7 @@ app.put('/api/questions/:id', async (req, res) => {
 app.delete('/api/questions/:id', async (req, res) => {
   try {
     await prisma.question.delete({ where: { id: req.params.id } });
+    await deleteCache('api:questions');
     res.json({ message: 'Deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete question' });
@@ -560,47 +577,51 @@ app.get('/api/analytics/packages', async (req, res) => {
 app.get('/api/analytics/packages/:packageId', async (req, res) => {
   const { packageId } = req.params;
   try {
-    const allStudents = await prisma.user.findMany({
-      where: { role: 'siswa' },
-      include: { 
-        school: true,
-        examSessions: { where: { packageId } }
-      }
-    });
-    
-    if (allStudents.length === 0) return res.json({ summary: null, schools: [] });
-
-    let total = 0, highest = -1, lowest = 101;
-    const schoolGroups: Record<string, { npsn: string, name: string, count: number, sum: number }> = {};
-
-    allStudents.forEach(student => {
-      const session = student.examSessions[0];
-      const score = (session && session.status === 'selesai') ? Number(session.totalScore || 0) : 0;
+    const data = await getOrSetCache(`api:analytics:pkg:${packageId}:summary`, 300, async () => {
+      const allStudents = await prisma.user.findMany({
+        where: { role: 'siswa' },
+        include: { 
+          school: true,
+          examSessions: { where: { packageId } }
+        }
+      });
       
-      total += score;
-      if (score > highest) highest = score;
-      if (score < lowest) lowest = score;
+      if (allStudents.length === 0) return { summary: null, schools: [] };
 
-      const npsn = student.schoolNpsn || 'UNKNOWN';
-      const name = student.school?.name || 'Tanpa Sekolah';
+      let total = 0, highest = -1, lowest = 101;
+      const schoolGroups: Record<string, { npsn: string, name: string, count: number, sum: number }> = {};
 
-      if (!schoolGroups[npsn]) schoolGroups[npsn] = { npsn, name, count: 0, sum: 0 };
-      schoolGroups[npsn].count += 1;
-      schoolGroups[npsn].sum += score;
+      allStudents.forEach(student => {
+        const session = student.examSessions[0];
+        const score = (session && session.status === 'selesai') ? Number(session.totalScore || 0) : 0;
+        
+        total += score;
+        if (score > highest) highest = score;
+        if (score < lowest) lowest = score;
+
+        const npsn = student.schoolNpsn || 'UNKNOWN';
+        const name = student.school?.name || 'Tanpa Sekolah';
+
+        if (!schoolGroups[npsn]) schoolGroups[npsn] = { npsn, name, count: 0, sum: 0 };
+        schoolGroups[npsn].count += 1;
+        schoolGroups[npsn].sum += score;
+      });
+
+      const average = total / allStudents.length;
+      const schools = Object.values(schoolGroups).map(sg => ({
+        npsn: sg.npsn,
+        name: sg.name,
+        participantCount: sg.count,
+        averageScore: sg.sum / sg.count
+      }));
+
+      return {
+        summary: { average, highest: highest === -1 ? 0 : highest, lowest: lowest === 101 ? 0 : lowest, totalParticipants: allStudents.length },
+        schools
+      };
     });
 
-    const average = total / allStudents.length;
-    const schools = Object.values(schoolGroups).map(sg => ({
-      npsn: sg.npsn,
-      name: sg.name,
-      participantCount: sg.count,
-      averageScore: sg.sum / sg.count
-    }));
-
-    res.json({
-      summary: { average, highest: highest === -1 ? 0 : highest, lowest: lowest === 101 ? 0 : lowest, totalParticipants: allStudents.length },
-      schools
-    });
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch package analytics' });
   }
@@ -660,43 +681,45 @@ app.get('/api/analytics/packages/:packageId/schools/:schoolNpsn', async (req, re
 app.get('/api/analytics/packages/:packageId/all-students', async (req, res) => {
   const { packageId } = req.params;
   try {
-    const allStudents = await prisma.user.findMany({
-      where: { role: 'siswa' },
-      include: { 
-        school: true,
-        examSessions: { 
-          where: { packageId },
-          include: { answers: { include: { question: true } } }
+    const data = await getOrSetCache(`api:analytics:pkg:${packageId}:all_students`, 300, async () => {
+      const allStudents = await prisma.user.findMany({
+        where: { role: 'siswa' },
+        include: { 
+          school: true,
+          examSessions: { 
+            where: { packageId },
+            include: { answers: { include: { question: true } } }
+          }
         }
-      }
-    });
+      });
 
-    const data = allStudents.map(student => {
-      const session = student.examSessions[0];
-      const isFinished = session && session.status === 'selesai';
-      const elementBreakdown: Record<string, { total: number, correct: number }> = {};
-      
-      if (isFinished && session.answers) {
-        session.answers.forEach((ans: any) => {
-          const el = ans.question.element || 'Umum';
-          if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
-          elementBreakdown[el].total += 1;
-          if (ans.isCorrect) elementBreakdown[el].correct += 1;
-        });
-      }
-      
-      return {
-        sessionId: session?.id || null,
-        studentName: student.fullName,
-        nisn: student.username,
-        npsn: student.schoolNpsn || '-',
-        school: student.school?.name || '-',
-        score: isFinished ? session.totalScore : 0,
-        startTime: session ? session.startTime : null,
-        endTime: isFinished ? session.endTime : null,
-        elementBreakdown,
-        status: isFinished ? 'Selesai' : (session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan')
-      };
+      return allStudents.map(student => {
+        const session = student.examSessions[0];
+        const isFinished = session && session.status === 'selesai';
+        const elementBreakdown: Record<string, { total: number, correct: number }> = {};
+        
+        if (isFinished && session.answers) {
+          session.answers.forEach((ans: any) => {
+            const el = ans.question.element || 'Umum';
+            if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
+            elementBreakdown[el].total += 1;
+            if (ans.isCorrect) elementBreakdown[el].correct += 1;
+          });
+        }
+        
+        return {
+          sessionId: session?.id || null,
+          studentName: student.fullName,
+          nisn: student.username,
+          npsn: student.schoolNpsn || '-',
+          school: student.school?.name || '-',
+          score: isFinished ? session.totalScore : 0,
+          startTime: session ? session.startTime : null,
+          endTime: isFinished ? session.endTime : null,
+          elementBreakdown,
+          status: isFinished ? 'Selesai' : (session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan')
+        };
+      });
     });
 
     res.json(data);
@@ -709,57 +732,61 @@ app.get('/api/analytics/packages/:packageId/all-students', async (req, res) => {
 app.get('/api/analytics/packages/:packageId/items', async (req, res) => {
   const { packageId } = req.params;
   try {
-    const pkg = await prisma.package.findUnique({
-      where: { id: packageId },
-      include: {
-        questions: {
-          include: {
-            question: true
-          }
-        }
-      }
-    });
-
-    if (!pkg) return res.status(404).json({ error: 'Package not found' });
-
-    const sessions = await prisma.examSession.findMany({
-      where: { packageId, status: 'selesai' },
-      include: { answers: true }
-    });
-
-    const itemAnalytics = pkg.questions.map((pq, idx) => {
-      const qId = pq.questionId;
-      let totalAttempts = 0;
-      let correctCount = 0;
-
-      sessions.forEach(session => {
-        const answer = session.answers.find(a => a.questionId === qId);
-        if (answer) {
-          totalAttempts++;
-          if (answer.isCorrect) {
-            correctCount++;
+    const data = await getOrSetCache(`api:analytics:pkg:${packageId}:items`, 300, async () => {
+      const pkg = await prisma.package.findUnique({
+        where: { id: packageId },
+        include: {
+          questions: {
+            include: { question: true }
           }
         }
       });
 
-      const difficultyIndex = totalAttempts > 0 ? (correctCount / totalAttempts) : 0;
-      let category = 'Sedang';
-      if (difficultyIndex > 0.7) category = 'Mudah';
-      else if (difficultyIndex < 0.3) category = 'Sulit';
+      if (!pkg) return null;
 
-      return {
-        questionId: qId,
-        questionNumber: idx + 1,
-        content: pq.question.content,
-        cognitiveLevel: pq.question.cognitiveLevel,
-        totalAttempts,
-        correctCount,
-        difficultyIndex,
-        category
-      };
+      const sessions = await prisma.examSession.findMany({
+        where: { packageId, status: 'selesai' },
+        include: { answers: true }
+      });
+
+      const items = pkg.questions.map((pq, idx) => {
+        const qId = pq.questionId;
+        let totalAttempts = 0;
+        let correctCount = 0;
+
+        sessions.forEach(session => {
+          const answer = session.answers.find(a => a.questionId === qId);
+          if (answer) {
+            totalAttempts++;
+            if (answer.isCorrect) {
+              correctCount++;
+            }
+          }
+        });
+
+        const difficultyIndex = totalAttempts > 0 ? (correctCount / totalAttempts) : 0;
+        let category = 'Sedang';
+        if (difficultyIndex > 0.7) category = 'Mudah';
+        else if (difficultyIndex < 0.3) category = 'Sulit';
+
+        return {
+          questionId: qId,
+          questionNumber: idx + 1,
+          content: pq.question.content,
+          cognitiveLevel: pq.question.cognitiveLevel,
+          totalAttempts,
+          correctCount,
+          difficultyIndex,
+          category
+        };
+      });
+
+      return { package: pkg.name, items };
     });
 
-    res.json({ package: pkg.name, items: itemAnalytics });
+    if (!data) return res.status(404).json({ error: 'Package not found' });
+
+    res.json(data);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch item analytics' });
