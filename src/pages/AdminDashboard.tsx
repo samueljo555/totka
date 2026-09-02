@@ -370,7 +370,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
-                  <th className="p-5" style={{ fontWeight: 600 }}>Nama / Institusi</th>
+                  <th className="p-5" style={{ fontWeight: 600 }}>Nama</th>
                   <th className="p-5" style={{ fontWeight: 600 }}>Peran</th>
                   <th className="p-5" style={{ fontWeight: 600 }}>Status</th>
                   <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
@@ -380,8 +380,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 {users.length > 0 ? users.slice((userPage - 1) * usersPerPage, userPage * usersPerPage).map((u) => (
                   <tr key={u.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td className="p-5 font-semibold text-main">
-                      {u.fullName} <br/>
-                      <span className="text-muted" style={{ fontWeight: 'normal', fontSize: '0.85rem' }}>{u.school?.name || 'Pusat'}</span>
+                      {u.fullName}
                     </td>
                     <td className="p-5">
                       <span className="tag" style={{ padding: '6px 12px', fontSize: '0.85rem' }}>

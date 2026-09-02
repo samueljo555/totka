@@ -20,12 +20,17 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+import { Storage } from '@google-cloud/storage';
+
+const STORAGE_PROVIDER = process.env.STORAGE_PROVIDER || 'LOCAL'; // 'LOCAL' or 'GCP'
+
 const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
+if (STORAGE_PROVIDER === 'LOCAL' && !fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
+// Storage for Local
+const diskStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadDir)
   },
@@ -34,7 +39,23 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + path.extname(file.originalname))
   }
 });
-const upload = multer({ storage: storage });
+
+// Storage for GCP
+const memoryStorage = multer.memoryStorage();
+
+const upload = multer({ 
+  storage: STORAGE_PROVIDER === 'GCP' ? memoryStorage : diskStorage 
+});
+
+let gcpStorage: Storage | null = null;
+let bucketName = process.env.GCP_BUCKET_NAME || '';
+
+if (STORAGE_PROVIDER === 'GCP') {
+  gcpStorage = new Storage({
+    projectId: process.env.GCP_PROJECT_ID,
+    keyFilename: process.env.GCP_KEY_FILE_PATH, // Path to service account JSON (optional if running inside GCP)
+  });
+}
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -42,7 +63,34 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No image uploaded' });
   }
-  res.json({ imageUrl: `/uploads/${req.file.filename}` });
+
+  if (STORAGE_PROVIDER === 'GCP' && gcpStorage) {
+    const bucket = gcpStorage.bucket(bucketName);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const blobName = uniqueSuffix + path.extname(req.file.originalname);
+    const blob = bucket.file(blobName);
+    
+    const blobStream = blob.createWriteStream({
+      resumable: false,
+      contentType: req.file.mimetype
+    });
+
+    blobStream.on('error', (err) => {
+      console.error("GCP Upload Error:", err);
+      return res.status(500).json({ error: 'Failed to upload to GCP' });
+    });
+
+    blobStream.on('finish', () => {
+      // Return the public URL for the uploaded file
+      const publicUrl = `https://storage.googleapis.com/${bucketName}/${blobName}`;
+      return res.json({ imageUrl: publicUrl });
+    });
+
+    blobStream.end(req.file.buffer);
+  } else {
+    // Return the local URL
+    res.json({ imageUrl: `/uploads/${req.file.filename}` });
+  }
 });
 
 // Basic health check route
