@@ -204,8 +204,10 @@ app.put('/api/packages/:id', async (req, res) => {
 
 app.get('/api/users', async (req, res) => {
   try {
-    const users = await prisma.user.findMany({
-      include: { school: true }
+    const users = await getOrSetCache('api:users', 300, async () => {
+      return await prisma.user.findMany({
+        include: { school: true }
+      });
     });
     res.json(users);
   } catch (error) {
@@ -235,6 +237,7 @@ app.post('/api/users', async (req, res) => {
       }
     });
 
+    await deleteCache('api:users');
     res.json({ message: 'User created successfully', user: newUser });
   } catch (error) {
     console.error("Create user error:", error);
@@ -270,6 +273,7 @@ app.put('/api/users/:id', async (req, res) => {
       }
     });
 
+    await deleteCache('api:users');
     res.json({ message: 'User updated successfully', user: updatedUser });
   } catch (error) {
     console.error("Update user error:", error);
@@ -281,6 +285,7 @@ app.delete('/api/users/:id', async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.user.delete({ where: { id } });
+    await deleteCache('api:users');
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     console.error("Delete user error:", error);
@@ -564,9 +569,11 @@ app.get('/api/sessions', async (req, res) => {
 
 app.get('/api/analytics/packages', async (req, res) => {
   try {
-    const packages = await prisma.package.findMany({
-      where: { examSessions: { some: { status: 'selesai' } } },
-      select: { id: true, name: true, mapel: true }
+    const packages = await getOrSetCache('api:analytics:packages_dropdown', 300, async () => {
+      return await prisma.package.findMany({
+        where: { examSessions: { some: { status: 'selesai' } } },
+        select: { id: true, name: true, mapel: true }
+      });
     });
     res.json(packages);
   } catch (error) {
@@ -630,45 +637,47 @@ app.get('/api/analytics/packages/:packageId', async (req, res) => {
 app.get('/api/analytics/packages/:packageId/schools/:schoolNpsn', async (req, res) => {
   const { packageId, schoolNpsn } = req.params;
   try {
-    const npsnFilter = schoolNpsn === 'UNKNOWN' ? null : schoolNpsn;
-    
-    const allStudents = await prisma.user.findMany({
-      where: { role: 'siswa', schoolNpsn: npsnFilter },
-      include: { 
-        school: true,
-        examSessions: {
-          where: { packageId },
-          include: { answers: { include: { question: true } } }
-        }
-      }
-    });
-
-    const data = allStudents.map(student => {
-      const session = student.examSessions[0];
-      const isFinished = session && session.status === 'selesai';
-      const elementBreakdown: Record<string, { total: number, correct: number }> = {};
+    const data = await getOrSetCache(`api:analytics:pkg:${packageId}:school:${schoolNpsn}`, 300, async () => {
+      const npsnFilter = schoolNpsn === 'UNKNOWN' ? null : schoolNpsn;
       
-      if (isFinished && session.answers) {
-        session.answers.forEach((ans: any) => {
-          const el = ans.question.element || 'Umum';
-          if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
-          elementBreakdown[el].total += 1;
-          if (ans.isCorrect) elementBreakdown[el].correct += 1;
-        });
-      }
+      const allStudents = await prisma.user.findMany({
+        where: { role: 'siswa', schoolNpsn: npsnFilter },
+        include: { 
+          school: true,
+          examSessions: {
+            where: { packageId },
+            include: { answers: { include: { question: true } } }
+          }
+        }
+      });
 
-      return {
-        sessionId: session?.id || null,
-        studentName: student.fullName,
-        nisn: student.username,
-        npsn: student.schoolNpsn || '-',
-        school: student.school?.name || '-',
-        score: isFinished ? session.totalScore : 0,
-        endTime: isFinished ? session.endTime : null,
-        startTime: session ? session.startTime : null,
-        elementBreakdown,
-        status: isFinished ? 'Selesai' : (session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan')
-      };
+      return allStudents.map(student => {
+        const session = student.examSessions[0];
+        const isFinished = session && session.status === 'selesai';
+        const elementBreakdown: Record<string, { total: number, correct: number }> = {};
+        
+        if (isFinished && session.answers) {
+          session.answers.forEach((ans: any) => {
+            const el = ans.question.element || 'Umum';
+            if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
+            elementBreakdown[el].total += 1;
+            if (ans.isCorrect) elementBreakdown[el].correct += 1;
+          });
+        }
+
+        return {
+          sessionId: session?.id || null,
+          studentName: student.fullName,
+          nisn: student.username,
+          npsn: student.schoolNpsn || '-',
+          school: student.school?.name || '-',
+          score: isFinished ? session.totalScore : 0,
+          endTime: isFinished ? session.endTime : null,
+          startTime: session ? session.startTime : null,
+          elementBreakdown,
+          status: isFinished ? 'Selesai' : (session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan')
+        };
+      });
     });
 
     res.json(data);
@@ -796,34 +805,40 @@ app.get('/api/analytics/packages/:packageId/items', async (req, res) => {
 app.get('/api/analytics/:sessionId', async (req, res) => {
   const { sessionId } = req.params;
   try {
-    const session = await prisma.examSession.findUnique({
-      where: { id: sessionId },
-      include: {
-        student: { include: { school: true } },
-        package: { include: { questions: { include: { question: { include: { reading: true } } } } } },
-        answers: { include: { question: { include: { reading: true } } } }
-      }
+    const data = await getOrSetCache(`api:analytics:session:${sessionId}`, 300, async () => {
+      const session = await prisma.examSession.findUnique({
+        where: { id: sessionId },
+        include: {
+          student: { include: { school: true } },
+          package: { include: { questions: { include: { question: { include: { reading: true } } } } } },
+          answers: { include: { question: { include: { reading: true } } } }
+        }
+      });
+
+      if (!session) return null;
+
+      // We also want to compute average score for this package to show comparison
+      const packageSessions = await prisma.examSession.findMany({
+        where: { packageId: session.packageId, status: 'selesai' },
+        select: { totalScore: true }
+      });
+      
+      let totalScoreSum = 0;
+      let validCount = 0;
+      packageSessions.forEach(s => {
+        if (s.totalScore !== null) {
+          totalScoreSum += Number(s.totalScore);
+          validCount++;
+        }
+      });
+      const averageScore = validCount > 0 ? totalScoreSum / validCount : 0;
+
+      return { session, averageScore, rank: 0 };
     });
 
-    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!data) return res.status(404).json({ error: 'Session not found' });
 
-    // We also want to compute average score for this package to show comparison
-    const packageSessions = await prisma.examSession.findMany({
-      where: { packageId: session.packageId, status: 'selesai' },
-      select: { totalScore: true }
-    });
-    
-    let totalScoreSum = 0;
-    let validCount = 0;
-    packageSessions.forEach(s => {
-      if (s.totalScore !== null) {
-        totalScoreSum += Number(s.totalScore);
-        validCount++;
-      }
-    });
-    const averageScore = validCount > 0 ? totalScoreSum / validCount : 0;
-
-    res.json({ session, averageScore, rank: 0 }); // rank can be computed if needed
+    res.json(data);
   } catch (error) {
     console.error("Detailed analytics error:", error);
     res.status(500).json({ error: 'Failed to fetch session detail' });
@@ -1002,6 +1017,7 @@ app.post('/api/users/siswa', async (req, res) => {
       }
     });
 
+    await deleteCache('api:users');
     res.json({ message: 'Siswa created successfully', user: newUser });
   } catch (error) {
     console.error("Create siswa error:", error);
@@ -1031,6 +1047,7 @@ app.post('/api/users/siswa/batch', async (req, res) => {
       data: dataToInsert,
       skipDuplicates: true
     });
+    await deleteCache('api:users');
     res.json({ message: `Successfully imported ${result.count} students` });
   } catch (error) {
     console.error("Batch insert siswa error:", error);
