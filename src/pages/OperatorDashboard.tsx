@@ -6,7 +6,8 @@ import {
   Plus,
   Search,
   Upload,
-  Download
+  Download,
+  Printer
 } from 'lucide-react';
 
 const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
@@ -103,6 +104,84 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
     e.target.value = '';
   };
 
+  const handlePrintKartuLogin = () => {
+    if (students.length === 0) return alert("Belum ada data siswa untuk dicetak.");
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return alert("Pop-up diblokir. Harap izinkan pop-up untuk mencetak kartu.");
+    
+    let html = `
+      <html>
+        <head>
+          <title>Kartu Login Siswa - ${user?.school?.name || 'Sekolah'}</title>
+          <style>
+            body { font-family: sans-serif; padding: 20px; }
+            .card-container {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 20px;
+              justify-content: flex-start;
+            }
+            .card {
+              border: 2px dashed #ccc;
+              border-radius: 8px;
+              padding: 15px;
+              width: 300px;
+              box-sizing: border-box;
+              page-break-inside: avoid;
+              margin-bottom: 20px;
+            }
+            .header { text-align: center; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; font-size: 16px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+            .label { color: #555; }
+            .value { font-weight: bold; }
+            .school-name { text-align: center; font-size: 12px; color: #777; margin-bottom: 10px; }
+            @media print {
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print" style="margin-bottom: 20px;">
+            <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background: #0070f3; color: white; border: none; border-radius: 5px;">🖨️ Print Kartu</button>
+          </div>
+          <div class="card-container">
+    `;
+
+    students.forEach(siswa => {
+      html += `
+        <div class="card">
+          <div class="header">KARTU UJIAN TRY OUT</div>
+          <div class="school-name">${user?.school?.name || ''}</div>
+          <div class="row">
+            <span class="label">Nama:</span>
+            <span class="value">${siswa.fullName}</span>
+          </div>
+          <div class="row">
+            <span class="label">Kelas:</span>
+            <span class="value">${siswa.className || '-'}</span>
+          </div>
+          <div class="row">
+            <span class="label">Username (NISN):</span>
+            <span class="value">${siswa.nisn || siswa.username}</span>
+          </div>
+          <div class="row">
+            <span class="label">Password:</span>
+            <span class="value">${siswa.password || '******'}</span>
+          </div>
+        </div>
+      `;
+    });
+
+    html += `
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   const tabs = [
     { id: 'students', name: 'Manajemen Siswa', icon: <Users size={20} /> },
     { id: 'monitoring', name: 'Pantau Ujian', icon: <Activity size={20} /> },
@@ -188,6 +267,9 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 <p>Kelola data akun siswa di sekolah Anda (tambah satuan atau impor Excel).</p>
               </div>
               <div className="flex gap-2">
+                <button className="btn-secondary" onClick={handlePrintKartuLogin} style={{ margin: 0, background: '#f8fafc', color: '#0f172a' }}>
+                  <Printer size={18} /> Cetak Kartu Login
+                </button>
                 <input type="file" id="csv-upload" accept=".csv" style={{ display: 'none' }} onChange={handleImportCsv} />
                 <label htmlFor="csv-upload" className="btn-secondary" style={{ margin: 0 }}>
                   <Upload size={18} /> Import CSV
