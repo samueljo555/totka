@@ -267,20 +267,20 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 <p>Kelola data akun siswa di sekolah Anda (tambah satuan atau impor Excel).</p>
               </div>
               <div className="flex gap-2">
-                <button className="btn-secondary" onClick={handlePrintKartuLogin} style={{ margin: 0, background: '#f8fafc', color: '#0f172a' }}>
-                  <Printer size={18} /> Cetak Kartu Login
+                <button className="btn-secondary" onClick={handlePrintKartuLogin} style={{ margin: 0, background: '#f8fafc', color: '#0f172a', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                  <Printer size={16} /> Cetak Kartu Login
                 </button>
                 <input type="file" id="csv-upload" accept=".csv" style={{ display: 'none' }} onChange={handleImportCsv} />
-                <label htmlFor="csv-upload" className="btn-secondary" style={{ margin: 0 }}>
-                  <Upload size={18} /> Import CSV
+                <label htmlFor="csv-upload" className="btn-secondary" style={{ margin: 0, padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                  <Upload size={16} /> Import CSV
                 </label>
-                <button className="btn" onClick={() => {
+                <button className="btn" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }} onClick={() => {
                   setNewNisn('');
                   setNewFullName('');
                   setNewClassName('');
                   setIsAddingSiswa(true);
                 }}>
-                  <Plus size={18} /> Tambah Siswa
+                  <Plus size={16} /> Tambah Siswa
                 </button>
               </div>
             </div>
