@@ -512,15 +512,17 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                   let lowest = 101;
                   let totalSum = 0;
 
-                  finishedSessions.forEach(s => {
-                    const score = Number(s.totalScore) || 0;
+                  students.forEach(student => {
+                    const session = pkgSessions.find(s => s.studentId === student.id);
+                    const score = (session && session.status === 'selesai') ? (Number(session.totalScore) || 0) : 0;
+                    
                     if (score > highest) highest = score;
                     if (score < lowest) lowest = score;
                     totalSum += score;
                   });
 
-                  if (finished === 0) lowest = 0;
-                  const average = finished > 0 ? (totalSum / finished).toFixed(2) : 0;
+                  if (students.length === 0) lowest = 0;
+                  const average = students.length > 0 ? (totalSum / students.length).toFixed(2) : 0;
 
                   return (
                     <>
