@@ -504,19 +504,46 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 
                 {(() => {
                   const pkgSessions = sessions.filter(s => s.packageId === selectedHistoryPackage.id);
-                  const finished = pkgSessions.filter(s => s.status === 'selesai').length;
+                  const finishedSessions = pkgSessions.filter(s => s.status === 'selesai');
+                  const finished = finishedSessions.length;
                   const notStarted = Math.max(0, students.length - pkgSessions.length);
+
+                  let highest = 0;
+                  let lowest = 101;
+                  let totalSum = 0;
+
+                  finishedSessions.forEach(s => {
+                    const score = Number(s.totalScore) || 0;
+                    if (score > highest) highest = score;
+                    if (score < lowest) lowest = score;
+                    totalSum += score;
+                  });
+
+                  if (finished === 0) lowest = 0;
+                  const average = finished > 0 ? (totalSum / finished).toFixed(2) : 0;
 
                   return (
                     <>
-                      <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 0, marginBottom: '2rem' }}>
+                      <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginTop: 0, marginBottom: '2rem', gap: '1rem' }}>
                         <div className="card" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1.5rem' }}>
-                          <h3 style={{ fontSize: '2.5rem', color: '#64748b', margin: 0 }}>{notStarted}</h3>
-                          <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Tidak Mengerjakan</p>
+                          <h3 style={{ fontSize: '2rem', color: '#64748b', margin: 0 }}>{notStarted}</h3>
+                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Tidak Ikut</p>
                         </div>
                         <div className="card" style={{ background: 'rgba(0, 128, 0, 0.1)', border: '1px solid rgba(0, 128, 0, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
-                          <h3 style={{ fontSize: '2.5rem', color: 'green', margin: 0 }}>{finished}</h3>
-                          <p style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Selesai Mengerjakan</p>
+                          <h3 style={{ fontSize: '2rem', color: 'green', margin: 0 }}>{finished}</h3>
+                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Selesai</p>
+                        </div>
+                        <div className="card" style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
+                          <h3 style={{ fontSize: '2rem', color: '#ca8a04', margin: 0 }}>{highest}</h3>
+                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Tertinggi</p>
+                        </div>
+                        <div className="card" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
+                          <h3 style={{ fontSize: '2rem', color: '#dc2626', margin: 0 }}>{lowest}</h3>
+                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Terendah</p>
+                        </div>
+                        <div className="card" style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
+                          <h3 style={{ fontSize: '2rem', color: '#2563eb', margin: 0 }}>{average}</h3>
+                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Rata-rata</p>
                         </div>
                       </div>
 
@@ -536,7 +563,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                               <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                                 <td className="p-4 font-semibold text-main">{student.fullName || '-'}</td>
                                 <td className="p-4">{student.className || '-'}</td>
-                                <td className="p-4 font-bold">{session?.finalScore !== undefined && session?.finalScore !== null ? session.finalScore : '-'}</td>
+                                <td className="p-4 font-bold">{session?.totalScore !== undefined && session?.totalScore !== null ? session.totalScore : '-'}</td>
                                 <td className="p-4">
                                   {!session ? (
                                     <span className="tag" style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', fontSize: '0.75rem' }}>Tidak Mengerjakan</span>
