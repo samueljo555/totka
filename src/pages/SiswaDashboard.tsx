@@ -155,7 +155,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               style={{ fontSize: '1.5rem', textAlign: 'center', letterSpacing: '4px', textTransform: 'uppercase' }}
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="Masukkan Token dari Admin"
+              placeholder="Masukkan Token"
             />
           </div>
           
