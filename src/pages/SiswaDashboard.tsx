@@ -411,13 +411,27 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               >
                 <ChevronLeft size={18} style={{ marginRight: '4px' }} /> Sebelumnya
               </button>
-              <button 
-                className="btn" 
-                disabled={currentQuestion === totalQuestions}
-                onClick={() => setCurrentQuestion(prev => Math.min(totalQuestions, prev + 1))}
-              >
-                Selanjutnya <ChevronRight size={18} style={{ marginLeft: '4px' }} />
-              </button>
+              {currentQuestion < totalQuestions ? (
+                <button 
+                  className="btn" 
+                  onClick={() => setCurrentQuestion(prev => Math.min(totalQuestions, prev + 1))}
+                >
+                  Selanjutnya <ChevronRight size={18} style={{ marginLeft: '4px' }} />
+                </button>
+              ) : (
+                <button 
+                  className="btn" 
+                  style={{ background: '#d32f2f' }}
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    if (confirm("Apakah Anda yakin ingin menyelesaikan TO? Jawaban tidak bisa diubah lagi.")) {
+                      handleFinishExam();
+                    }
+                  }}
+                >
+                  {isSubmitting ? 'Menyimpan...' : 'Selesai'}
+                </button>
+              )}
             </div>
           </div>
         </main>
