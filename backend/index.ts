@@ -8,8 +8,14 @@ import fs from 'fs';
 import { getOrSetCache, deleteCache } from './cache';
 dotenv.config();
 
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
+
 const app = express();
-const prisma = new PrismaClient();
+const connectionString = `${process.env.DATABASE_URL}`;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 const port = process.env.PORT || 3001;
 
 app.use(cors());
