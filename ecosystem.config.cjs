@@ -2,9 +2,8 @@ module.exports = {
   apps: [
     {
       name: "tka-app-server",
-      script: "index.ts",
+      script: "dist/index.js",
       cwd: "./backend",
-      node_args: "-r ts-node/register",
       instances: "max",
       exec_mode: "cluster",
       env: {
