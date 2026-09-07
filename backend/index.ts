@@ -1,7 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { Pool } from 'pg';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 import multer from 'multer';
@@ -11,10 +9,7 @@ import { getOrSetCache, deleteCache } from './cache';
 dotenv.config();
 
 const app = express();
-const connectionString = `${process.env.DATABASE_URL}`;
-const pool = new Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient();
 const port = process.env.PORT || 3001;
 
 app.use(cors());
