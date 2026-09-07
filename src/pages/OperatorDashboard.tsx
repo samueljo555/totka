@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { 
   Users, 
@@ -77,7 +78,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
       }).filter(s => s.nisn && s.fullName);
 
       if (studentsData.length === 0) {
-        alert('Format CSV tidak valid atau kosong. Pastikan format: nisn,fullName,className');
+        toast.error('Format CSV tidak valid atau kosong. Pastikan format: nisn,fullName,className');
         return;
       }
 
@@ -91,13 +92,13 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
           })
         });
         if (res.ok) {
-          alert(`Berhasil mengimpor ${studentsData.length} data siswa!`);
+          toast.success(`Berhasil mengimpor ${studentsData.length} data siswa!`);
           fetchStudents();
         } else {
-          alert('Terjadi kesalahan saat impor data.');
+          toast.error('Terjadi kesalahan saat impor data.');
         }
       } catch(err) {
-        alert('Gagal menghubungi server.');
+        toast.error('Gagal menghubungi server.');
       }
     };
     reader.readAsText(file);
@@ -105,9 +106,9 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   };
 
   const handlePrintKartuLogin = () => {
-    if (students.length === 0) return alert("Belum ada data siswa untuk dicetak.");
+    if (students.length === 0) return toast("Belum ada data siswa untuk dicetak.");
     const printWindow = window.open('', '_blank');
-    if (!printWindow) return alert("Pop-up diblokir. Harap izinkan pop-up untuk mencetak kartu.");
+    if (!printWindow) return toast.error("Pop-up diblokir. Harap izinkan pop-up untuk mencetak kartu.");
     
     let html = `
       <html>

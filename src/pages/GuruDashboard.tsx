@@ -1,3 +1,5 @@
+import { useConfirm } from '../contexts/ConfirmContext';
+import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react';
 import { 
   FileText, 
@@ -16,6 +18,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 
 const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
+  const confirmModal = useConfirm();
   const [activeTab, setActiveTab] = useState('bank');
   const [isAdding, setIsAdding] = useState(false);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -59,7 +62,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         setReadings(data);
       }
     } catch(err) {
-      alert('Gagal menyimpan bacaan');
+      toast.error('Gagal menyimpan bacaan');
     }
   };
 
@@ -90,11 +93,11 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
 
   const handleSaveQuestion = async () => {
     if (!questionText || options.length === 0) {
-      alert("Pertanyaan dan opsi tidak boleh kosong!");
+      toast.error("Pertanyaan dan opsi tidak boleh kosong!");
       return;
     }
     if (!selectedElement) {
-      alert("Elemen/Kompetensi harus dipilih terlebih dahulu!");
+      toast.error("Elemen/Kompetensi harus dipilih terlebih dahulu!");
       return;
     }
 
@@ -111,7 +114,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
           const uploadData = await uploadRes.json();
           finalImageUrl = uploadData.imageUrl;
         } else {
-          alert('Gagal mengupload gambar.');
+          toast.error('Gagal mengupload gambar.');
           return;
         }
       }
@@ -147,10 +150,10 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         const data = await fetch('/api/questions').then(r => r.json());
         setQuestions(data);
       } else {
-        alert("Gagal menyimpan soal");
+        toast.error("Gagal menyimpan soal");
       }
     } catch(err) {
-      alert("Error saving question");
+      toast.error("Error saving question");
     }
   };
 
@@ -166,7 +169,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
     if (options.length > 2) {
       setOptions(options.filter(o => o.id !== id));
     } else {
-      alert("Harus ada minimal 2 pilihan jawaban/pernyataan.");
+      toast.error("Harus ada minimal 2 pilihan jawaban/pernyataan.");
     }
   };
 
@@ -200,7 +203,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
       }));
       setSelectedElement(newElements[0]);
     } else {
-      alert("Harus menyisakan minimal 1 elemen.");
+      toast.error("Harus menyisakan minimal 1 elemen.");
     }
   };
 
@@ -367,7 +370,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                         <Edit size={16}/>
                       </button>
                       <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: '#d32f2f' }} title="Hapus" onClick={async () => {
-                        if (window.confirm('Yakin ingin menghapus soal ini?')) {
+                        if (await confirmModal({ title: 'Konfirmasi', message: 'Yakin ingin menghapus soal ini?' })) {
                           await fetch(`/api/questions/${soal.id}`, { method: 'DELETE' });
                           const data = await fetch('/api/questions').then(r => r.json());
                           setQuestions(data);
@@ -589,7 +592,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                           setIsAddingReading(true);
                         }}>Edit</button>
                         <button className="btn-secondary" style={{ padding: '4px 8px', color: '#d32f2f', background: 'rgba(255,0,0,0.1)' }} onClick={async () => {
-                          if (window.confirm('Hapus bacaan ini?')) {
+                          if (await confirmModal({ title: 'Konfirmasi', message: 'Hapus bacaan ini?' })) {
                             await fetch(`/api/readings/${r.id}`, { method: 'DELETE' });
                             const data = await fetch('/api/readings').then(res => res.json());
                             setReadings(data);

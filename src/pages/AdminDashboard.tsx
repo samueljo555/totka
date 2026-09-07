@@ -1,3 +1,5 @@
+import { useConfirm } from '../contexts/ConfirmContext';
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -25,6 +27,7 @@ import {
 import AnalysisDetailModal from '../components/AnalysisDetailModal';
 
 const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
+  const confirmModal = useConfirm();
   const [activeTab, setActiveTab] = useState('overview');
   const [isAddingPackage, setIsAddingPackage] = useState(false);
   const [isAddingUser, setIsAddingUser] = useState(false);
@@ -181,7 +184,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       }).filter(s => s.npsn && s.name);
   
       if (schoolsData.length === 0) {
-        alert('Format CSV tidak valid atau kosong. Pastikan format: npsn,name,region');
+        toast.error('Format CSV tidak valid atau kosong. Pastikan format: npsn,name,region');
         return;
       }
   
@@ -192,13 +195,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           body: JSON.stringify({ schools: schoolsData })
         });
         if (res.ok) {
-          alert(`Berhasil mengimpor ${schoolsData.length} data sekolah!`);
+          toast.success(`Berhasil mengimpor ${schoolsData.length} data sekolah!`);
           fetchSchools();
         } else {
-          alert('Terjadi kesalahan saat impor data.');
+          toast.error('Terjadi kesalahan saat impor data.');
         }
       } catch(err) {
-        alert('Gagal menghubungi server.');
+        toast.error('Gagal menghubungi server.');
       }
     };
     reader.readAsText(file);
@@ -207,7 +210,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   const handleSavePackage = async () => {
     if (!newPackageName || !newPackageToken) {
-      alert("Nama Paket dan Token Ujian wajib diisi!");
+      toast.error("Nama Paket dan Token Ujian wajib diisi!");
       return;
     }
     
@@ -243,10 +246,10 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         setPackages(pkgs);
       } else {
         const err = await res.json();
-        alert(`Gagal: ${err.error || 'Terjadi kesalahan'}`);
+        toast.error(`Gagal: ${err.error || 'Terjadi kesalahan'}`);
       }
     } catch (err) {
-      alert("Terjadi kesalahan jaringan");
+      toast.error("Terjadi kesalahan jaringan");
     } finally {
       setIsSavingPackage(false);
     }
@@ -415,12 +418,12 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         <button 
                           className="btn-secondary" 
                           style={{ padding: '6px 12px', fontSize: '0.85rem', color: '#d32f2f', background: 'rgba(255,0,0,0.05)' }}
-                          onClick={() => {
-                            if (window.confirm(`Yakin ingin menghapus pengguna ${u.fullName}?`)) {
+                          onClick={async () => {
+                            if (await confirmModal({ title: 'Konfirmasi', message: `Yakin ingin menghapus pengguna ${u.fullName}?` })) {
                               fetch(`/api/users/${u.id}`, { method: 'DELETE' })
                                 .then(res => {
                                   if (res.ok) fetchUsers();
-                                  else alert('Gagal menghapus pengguna');
+                                  else toast.error('Gagal menghapus pengguna');
                                 });
                             }
                           }}
@@ -683,8 +686,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         <button 
                           className="btn-secondary" 
                           style={{ padding: '6px 12px', fontSize: '0.85rem', color: '#d32f2f', background: 'rgba(255,0,0,0.05)' }}
-                          onClick={() => {
-                            if (window.confirm('Hapus sekolah ini?')) {
+                          onClick={async () => {
+                            if (await confirmModal({ title: 'Konfirmasi', message: 'Hapus sekolah ini?' })) {
                               fetch(`/api/schools/${s.npsn}`, { method: 'DELETE' })
                                 .then(() => fetchSchools());
                             }
@@ -811,7 +814,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     }}>Edit Paket</button>
                     {pkg.status === 'draft' ? (
                       <button className="btn" style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }} onClick={async () => {
-                        if (confirm('Ubah status paket menjadi AKTIF? Paket yang aktif dapat diakses siswa.')) {
+                        if (await confirmModal({ title: 'Konfirmasi', message: 'Ubah status paket menjadi AKTIF? Paket yang aktif dapat diakses siswa.' })) {
                           await fetch(`/api/packages/${pkg.id}`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
@@ -823,7 +826,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       }}>Buka Ujian</button>
                     ) : (
                       <button className="btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '0.9rem', color: '#d32f2f', border: '1px solid #d32f2f' }} onClick={async () => {
-                        if (confirm('Nonaktifkan paket ujian ini? Siswa tidak akan bisa masuk menggunakan token ini lagi.')) {
+                        if (await confirmModal({ title: 'Konfirmasi', message: 'Nonaktifkan paket ujian ini? Siswa tidak akan bisa masuk menggunakan token ini lagi.' })) {
                           await fetch(`/api/packages/${pkg.id}`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
@@ -1115,7 +1118,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                                       a.download = `analitik_semua_siswa_${pkg.id}.csv`;
                                       a.click();
                                     } catch(err) {
-                                      alert("Gagal mengunduh data seluruh siswa");
+                                      toast.error("Gagal mengunduh data seluruh siswa");
                                     }
                                   }}
                                 >

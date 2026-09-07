@@ -1,3 +1,5 @@
+import { useConfirm } from '../contexts/ConfirmContext';
+import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react';
 import { Clock, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -6,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 
 const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
+  const confirmModal = useConfirm();
   const [hasEnteredToken, setHasEnteredToken] = useState(false);
   const [token, setToken] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -128,11 +131,11 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         setFinalScore(data.totalScore ? parseFloat(data.totalScore) : 0);
         setIsFinished(true);
       } else {
-        alert("Gagal mengakhiri sesi ujian.");
+        toast.error("Gagal mengakhiri sesi ujian.");
       }
     } catch (error) {
       console.error(error);
-      alert("Terjadi kesalahan jaringan.");
+      toast.error("Terjadi kesalahan jaringan.");
     } finally {
       setIsSubmitting(false);
     }
@@ -388,8 +391,8 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               <Clock size={20} />
               <span>{formatTime(timeLeft)}</span>
             </div>
-            <button className="btn" style={{ background: '#d32f2f', opacity: isSubmitting ? 0.7 : 1 }} disabled={isSubmitting} onClick={() => {
-              if (confirm("Apakah Anda yakin ingin menyelesaikan ujian? Jawaban tidak bisa diubah lagi.")) {
+            <button className="btn" style={{ background: '#d32f2f', opacity: isSubmitting ? 0.7 : 1 }} disabled={isSubmitting} onClick={async () => {
+              if (await confirmModal({ title: 'Konfirmasi', message: "Apakah Anda yakin ingin menyelesaikan ujian? Jawaban tidak bisa diubah lagi." })) {
                 handleFinishExam();
               }
             }}>
@@ -423,8 +426,8 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   className="btn" 
                   style={{ background: '#d32f2f' }}
                   disabled={isSubmitting}
-                  onClick={() => {
-                    if (confirm("Apakah Anda yakin ingin menyelesaikan TO? Jawaban tidak bisa diubah lagi.")) {
+                  onClick={async () => {
+              if (await confirmModal({ title: 'Konfirmasi', message: "Apakah Anda yakin ingin menyelesaikan TO? Jawaban tidak bisa diubah lagi." })) {
                       handleFinishExam();
                     }
                   }}
