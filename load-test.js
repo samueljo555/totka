@@ -10,9 +10,9 @@ export const options = {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '2m', target: 2000 },  // Naik ke 2.000 siswa dalam 2 menit
-        { duration: '3m', target: 10000 }, // Naik ke 10.000 siswa dalam 3 menit
-        { duration: '5m', target: 10000 }, // Tahan 10.000 siswa ujian selama 5 menit
+        { duration: '1m', target: 500 },   // Naik perlahan ke 500 siswa dalam 1 menit
+        { duration: '2m', target: 1000 },  // Naik ke 1000 siswa dalam 2 menit
+        { duration: '3m', target: 1000 },  // Tahan 1000 siswa ujian selama 3 menit
         { duration: '1m', target: 0 },     // Turun perlahan (selesai ujian)
       ],
       gracefulRampDown: '30s',
