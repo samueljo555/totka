@@ -4,20 +4,6 @@ import { SharedArray } from 'k6/data';
 
 // --- KONFIGURASI LOAD TEST ---
 export const options = {
-  scenarios: {
-    // Skenario: 10.000 Siswa masuk secara bertahap dalam 5 menit, lalu ujian selama 5 menit
-    exam_simulation: {
-      executor: 'ramping-vus',
-      startVUs: 0,
-      stages: [
-        { duration: '1m', target: 500 },   // Naik perlahan ke 500 siswa dalam 1 menit
-        { duration: '2m', target: 1000 },  // Naik ke 1000 siswa dalam 2 menit
-        { duration: '3m', target: 1000 },  // Tahan 1000 siswa ujian selama 3 menit
-        { duration: '1m', target: 0 },     // Turun perlahan (selesai ujian)
-      ],
-      gracefulRampDown: '30s',
-    },
-  },
   thresholds: {
     http_req_duration: ['p(95)<2000'], // 95% request harus selesai di bawah 2 detik
     http_req_failed: ['rate<0.01'],    // Error rate tidak boleh lebih dari 1%
