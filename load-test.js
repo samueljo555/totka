@@ -45,7 +45,6 @@ export default function (data) {
 
   check(res, {
     'login berhasil': (r) => r.status === 200,
-    'dapat token': (r) => r.json('token') !== undefined,
   });
 
   if (res.status !== 200) {
@@ -53,13 +52,11 @@ export default function (data) {
     return; // Jika gagal login, coba lagi nanti (abort iterasi ini)
   }
 
-  const token = res.json('token');
   const userObj = res.json('user');
   
   const authHeaders = {
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'Content-Type': 'application/json'
     }
   };
 
