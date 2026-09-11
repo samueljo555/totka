@@ -66,11 +66,11 @@ export default function (data) {
   }
 
   const sessionId = res.json('session.id');
-  const questions = res.json('package.questions') || [];
+  const questions = res.json('questions') || [];
 
   // --- MENGERJAKAN SOAL (Satu per satu) ---
   for (let i = 0; i < questions.length; i++) {
-    const q = questions[i].question;
+    const q = questions[i];
     
     // Waktu berpikir/membaca soal (5 hingga 15 detik per soal)
     // Dipercepat agar script tidak terlalu lama untuk simulasi
