@@ -17,7 +17,7 @@ const EXAM_TOKEN = __ENV.EXAM_TOKEN || 'SIMULASI123'; // Token ujian aktif
 export default function (data) {
   // 1. Ambil nomor identitas VU (Virtual User) untuk login
   // k6 VU id dimulai dari 1. Kita punya siswa1 sampai siswa10000
-  const studentId = (__VU % 10000) + 1; 
+  const studentId = ((__VU - 1) % 10000) + 1; 
   const username = `siswa${studentId}`;
   const password = '123456';
 
