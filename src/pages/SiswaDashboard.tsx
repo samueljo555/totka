@@ -1,7 +1,8 @@
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react';
-import { Clock, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { Clock, ChevronRight, ChevronLeft, CheckCircle2, ZoomIn } from 'lucide-react';
+import { ImageModal } from '../components/ImageModal';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -25,6 +26,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [releaseScoreMode, setReleaseScoreMode] = useState<string>('langsung');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Timer effect
   useEffect(() => {
@@ -255,7 +257,55 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           )}
           {q.imageUrl && (
             <div className="mt-4">
-              <img src={q.imageUrl} alt="Gambar Soal" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }} />
+              <div 
+                onClick={() => setPreviewImage(q.imageUrl)}
+                style={{
+                  display: 'inline-block',
+                  position: 'relative',
+                  cursor: 'zoom-in',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  border: '1px solid #cbd5e1',
+                  transition: 'all 0.2s ease',
+                  backgroundColor: '#f8fafc'
+                }}
+                title="Klik untuk memperbesar gambar"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 82, 204, 0.15)';
+                  e.currentTarget.style.borderColor = 'var(--primary-color)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                }}
+              >
+                <img 
+                  src={q.imageUrl} 
+                  alt="Gambar Soal" 
+                  style={{ maxWidth: '100%', maxHeight: '300px', display: 'block', borderRadius: '7px' }} 
+                />
+                <div style={{
+                  position: 'absolute',
+                  bottom: '8px',
+                  right: '8px',
+                  background: 'rgba(15, 23, 42, 0.75)',
+                  backdropFilter: 'blur(4px)',
+                  color: 'white',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  pointerEvents: 'none'
+                }}>
+                  <ZoomIn size={14} />
+                  <span>Klik untuk perbesar</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -488,6 +538,14 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           </div>
         </div>
       </aside>
+
+      {/* Modal Lightbox untuk Perbesar Gambar Soal */}
+      <ImageModal 
+        isOpen={!!previewImage} 
+        imageUrl={previewImage} 
+        altText={`Gambar Soal No. ${currentQuestion}`}
+        onClose={() => setPreviewImage(null)} 
+      />
     </div>
   );
 };
