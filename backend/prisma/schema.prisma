@@ -20,6 +20,7 @@ model User {
   password  String
   fullName  String
   role      String   // super_admin, admin, guru, operator, siswa
+  activeToken String?
   
   // Siswa specific fields
   nisn      String?  @unique

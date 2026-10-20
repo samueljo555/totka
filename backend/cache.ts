@@ -69,3 +69,22 @@ export async function deleteCache(key: string) {
     console.error(`Redis Del Error for key ${key}:`, err);
   }
 }
+
+export async function setUserActiveToken(userId: string, token: string) {
+  if (!USE_REDIS || !redisClient || !isRedisConnected) return;
+  try {
+    await redisClient.setEx(`user:active_token:${userId}`, 86400, token); // 24 jam
+  } catch (err) {
+    console.error(`Redis Set Active Token Error for ${userId}:`, err);
+  }
+}
+
+export async function getUserActiveToken(userId: string): Promise<string | null> {
+  if (!USE_REDIS || !redisClient || !isRedisConnected) return null;
+  try {
+    return await redisClient.get(`user:active_token:${userId}`);
+  } catch (err) {
+    console.error(`Redis Get Active Token Error for ${userId}:`, err);
+    return null;
+  }
+}

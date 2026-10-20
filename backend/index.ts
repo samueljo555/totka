@@ -4,9 +4,14 @@ import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import fs from 'fs';
-import { getOrSetCache, deleteCache } from './cache';
+import crypto from 'crypto';
+import { getOrSetCache, deleteCache, setUserActiveToken, getUserActiveToken } from './cache.js';
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -17,6 +22,38 @@ const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 const port = process.env.PORT || 3001;
+
+// Helper: Validasi sesi aktif siswa (Single Device Policy: Tendang Perangkat Lama)
+async function verifyStudentSession(studentId: string, clientToken?: string): Promise<{ valid: boolean; reason?: string }> {
+  if (!clientToken) {
+    return { valid: true }; // Kompatibilitas mundur jika token tidak dikirim
+  }
+
+  // 1. Cek dari Redis Cache lebih dulu (Super cepat, sub-millisecond)
+  let activeToken = await getUserActiveToken(studentId);
+
+  // 2. Fallback ke PostgreSQL jika Redis kosong
+  if (!activeToken) {
+    const user = await prisma.user.findUnique({
+      where: { id: studentId },
+      select: { activeToken: true }
+    });
+    activeToken = user?.activeToken || null;
+    if (activeToken) {
+      await setUserActiveToken(studentId, activeToken);
+    }
+  }
+
+  // Jika activeToken berbeda dengan clientToken yang dibawa perangkat ini -> TENDANG
+  if (activeToken && activeToken !== clientToken) {
+    return {
+      valid: false,
+      reason: 'Akun Anda telah login di perangkat lain. Sesi pada perangkat ini telah dinonaktifkan.'
+    };
+  }
+
+  return { valid: true };
+}
 
 app.use(cors());
 app.use(express.json());
@@ -52,10 +89,10 @@ let gcpStorage: Storage | null = null;
 let bucketName = process.env.GCP_BUCKET_NAME || '';
 
 if (STORAGE_PROVIDER === 'GCP') {
-  gcpStorage = new Storage({
-    projectId: process.env.GCP_PROJECT_ID,
-    keyFilename: process.env.GCP_KEY_FILE_PATH, // Path to service account JSON (optional if running inside GCP)
-  });
+  const gcpOptions: any = {};
+  if (process.env.GCP_PROJECT_ID) gcpOptions.projectId = process.env.GCP_PROJECT_ID;
+  if (process.env.GCP_KEY_FILE_PATH) gcpOptions.keyFilename = process.env.GCP_KEY_FILE_PATH;
+  gcpStorage = new Storage(gcpOptions);
 }
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -459,20 +496,51 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
+    // Generate token sesi unik untuk login perangkat ini
+    const sessionToken = crypto.randomUUID();
+
+    // Simpan token aktif di PostgreSQL
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { activeToken: sessionToken }
+    });
+
+    // Simpan di Redis Cache
+    await setUserActiveToken(user.id, sessionToken);
+
     res.json({
       message: 'Login successful',
+      sessionToken,
       user: {
         id: user.id,
         username: user.username,
         role: user.role,
         fullName: user.fullName,
-        school: user.school
+        school: user.school,
+        activeToken: sessionToken
       }
     });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: 'Internal server error during login' });
   }
+});
+
+// Endpoint untuk cek keabsahan sesi (Heartbeat Single Device Check)
+app.get('/api/auth/session-check', async (req, res) => {
+  const studentId = (req.query.studentId as string) || (req.headers['x-student-id'] as string);
+  const clientToken = (req.headers['x-session-token'] as string) || (req.query.sessionToken as string);
+
+  if (!studentId || !clientToken) {
+    return res.status(400).json({ error: 'Missing studentId or sessionToken' });
+  }
+
+  const check = await verifyStudentSession(studentId, clientToken);
+  if (!check.valid) {
+    return res.status(401).json({ error: 'SESSION_KICKED', message: check.reason });
+  }
+
+  return res.json({ status: 'valid' });
 });
 
 app.get('/api/questions', async (req, res) => {
@@ -783,7 +851,7 @@ app.get('/api/analytics/packages/:packageId/items', async (req, res) => {
           questionId: qId,
           questionNumber: idx + 1,
           content: pq.question.content,
-          cognitiveLevel: pq.question.cognitiveLevel,
+          cognitiveLevel: (pq.question as any).cognitiveLevel || 'C3',
           totalAttempts,
           correctCount,
           difficultyIndex,
@@ -848,8 +916,17 @@ app.get('/api/analytics/:sessionId', async (req, res) => {
 
 app.post('/api/sessions/start', async (req, res) => {
   const { studentId, token } = req.body;
+  const clientToken = (req.headers['x-session-token'] as string) || req.body.sessionToken;
+
   if (!studentId || !token) {
     return res.status(400).json({ error: 'Missing studentId or token' });
+  }
+
+  if (clientToken) {
+    const check = await verifyStudentSession(studentId, clientToken);
+    if (!check.valid) {
+      return res.status(401).json({ error: 'SESSION_KICKED', message: check.reason });
+    }
   }
 
   try {
@@ -896,7 +973,16 @@ app.post('/api/sessions/start', async (req, res) => {
 
 app.post('/api/sessions/:sessionId/answer', async (req, res) => {
   const { sessionId } = req.params;
-  const { questionId, answerData } = req.body;
+  const { questionId, answerData, studentId } = req.body;
+  const clientToken = (req.headers['x-session-token'] as string) || req.body.sessionToken;
+  const reqStudentId = (req.headers['x-student-id'] as string) || studentId;
+
+  if (reqStudentId && clientToken) {
+    const check = await verifyStudentSession(reqStudentId, clientToken);
+    if (!check.valid) {
+      return res.status(401).json({ error: 'SESSION_KICKED', message: check.reason });
+    }
+  }
 
   try {
     const answer = await prisma.answer.upsert({
@@ -913,6 +999,16 @@ app.post('/api/sessions/:sessionId/answer', async (req, res) => {
 
 app.post('/api/sessions/:sessionId/finish', async (req, res) => {
   const { sessionId } = req.params;
+  const clientToken = (req.headers['x-session-token'] as string) || req.body?.sessionToken;
+  const reqStudentId = (req.headers['x-student-id'] as string) || req.body?.studentId;
+
+  if (reqStudentId && clientToken) {
+    const check = await verifyStudentSession(reqStudentId, clientToken);
+    if (!check.valid) {
+      return res.status(401).json({ error: 'SESSION_KICKED', message: check.reason });
+    }
+  }
+
   try {
     const session = await prisma.examSession.findUnique({
       where: { id: sessionId },
@@ -1055,8 +1151,6 @@ app.post('/api/users/siswa/batch', async (req, res) => {
     res.status(500).json({ error: 'Failed to import students' });
   }
 });
-
-import path from 'path';
 
 // Serve static frontend files in production
 const frontendDistPath = path.join(__dirname, '../dist');

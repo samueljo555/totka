@@ -1,7 +1,7 @@
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react';
-import { Clock, ChevronRight, ChevronLeft, CheckCircle2, ZoomIn } from 'lucide-react';
+import { Clock, ChevronRight, ChevronLeft, CheckCircle2, ZoomIn, WifiOff, RefreshCw, AlertCircle } from 'lucide-react';
 import { ImageModal } from '../components/ImageModal';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -28,6 +28,15 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  // Offline & Auto-Sync State
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncSuccessNotice, setSyncSuccessNotice] = useState(false);
+
+  // Single Device Policy State (Kicked)
+  const [kickedData, setKickedData] = useState<{ show: boolean; message: string } | null>(null);
+
   // Timer effect
   useEffect(() => {
     if (hasEnteredToken && !isFinished && timeLeft > 0) {
@@ -46,18 +55,195 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Helper Antrian Jawaban Lokal (Offline Queue)
+  const getQueue = (sId: string): any[] => {
+    try {
+      const q = localStorage.getItem(`tka_queue_${sId}`);
+      return q ? JSON.parse(q) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const saveQueue = (sId: string, queue: any[]) => {
+    try {
+      localStorage.setItem(`tka_queue_${sId}`, JSON.stringify(queue));
+      setPendingSyncCount(queue.length);
+    } catch (e) {
+      console.error("Failed to save local queue:", e);
+    }
+  };
+
+  const addToQueue = (sId: string, item: { questionId: string; answerData: any; qNumber: number }) => {
+    const queue = getQueue(sId);
+    const filtered = queue.filter(q => q.questionId !== item.questionId);
+    filtered.push(item);
+    saveQueue(sId, filtered);
+  };
+
+  // Sinkronisasi Jawaban Tertunda ke Server secara Otomatis
+  const syncPendingQueue = async () => {
+    if (!sessionId || isSyncing || !navigator.onLine) return;
+    const queue = getQueue(sessionId);
+    if (queue.length === 0) {
+      setPendingSyncCount(0);
+      return;
+    }
+
+    setIsSyncing(true);
+    let remaining = [...queue];
+
+    for (const item of queue) {
+      try {
+        const res = await fetch(`/api/sessions/${sessionId}/answer`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-session-token': user?.activeToken || '',
+            'x-student-id': user?.id || ''
+          },
+          body: JSON.stringify({ 
+            questionId: item.questionId, 
+            answerData: item.answerData,
+            studentId: user?.id,
+            sessionToken: user?.activeToken
+          })
+        });
+
+        if (res.status === 401) {
+          const data = await res.json();
+          if (data.error === 'SESSION_KICKED') {
+            setKickedData({ show: true, message: data.message });
+            setIsSyncing(false);
+            return;
+          }
+        }
+
+        if (res.ok) {
+          remaining = remaining.filter(q => q.questionId !== item.questionId);
+          saveQueue(sessionId, remaining);
+        } else {
+          break; // Berhenti sementara dan coba lagi nanti
+        }
+      } catch (err) {
+        setIsOnline(false);
+        break;
+      }
+    }
+
+    setIsSyncing(false);
+    if (remaining.length === 0) {
+      setSyncSuccessNotice(true);
+      setTimeout(() => setSyncSuccessNotice(false), 3500);
+    }
+  };
+
+  // Deteksi Status Jaringan Online / Offline
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (sessionId) {
+        syncPendingQueue();
+      }
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [sessionId]);
+
+  // Heartbeat Single Device Check & Auto-Sync Rutin
+  useEffect(() => {
+    if (!hasEnteredToken || isFinished || !user?.id || !user?.activeToken) return;
+
+    const interval = setInterval(async () => {
+      if (navigator.onLine && sessionId) {
+        const q = getQueue(sessionId);
+        if (q.length > 0) {
+          syncPendingQueue();
+        }
+      }
+
+      if (navigator.onLine) {
+        try {
+          const res = await fetch(`/api/auth/session-check?studentId=${user.id}`, {
+            headers: { 'x-session-token': user.activeToken }
+          });
+          if (res.status === 401) {
+            const data = await res.json();
+            if (data.error === 'SESSION_KICKED') {
+              setKickedData({ show: true, message: data.message });
+            }
+          }
+        } catch {
+          // Abaikan glitch jaringan sementara
+        }
+      }
+    }, 15000); // Cek setiap 15 detik
+
+    return () => clearInterval(interval);
+  }, [hasEnteredToken, isFinished, sessionId, user?.id, user?.activeToken]);
+
   const handleAnswer = async (qNumber: number, answer: any) => {
     setAnswers(prev => ({ ...prev, [qNumber]: answer }));
-    if (sessionId && questions[qNumber - 1]) {
-      try {
-        await fetch(`/api/sessions/${sessionId}/answer`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ questionId: questions[qNumber - 1].id, answerData: answer })
-        });
-      } catch (err) {
-        console.error("Failed to auto-save answer:", err);
+
+    if (!sessionId || !questions[qNumber - 1]) return;
+    const questionId = questions[qNumber - 1].id;
+
+    // Backup ke LocalStorage
+    try {
+      localStorage.setItem(`tka_answers_${sessionId}`, JSON.stringify({ ...answers, [qNumber]: answer }));
+    } catch (e) {}
+
+    // Jika sedang offline, masukkan langsung ke antrian offline
+    if (!navigator.onLine) {
+      setIsOnline(false);
+      addToQueue(sessionId, { questionId, answerData: answer, qNumber });
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/answer`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-session-token': user?.activeToken || '',
+          'x-student-id': user?.id || ''
+        },
+        body: JSON.stringify({ 
+          questionId, 
+          answerData: answer,
+          studentId: user?.id,
+          sessionToken: user?.activeToken
+        })
+      });
+
+      if (res.status === 401) {
+        const data = await res.json();
+        if (data.error === 'SESSION_KICKED') {
+          setKickedData({ show: true, message: data.message });
+          return;
+        }
       }
+
+      if (!res.ok) {
+        throw new Error('Gagal menyimpan jawaban');
+      }
+
+      // Jika berhasil dan sebelumnya ada di antrian, bersihkan
+      const currentQueue = getQueue(sessionId);
+      if (currentQueue.some(q => q.questionId === questionId)) {
+        saveQueue(sessionId, currentQueue.filter(q => q.questionId !== questionId));
+      }
+    } catch (err) {
+      setIsOnline(false);
+      addToQueue(sessionId, { questionId, answerData: answer, qNumber });
     }
   };
 
@@ -68,10 +254,24 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     try {
       const res = await fetch('/api/sessions/start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: user.id, token: examToken })
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-session-token': user?.activeToken || '',
+          'x-student-id': user?.id || ''
+        },
+        body: JSON.stringify({ 
+          studentId: user.id, 
+          token: examToken,
+          sessionToken: user?.activeToken
+        })
       });
       const data = await res.json();
+
+      if (res.status === 401 && data.error === 'SESSION_KICKED') {
+        setKickedData({ show: true, message: data.message });
+        return;
+      }
+
       if (!res.ok) {
         sessionStorage.removeItem('activeExamToken');
         throw new Error(data.error || 'Gagal memulai ujian');
@@ -83,6 +283,10 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       setQuestions(data.questions || []);
       setReleaseScoreMode(data.package?.releaseScoreMode || 'langsung');
       
+      // Update pending queue count jika ada sisa antrian di perangkat ini
+      const localQueue = getQueue(data.session.id);
+      setPendingSyncCount(localQueue.length);
+
       // Map existing answers to our qNumber format
       const loadedAnswers: Record<number, any> = {};
       if (data.questions && data.existingAnswers) {
@@ -91,6 +295,16 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           if (ans) loadedAnswers[idx + 1] = ans.answerData;
         });
       }
+
+      // Timpa dengan backup lokal jika ada jawaban offline yang belum sempat terkirim
+      try {
+        const localBackup = localStorage.getItem(`tka_answers_${data.session.id}`);
+        if (localBackup) {
+          const parsed = JSON.parse(localBackup);
+          Object.assign(loadedAnswers, parsed);
+        }
+      } catch (e) {}
+
       setAnswers(loadedAnswers);
       
       // Calculate remaining time
@@ -124,12 +338,45 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   const handleFinishExam = async () => {
     if (!sessionId || isSubmitting) return;
+
+    // Proteksi: Cegah selesai ujian jika masih offline atau ada jawaban di antrian
+    if (!navigator.onLine || pendingSyncCount > 0) {
+      toast.error(
+        `Koneksi internet Anda sedang terputus atau masih ada ${pendingSyncCount} jawaban yang belum tersinkronkan ke server. Harap tunggu hingga koneksi pulih sebelum mengakhiri ujian.`,
+        { duration: 6000 }
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/finish`, { method: 'POST' });
+      const res = await fetch(`/api/sessions/${sessionId}/finish`, { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-token': user?.activeToken || '',
+          'x-student-id': user?.id || ''
+        },
+        body: JSON.stringify({
+          studentId: user?.id,
+          sessionToken: user?.activeToken
+        })
+      });
+
+      if (res.status === 401) {
+        const data = await res.json();
+        if (data.error === 'SESSION_KICKED') {
+          setKickedData({ show: true, message: data.message });
+          return;
+        }
+      }
+
       if (res.ok) {
         const data = await res.json();
         sessionStorage.removeItem('activeExamToken');
+        // Bersihkan antrian lokal setelah sukses selesai
+        localStorage.removeItem(`tka_queue_${sessionId}`);
+        localStorage.removeItem(`tka_answers_${sessionId}`);
         setFinalScore(data.totalScore ? parseFloat(data.totalScore) : 0);
         setIsFinished(true);
       } else {
@@ -451,6 +698,68 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           </div>
         </header>
 
+        {/* Offline & Auto-Sync Alert Banners */}
+        {!isOnline && (
+          <div style={{
+            background: '#fee2e2',
+            borderBottom: '1px solid #f87171',
+            color: '#991b1b',
+            padding: '10px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            fontSize: '0.9rem',
+            fontWeight: 600,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+            zIndex: 9
+          }}>
+            <WifiOff size={18} style={{ color: '#dc2626' }} />
+            <span>
+              Koneksi Internet Terputus! Anda sedang mode offline. Jawaban Anda tetap tersimpan aman di perangkat ini
+              {pendingSyncCount > 0 ? ` (${pendingSyncCount} jawaban menunggu sinkronisasi)` : ''}.
+            </span>
+          </div>
+        )}
+
+        {isOnline && isSyncing && (
+          <div style={{
+            background: '#fef3c7',
+            borderBottom: '1px solid #fcd34d',
+            color: '#92400e',
+            padding: '10px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            fontSize: '0.9rem',
+            fontWeight: 600,
+            zIndex: 9
+          }}>
+            <RefreshCw size={16} className="animate-spin" />
+            <span>Koneksi pulih! Sedang menyinkronkan {pendingSyncCount} jawaban tertunda ke server...</span>
+          </div>
+        )}
+
+        {isOnline && syncSuccessNotice && (
+          <div style={{
+            background: '#dcfce7',
+            borderBottom: '1px solid #86efac',
+            color: '#166534',
+            padding: '10px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            fontSize: '0.9rem',
+            fontWeight: 600,
+            zIndex: 9
+          }}>
+            <CheckCircle2 size={18} style={{ color: '#16a34a' }} />
+            <span>Semua jawaban berhasil tersimpan aman di server!</span>
+          </div>
+        )}
+
         {/* Question Area */}
         <main style={{ flex: 1, padding: '3rem', overflowY: 'auto' }}>
           <div className="glass-panel p-8" style={{ maxWidth: '800px', margin: '0 auto', background: 'rgba(255,255,255,0.9)' }}>
@@ -493,7 +802,20 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       {/* Navigation Sidebar */}
       <aside className="glass-panel" style={{ width: '320px', borderRadius: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(0,0,0,0.1)' }}>
         <div className="p-6" style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-          <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Siswa TKA</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 style={{ fontSize: '1.4rem', margin: 0 }}>Siswa TKA</h2>
+            {isOnline ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 600, background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '12px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }}></span>
+                Online
+              </span>
+            ) : (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 600, background: '#fee2e2', color: '#991b1b', padding: '3px 8px', borderRadius: '12px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ef4444' }}></span>
+                Offline
+              </span>
+            )}
+          </div>
           <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{user?.school?.name || 'Sekolah Pusat / Belum Terdaftar'}</p>
         </div>
         
@@ -546,6 +868,56 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         altText={`Gambar Soal No. ${currentQuestion}`}
         onClose={() => setPreviewImage(null)} 
       />
+
+      {/* Modal Single Device Policy (Kicked by Another Device) */}
+      {kickedData && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.88)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.5rem',
+          animation: 'fadeIn 0.25s ease-out'
+        }}>
+          <div className="glass-panel p-8 text-center" style={{ maxWidth: '440px', width: '100%', background: 'white' }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: '#fee2e2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.5rem auto'
+            }}>
+              <AlertCircle size={36} style={{ color: '#dc2626' }} />
+            </div>
+            <h2 style={{ fontSize: '1.4rem', color: '#991b1b', marginBottom: '0.75rem' }}>
+              Sesi Ujian Dinonaktifkan
+            </h2>
+            <p style={{ color: '#4b5563', lineHeight: '1.6', fontSize: '0.95rem', marginBottom: '1.5rem' }}>
+              {kickedData.message || 'Akun Anda baru saja login di perangkat lain. Sistem try out hanya mengizinkan 1 perangkat aktif pada saat bersamaan.'}
+            </p>
+            <button 
+              className="btn" 
+              style={{ width: '100%', background: '#dc2626', color: 'white' }}
+              onClick={() => {
+                sessionStorage.removeItem('activeExamToken');
+                onLogout();
+              }}
+            >
+              Kembali ke Halaman Login
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
