@@ -1,15 +1,16 @@
 import toast from 'react-hot-toast';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Users, 
   Activity, 
   LogOut,
   Plus,
-  Search,
   Upload,
   Download,
   Printer
 } from 'lucide-react';
+import { FilterBar } from '../components/FilterBar';
+import { apiFetch } from '../lib/api';
 
 const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('students');
@@ -19,6 +20,12 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const [allPackages, setAllPackages] = useState<any[]>([]);
   const [selectedHistoryPackage, setSelectedHistoryPackage] = useState<any | null>(null);
 
+  // Search, Filter & Loading States (Tahap 4 & 5)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterClass, setFilterClass] = useState('');
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
+  const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
+
   // State for new siswa form
   const [newNisn, setNewNisn] = useState('');
   const [newFullName, setNewFullName] = useState('');
@@ -26,34 +33,73 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Derived State: Daftar Kelas Unik (Tahap 4)
+  const uniqueClasses = useMemo(() => {
+    const classes = new Set<string>();
+    students.forEach((s) => {
+      if (s.className && typeof s.className === 'string' && s.className.trim()) {
+        classes.add(s.className.trim());
+      }
+    });
+    return Array.from(classes).sort();
+  }, [students]);
+
+  // Derived State: Hasil Filter Siswa (Tahap 4)
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        (s.fullName && s.fullName.toLowerCase().includes(q)) ||
+        (s.nisn && s.nisn.toLowerCase().includes(q)) ||
+        (s.className && s.className.toLowerCase().includes(q)) ||
+        (s.username && s.username.toLowerCase().includes(q));
+
+      const matchClass = !filterClass || s.className === filterClass;
+
+      return matchSearch && matchClass;
+    });
+  }, [students, searchQuery, filterClass]);
+
   const fetchStudents = () => {
-    fetch('/api/users')
+    setIsLoadingStudents(true);
+    apiFetch('/api/users')
       .then(res => res.json())
       .then(data => {
-        const schoolStudents = data.filter((u: any) => u.role === 'siswa' && u.schoolNpsn === user?.school?.npsn);
-        setStudents(schoolStudents);
+        if (Array.isArray(data)) {
+          const schoolStudents = data.filter((u: any) => u.role === 'siswa' && u.schoolNpsn === user?.school?.npsn);
+          setStudents(schoolStudents);
+        }
       })
-      .catch(err => console.error(err));
+      .catch(err => console.error(err))
+      .finally(() => {
+        setIsLoadingStudents(false);
+      });
   };
 
   useEffect(() => {
     if (activeTab === 'students') {
       fetchStudents();
     } else if (activeTab === 'monitoring' || activeTab === 'history') {
-      fetchStudents(); 
-      
+      setIsLoadingMonitoring(true);
       const npsn = user?.school?.npsn || '';
-      fetch(`/api/sessions?schoolNpsn=${npsn}`)
-        .then(res => res.json())
-        .then(data => setSessions(data))
-        .catch(err => console.error(err));
-        
-      fetch('/api/packages')
-        .then(res => res.json())
-        .then(data => {
-          setAllPackages(data);
+      
+      Promise.all([
+        apiFetch('/api/users').then(r => r.json()),
+        apiFetch(`/api/sessions?schoolNpsn=${npsn}`).then(r => r.json()),
+        apiFetch('/api/packages').then(r => r.json())
+      ])
+        .then(([usersData, sessionsData, packagesData]) => {
+          if (Array.isArray(usersData)) {
+            setStudents(usersData.filter((u: any) => u.role === 'siswa' && u.schoolNpsn === user?.school?.npsn));
+          }
+          if (Array.isArray(sessionsData)) setSessions(sessionsData);
+          if (Array.isArray(packagesData)) setAllPackages(packagesData);
         })
-        .catch(err => console.error(err));
+        .catch(err => console.error(err))
+        .finally(() => {
+          setIsLoadingMonitoring(false);
+        });
     }
   }, [activeTab, user]);
 
@@ -83,7 +129,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
       }
 
       try {
-        const res = await fetch('/api/users/siswa/batch', {
+        const res = await apiFetch('/api/users/siswa/batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -250,10 +296,6 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <h1>{tabs.find(t => t.id === activeTab)?.name}</h1>
           <div className="flex items-center gap-4">
-            <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input type="text" className="input-field" placeholder="Cari siswa/kelas..." style={{ paddingLeft: '40px', width: '250px' }} />
-            </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--secondary-color)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
               OP
             </div>
@@ -286,14 +328,20 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
               </div>
             </div>
 
-            <div className="flex gap-4 mb-6">
-              <select className="input-field" style={{ width: '200px' }}>
-                <option>Semua Kelas</option>
-                <option>Kelas 6A</option>
-                <option>Kelas 6B</option>
-                <option>Kelas 6C</option>
-              </select>
-            </div>
+            {/* Reusable FilterBar (Tahap 4 & 6) */}
+            <FilterBar
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="Cari siswa (Nama / NISN / Kelas)..."
+              filterValue={filterClass}
+              onFilterChange={setFilterClass}
+              filterOptions={uniqueClasses}
+              filterPlaceholder="Semua Kelas"
+              onReset={() => {
+                setSearchQuery('');
+                setFilterClass('');
+              }}
+            />
 
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
@@ -305,20 +353,53 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 </tr>
               </thead>
               <tbody>
-                {students.length > 0 ? students.map((siswa) => (
-                  <tr key={siswa.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td className="p-4 font-semibold">{siswa.nisn || '-'}</td>
-                    <td className="p-4 text-main">{siswa.fullName}</td>
-                    <td className="p-4">
-                      <span className="tag">{siswa.className || '-'}</span>
-                    </td>
-                    <td className="p-4 text-muted" style={{ fontFamily: 'monospace' }}>
-                      {siswa.password || '******'}
-                    </td>
-                  </tr>
-                )) : (
+                {isLoadingStudents ? (
+                  /* Loading Shimmer Skeletons (Tahap 5) */
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <tr key={`skeleton-${idx}`} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                      <td className="p-4">
+                        <div className="skeleton-shimmer" style={{ height: '18px', width: '110px' }} />
+                      </td>
+                      <td className="p-4">
+                        <div className="skeleton-shimmer" style={{ height: '18px', width: `${150 + (idx % 3) * 35}px` }} />
+                      </td>
+                      <td className="p-4">
+                        <div className="skeleton-shimmer" style={{ height: '18px', width: '60px', borderRadius: '12px' }} />
+                      </td>
+                      <td className="p-4">
+                        <div className="skeleton-shimmer" style={{ height: '18px', width: '85px' }} />
+                      </td>
+                    </tr>
+                  ))
+                ) : filteredStudents.length > 0 ? (
+                  filteredStudents.map((siswa) => (
+                    <tr key={siswa.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                      <td className="p-4 font-semibold">{siswa.nisn || '-'}</td>
+                      <td className="p-4 text-main">{siswa.fullName}</td>
+                      <td className="p-4">
+                        <span className="tag">{siswa.className || '-'}</span>
+                      </td>
+                      <td className="p-4 text-muted" style={{ fontFamily: 'monospace' }}>
+                        {siswa.password || '******'}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
                   <tr>
-                    <td colSpan={4} className="p-4 text-center text-muted">Belum ada siswa terdaftar (Atau sedang memuat dari API).</td>
+                    <td colSpan={4} className="p-4 text-center text-muted" style={{ padding: '3rem 1rem' }}>
+                      {searchQuery || filterClass ? (
+                        <div>
+                          <p style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.25rem' }}>
+                            Tidak ada siswa yang cocok dengan filter pencarian.
+                          </p>
+                          <p style={{ fontSize: '0.85rem' }}>
+                            Silakan coba kata kunci lain atau klik tombol <strong>Reset Filter</strong>.
+                          </p>
+                        </div>
+                      ) : (
+                        'Belum ada siswa terdaftar (Silakan tambah siswa baru atau impor dari file CSV).'
+                      )}
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -367,7 +448,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 }
                 setIsSaving(true);
                 setErrorMsg('');
-                fetch('/api/users/siswa', {
+                apiFetch('/api/users/siswa', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -415,7 +496,12 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 </div>
               </div>
 
-              {activePackages.length === 0 ? (
+              {isLoadingMonitoring ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  <div className="skeleton-shimmer" style={{ height: '140px', borderRadius: '12px' }} />
+                  <div className="skeleton-shimmer" style={{ height: '140px', borderRadius: '12px' }} />
+                </div>
+              ) : activePackages.length === 0 ? (
                 <div className="p-8 text-center text-muted" style={{ border: '1px dashed #cbd5e1', borderRadius: '12px' }}>
                   Tidak ada paket ujian yang sedang aktif saat ini.
                 </div>
