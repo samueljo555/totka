@@ -8,10 +8,56 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import { getOrSetCache, deleteCache, setUserActiveToken, getUserActiveToken } from './cache.js';
 dotenv.config();
 
 const BCRYPT_ROUNDS = 10;
+const JWT_SECRET = process.env.JWT_SECRET || 'tka-jwt-secret-key-super-secure-2026';
+const JWT_EXPIRES_IN = '8h';
+
+// Extend Express Request untuk menyimpan payload decoded user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any;
+    }
+  }
+}
+
+// Middleware: Autentikasi JWT Token
+function verifyJWT(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Token otentikasi tidak ditemukan.' });
+  }
+
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Format token harus Bearer <token>.' });
+  }
+
+  const token = parts[1];
+  if (!token) {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Token otentikasi tidak ditemukan.' });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err: any) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        error: 'TOKEN_EXPIRED', 
+        message: 'Sesi login Anda telah berakhir (Token kedaluwarsa). Silakan login kembali.' 
+      });
+    }
+    return res.status(403).json({ 
+      error: 'FORBIDDEN', 
+      message: 'Token otentikasi tidak valid.' 
+    });
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,6 +106,18 @@ async function verifyStudentSession(studentId: string, clientToken?: string): Pr
 
 app.use(cors());
 app.use(express.json());
+
+// Proteksi Global JWT: Semua rute /api/* diproteksi kecuali rute publik
+app.use('/api', (req, res, next) => {
+  const publicPaths = ['/login', '/health', '/auth/session-check'];
+  if (publicPaths.some(p => req.path === p || req.path.startsWith(p + '/'))) {
+    return next();
+  }
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+  return verifyJWT(req, res, next);
+});
 
 import { Storage } from '@google-cloud/storage';
 
@@ -539,8 +597,22 @@ app.post('/api/login', async (req, res) => {
     // Simpan di Redis Cache
     await setUserActiveToken(user.id, sessionToken);
 
+    // Generate JWT token (8 jam)
+    const token = jwt.sign(
+      {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        fullName: user.fullName,
+        schoolNpsn: user.schoolNpsn
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
     res.json({
       message: 'Login successful',
+      token, // JWT Token untuk Bearer Authorization
       sessionToken,
       user: {
         id: user.id,

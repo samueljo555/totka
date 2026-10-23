@@ -1,6 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import './index.css';
+import { 
+  clearToken, 
+  setSessionExpiredHandler, 
+  resetActivityTimer, 
+  isTokenExpired, 
+  isIdleTimeoutExceeded, 
+  triggerSessionExpired 
+} from './lib/api';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
@@ -23,8 +32,41 @@ function App() {
   const handleLogout = () => {
     setAuthUser(null);
     localStorage.removeItem('tka_auth_user');
+    clearToken();
     navigate('/');
   };
+
+  // Setup Global Session Expiration & Idle Timeout Handler
+  useEffect(() => {
+    setSessionExpiredHandler((msg) => {
+      toast.error(msg || 'Sesi login telah berakhir. Silakan login kembali.', { duration: 5000 });
+      handleLogout();
+    });
+
+    // Lacak aktivitas pengguna (mouse, keyboard, scroll, touch)
+    const handleUserActivity = () => {
+      resetActivityTimer();
+    };
+
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach(evt => window.addEventListener(evt, handleUserActivity, { passive: true }));
+
+    // Pengecekan berkala setiap 30 detik untuk batas waktu idle dan sesi
+    const interval = setInterval(() => {
+      if (authUser) {
+        if (isTokenExpired()) {
+          triggerSessionExpired('Batas sesi 8 jam telah berakhir. Silakan login kembali.');
+        } else if (isIdleTimeoutExceeded()) {
+          triggerSessionExpired('Anda tidak aktif selama 30 menit. Sesi otomatis ditutup untuk keamanan.');
+        }
+      }
+    }, 30000);
+
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, handleUserActivity));
+      clearInterval(interval);
+    };
+  }, [authUser]);
 
   // Protected Route Wrapper
   const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) => {

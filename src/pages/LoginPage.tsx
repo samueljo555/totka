@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { setToken } from '../lib/api';
 
 const roles = [
   { id: 'siswa', title: 'Siswa', description: 'Masuk dengan NISN dan Token untuk mulai ujian', icon: '🎓' },
@@ -29,6 +30,9 @@ const LoginPage = ({ onLogin }: { onLogin: (user: any) => void }) => {
       const data = await response.json();
       
       if (response.ok) {
+        if (data.token) {
+          setToken(data.token);
+        }
         onLogin(data.user);
         
         // Redirect based on role
