@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 import readline from 'readline';
+import bcrypt from 'bcrypt';
 
 dotenv.config();
 
@@ -29,6 +30,8 @@ async function main() {
             where: { username }
           });
 
+          const hashedPassword = await bcrypt.hash(password, 10);
+
           if (existingUser) {
             console.log(`\n[INFO] Username '${username}' sudah ada.`);
             console.log(`[INFO] Melakukan update password dan role ke super_admin...`);
@@ -36,7 +39,7 @@ async function main() {
             await prisma.user.update({
               where: { username },
               data: {
-                password,
+                password: hashedPassword,
                 fullName: fullName || existingUser.fullName,
                 role: 'super_admin'
               }
@@ -47,7 +50,7 @@ async function main() {
             await prisma.user.create({
               data: {
                 username,
-                password,
+                password: hashedPassword,
                 fullName: fullName || 'Super Admin',
                 role: 'super_admin',
               },

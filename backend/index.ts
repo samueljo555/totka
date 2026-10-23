@@ -7,8 +7,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 import { getOrSetCache, deleteCache, setUserActiveToken, getUserActiveToken } from './cache.js';
 dotenv.config();
+
+const BCRYPT_ROUNDS = 10;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -265,10 +268,12 @@ app.post('/api/users', async (req, res) => {
       return res.status(400).json({ error: 'Username already exists' });
     }
 
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
     const newUser = await prisma.user.create({
       data: { 
         username, 
-        password, 
+        password: hashedPassword, 
         fullName, 
         role,
         ...(schoolNpsn && { schoolNpsn })
@@ -300,11 +305,16 @@ app.put('/api/users/:id', async (req, res) => {
       }
     }
 
+    let finalPassword = existingUser.password;
+    if (password && password.trim() !== '') {
+      finalPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id },
       data: {
         username: username || existingUser.username,
-        password: password || existingUser.password,
+        password: finalPassword,
         fullName: fullName || existingUser.fullName,
         role: role || existingUser.role,
         schoolNpsn: schoolNpsn !== undefined ? schoolNpsn : existingUser.schoolNpsn
@@ -492,7 +502,28 @@ app.post('/api/login', async (req, res) => {
       include: { school: true }
     });
 
-    if (!user || user.password !== password) {
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    let isPasswordValid = false;
+    // Cek apakah password tersimpan dalam format hash bcrypt ($2a$ atau $2b$)
+    if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+      isPasswordValid = await bcrypt.compare(password, user.password);
+    } else {
+      // Fallback untuk akun lama dengan password plaintext
+      isPasswordValid = (user.password === password);
+      if (isPasswordValid) {
+        // Otomatis upgrade password plaintext menjadi hash bcrypt di database
+        const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { password: hashedPassword }
+        });
+      }
+    }
+
+    if (!isPasswordValid) {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
@@ -1101,11 +1132,12 @@ app.post('/api/users/siswa', async (req, res) => {
 
     // Generate a random temporary password (e.g., 6 chars)
     const tempPassword = Math.random().toString(36).slice(-6).toUpperCase();
+    const hashedPassword = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS);
 
     const newUser = await prisma.user.create({
       data: {
         username: nisn,
-        password: tempPassword,
+        password: hashedPassword,
         role: 'siswa',
         fullName,
         nisn,
@@ -1115,7 +1147,7 @@ app.post('/api/users/siswa', async (req, res) => {
     });
 
     await deleteCache('api:users');
-    res.json({ message: 'Siswa created successfully', user: newUser });
+    res.json({ message: 'Siswa created successfully', user: { ...newUser, tempPassword } });
   } catch (error) {
     console.error("Create siswa error:", error);
     res.status(500).json({ error: 'Internal server error while creating siswa' });
@@ -1126,20 +1158,21 @@ app.post('/api/users/siswa/batch', async (req, res) => {
   const { students, schoolNpsn } = req.body;
   if (!Array.isArray(students)) return res.status(400).json({ error: 'Invalid data' });
 
-  const dataToInsert = students.map(s => {
-    const tempPassword = Math.random().toString(36).slice(-6).toUpperCase();
-    return {
-      username: s.nisn,
-      password: tempPassword,
-      role: 'siswa',
-      fullName: s.fullName,
-      nisn: s.nisn,
-      className: s.className || '',
-      schoolNpsn: schoolNpsn || s.schoolNpsn
-    };
-  });
-
   try {
+    const dataToInsert = await Promise.all(students.map(async s => {
+      const tempPassword = Math.random().toString(36).slice(-6).toUpperCase();
+      const hashedPassword = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS);
+      return {
+        username: s.nisn,
+        password: hashedPassword,
+        role: 'siswa',
+        fullName: s.fullName,
+        nisn: s.nisn,
+        className: s.className || '',
+        schoolNpsn: schoolNpsn || s.schoolNpsn
+      };
+    }));
+
     const result = await prisma.user.createMany({
       data: dataToInsert,
       skipDuplicates: true
