@@ -1,6 +1,6 @@
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Clock, ChevronRight, ChevronLeft, CheckCircle2, ZoomIn, WifiOff, RefreshCw, AlertCircle } from 'lucide-react';
 import { ImageModal } from '../components/ImageModal';
 import ReactMarkdown from 'react-markdown';
@@ -26,6 +26,12 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [releaseScoreMode, setReleaseScoreMode] = useState<string>('langsung');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const inFlightAnswers = useRef(new Set<Promise<void>>());
+  const syncTask = useRef<Promise<void> | null>(null);
+  const deadlineAt = useRef<number | null>(null);
+  const finishHandler = useRef<(expired?: boolean) => Promise<void>>(async () => {});
+  const finishedRef = useRef(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Offline & Auto-Sync State
@@ -37,17 +43,39 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   // Single Device Policy State (Kicked)
   const [kickedData, setKickedData] = useState<{ show: boolean; message: string } | null>(null);
 
-  // Timer effect
+  // Server supplies the remaining budget. A monotonic clock avoids local wall-clock changes
+  // and interval drift when the browser tab is throttled. The server enforces the deadline.
   useEffect(() => {
-    if (hasEnteredToken && !isFinished && timeLeft > 0) {
-      const timer = setInterval(() => {
-        setTimeLeft(prev => prev - 1);
-      }, 1000);
-      return () => clearInterval(timer);
-    } else if (timeLeft === 0 && !isFinished) {
-      handleFinishExam(); // Auto-submit
+    if (!hasEnteredToken || isFinished) return;
+    let lastAttempt = -Infinity;
+    const tick = () => {
+      if (deadlineAt.current === null) return;
+      const remaining = Math.max(0, Math.ceil((deadlineAt.current - performance.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining === 0 && navigator.onLine && performance.now() - lastAttempt >= 5000) {
+        lastAttempt = performance.now();
+        void finishHandler.current(true);
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [hasEnteredToken, isFinished]);
+
+  const acceptFinishedSession = (session: any, rejected = false) => {
+    if (!sessionId || session?.status !== 'selesai') return;
+    if (rejected || getQueue(sessionId).length > 0) {
+      toast.error('Ujian telah ditutup. Jawaban yang belum diterima server sebelum batas waktu tidak dinilai.', { duration: 8000 });
     }
-  }, [hasEnteredToken, timeLeft, isFinished]);
+    finishedRef.current = true;
+    setReleaseScoreMode(session.releaseScoreMode || 'ditunda');
+    setFinalScore(session.totalScore === null ? null : Number(session.totalScore));
+    setIsFinished(true);
+    sessionStorage.removeItem('activeExamToken');
+    localStorage.removeItem(`tka_queue_${sessionId}`);
+    localStorage.removeItem(`tka_answers_${sessionId}`);
+    setPendingSyncCount(0);
+  };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -82,8 +110,8 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   };
 
   // Sinkronisasi Jawaban Tertunda ke Server secara Otomatis
-  const syncPendingQueue = async () => {
-    if (!sessionId || isSyncing || !navigator.onLine) return;
+  const runPendingQueue = async () => {
+    if (!sessionId || finishedRef.current || !navigator.onLine) return;
     const queue = getQueue(sessionId);
     if (queue.length === 0) {
       setPendingSyncCount(0);
@@ -97,6 +125,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       try {
         const res = await fetch(`/api/sessions/${sessionId}/answer`, {
           method: 'POST',
+          signal: AbortSignal.timeout(15000),
           headers: { 
             'Content-Type': 'application/json',
             'x-session-token': user?.activeToken || '',
@@ -119,6 +148,13 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           }
         }
 
+        if (res.status === 409) {
+          const data = await res.json();
+          if (data.session?.status === 'selesai') {
+            acceptFinishedSession(data.session, true);
+            break;
+          }
+        }
         if (res.ok) {
           remaining = remaining.filter(q => q.questionId !== item.questionId);
           saveQueue(sessionId, remaining);
@@ -136,6 +172,13 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       setSyncSuccessNotice(true);
       setTimeout(() => setSyncSuccessNotice(false), 3500);
     }
+  };
+
+  const syncPendingQueue = () => {
+    if (syncTask.current) return syncTask.current;
+    const task = runPendingQueue().finally(() => { syncTask.current = null; });
+    syncTask.current = task;
+    return task;
   };
 
   // Deteksi Status Jaringan Online / Offline
@@ -190,7 +233,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     return () => clearInterval(interval);
   }, [hasEnteredToken, isFinished, sessionId, user?.id, user?.activeToken]);
 
-  const handleAnswer = async (qNumber: number, answer: any) => {
+  const persistAnswer = async (qNumber: number, answer: any) => {
     setAnswers(prev => ({ ...prev, [qNumber]: answer }));
 
     if (!sessionId || !questions[qNumber - 1]) return;
@@ -198,7 +241,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
     // Backup ke LocalStorage
     try {
-      localStorage.setItem(`tka_answers_${sessionId}`, JSON.stringify({ ...answers, [qNumber]: answer }));
+      localStorage.setItem(`tka_answers_${sessionId}`, JSON.stringify({ byQuestionId: Object.fromEntries(Object.entries({ ...answers, [qNumber]: answer }).map(([number, value]) => [questions[Number(number) - 1]?.id, value])) }));
     } catch (e) {}
 
     // Jika sedang offline, masukkan langsung ke antrian offline
@@ -211,6 +254,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     try {
       const res = await fetch(`/api/sessions/${sessionId}/answer`, {
         method: 'POST',
+          signal: AbortSignal.timeout(15000),
         headers: { 
           'Content-Type': 'application/json',
           'x-session-token': user?.activeToken || '',
@@ -232,6 +276,15 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         }
       }
 
+      if (res.status === 409) {
+        const data = await res.json();
+        if (data.session?.status === 'selesai') { acceptFinishedSession(data.session, true); return; }
+      }
+      if (res.status === 400) {
+        const data = await res.json();
+        toast.error(data.message || 'Jawaban ditolak oleh server.');
+        return;
+      }
       if (!res.ok) {
         throw new Error('Gagal menyimpan jawaban');
       }
@@ -247,6 +300,13 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     }
   };
 
+  const handleAnswer = (qNumber: number, answer: any) => {
+    if (submittingRef.current || finishedRef.current || (deadlineAt.current !== null && performance.now() >= deadlineAt.current)) return;
+    const task = persistAnswer(qNumber, answer);
+    inFlightAnswers.current.add(task);
+    void task.finally(() => inFlightAnswers.current.delete(task));
+  };
+
   const startExamWithToken = async (examToken: string) => {
     if (examToken.length < 3) return;
     setIsLoading(true);
@@ -254,6 +314,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     try {
       const res = await fetch('/api/sessions/start', {
         method: 'POST',
+          signal: AbortSignal.timeout(15000),
         headers: { 
           'Content-Type': 'application/json',
           'x-session-token': user?.activeToken || '',
@@ -274,7 +335,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
       if (!res.ok) {
         sessionStorage.removeItem('activeExamToken');
-        throw new Error(data.error || 'Gagal memulai ujian');
+        throw new Error(data.message || data.error || 'Gagal memulai ujian');
       }
 
       sessionStorage.setItem('activeExamToken', examToken);
@@ -301,22 +362,32 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         const localBackup = localStorage.getItem(`tka_answers_${data.session.id}`);
         if (localBackup) {
           const parsed = JSON.parse(localBackup);
-          Object.assign(loadedAnswers, parsed);
+          // New backups use stable question IDs. Legacy index-based backups cannot
+          // safely override the server when question order has changed.
+          data.questions.forEach((q: any, index: number) => {
+            if (parsed.byQuestionId && Object.hasOwn(parsed.byQuestionId, q.id)) loadedAnswers[index + 1] = parsed.byQuestionId[q.id];
+          });
         }
       } catch (e) {}
 
+      localQueue.forEach(item => {
+        const index = data.questions.findIndex((q: any) => q.id === item.questionId);
+        if (index >= 0) loadedAnswers[index + 1] = item.answerData;
+      });
       setAnswers(loadedAnswers);
       
-      // Calculate remaining time
-      const startTime = new Date(data.session.startTime).getTime();
-      const elapsedSecs = Math.floor((Date.now() - startTime) / 1000);
-      const durationSecs = (data.package?.durationMinutes || 90) * 60;
-      setTimeLeft(Math.max(0, durationSecs - elapsedSecs));
+      const remaining = Math.max(0, Number(data.remainingSeconds) || 0);
+      deadlineAt.current = performance.now() + remaining * 1000;
+      setTimeLeft(remaining);
 
       setHasEnteredToken(true);
       if (data.session.status === 'selesai') {
+        finishedRef.current = true;
+        if (localQueue.length) toast.error('Waktu ujian telah berakhir. Jawaban offline yang belum diterima server tidak dinilai.', { duration: 8000 });
+        localStorage.removeItem(`tka_queue_${data.session.id}`);
+        localStorage.removeItem(`tka_answers_${data.session.id}`);
         sessionStorage.removeItem('activeExamToken');
-        setFinalScore(data.session.totalScore ? parseFloat(data.session.totalScore) : 0);
+        setFinalScore(data.session.totalScore === null ? null : Number(data.session.totalScore));
         setIsFinished(true);
       }
     } catch (err: any) {
@@ -336,22 +407,28 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     }
   }, []);
 
-  const handleFinishExam = async () => {
-    if (!sessionId || isSubmitting) return;
-
-    // Proteksi: Cegah selesai ujian jika masih offline atau ada jawaban di antrian
-    if (!navigator.onLine || pendingSyncCount > 0) {
-      toast.error(
-        `Koneksi internet Anda sedang terputus atau masih ada ${pendingSyncCount} jawaban yang belum tersinkronkan ke server. Harap tunggu hingga koneksi pulih sebelum mengakhiri ujian.`,
-        { duration: 6000 }
-      );
+  const handleFinishExam = async (expired = false) => {
+    if (!sessionId || submittingRef.current || finishedRef.current) return;
+    if (!navigator.onLine) {
+      if (!expired) toast.error('Koneksi terputus. Hubungkan kembali untuk memastikan hasil ujian.');
       return;
     }
-
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
+      await Promise.all([...inFlightAnswers.current]);
+      if (finishedRef.current) return;
+      if (!expired) {
+        await syncPendingQueue();
+        if (finishedRef.current) return;
+        if (getQueue(sessionId).length > 0) {
+          toast.error('Masih ada jawaban yang belum tersimpan. Coba kembali sebelum batas waktu.');
+          return;
+        }
+      }
       const res = await fetch(`/api/sessions/${sessionId}/finish`, { 
         method: 'POST',
+          signal: AbortSignal.timeout(15000),
         headers: {
           'Content-Type': 'application/json',
           'x-session-token': user?.activeToken || '',
@@ -373,12 +450,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
       if (res.ok) {
         const data = await res.json();
-        sessionStorage.removeItem('activeExamToken');
-        // Bersihkan antrian lokal setelah sukses selesai
-        localStorage.removeItem(`tka_queue_${sessionId}`);
-        localStorage.removeItem(`tka_answers_${sessionId}`);
-        setFinalScore(data.totalScore ? parseFloat(data.totalScore) : 0);
-        setIsFinished(true);
+        acceptFinishedSession(data, expired);
       } else {
         toast.error("Gagal mengakhiri sesi ujian.");
       }
@@ -386,9 +458,12 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       console.error(error);
       toast.error("Terjadi kesalahan jaringan.");
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
+
+  finishHandler.current = handleFinishExam;
 
   if (!hasEnteredToken) {
     return (
@@ -434,7 +509,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         <div className="glass-panel p-8 animate-fade-in">
           <CheckCircle2 size={64} style={{ color: 'green', margin: '0 auto 1rem auto' }} />
           <h2>Ujian Selesai!</h2>
-          <p className="mb-6">Terima kasih, jawaban Anda telah berhasil disimpan di sistem.</p>
+          <p className="mb-6">Hasil dihitung dari jawaban yang telah diterima server sebelum ujian ditutup.</p>
           
           <div className="card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
             {releaseScoreMode === 'langsung' ? (
@@ -572,7 +647,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 }}
               >
                 <input 
-                  type="radio" 
+                  type="radio" disabled={isSubmitting || timeLeft === 0}
                   name={`q_${currentQuestion}`} 
                   checked={answers[currentQuestion] === i}
                   onChange={() => handleAnswer(currentQuestion, i)}
@@ -604,7 +679,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   }}
                 >
                   <input 
-                    type="checkbox" 
+                    type="checkbox" disabled={isSubmitting || timeLeft === 0}
                     checked={isChecked}
                     onChange={(e) => {
                       let newAnswers = [...currentAnswers];
@@ -639,7 +714,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </div>
                   <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
                     <input 
-                      type="radio" 
+                      type="radio" disabled={isSubmitting || timeLeft === 0}
                       name={`cat_stmt_${currentQuestion}_${i}`} 
                       checked={currentAnswers[i] === 0}
                       onChange={() => {
@@ -652,7 +727,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </div>
                   <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
                     <input 
-                      type="radio" 
+                      type="radio" disabled={isSubmitting || timeLeft === 0}
                       name={`cat_stmt_${currentQuestion}_${i}`} 
                       checked={currentAnswers[i] === 1}
                       onChange={() => {
@@ -716,7 +791,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           }}>
             <WifiOff size={18} style={{ color: '#dc2626' }} />
             <span>
-              Koneksi Internet Terputus! Anda sedang mode offline. Jawaban Anda tetap tersimpan aman di perangkat ini
+              Koneksi Internet Terputus! Anda sedang mode offline. Jawaban disimpan sementara di perangkat dan harus diterima server sebelum waktu ujian habis
               {pendingSyncCount > 0 ? ` (${pendingSyncCount} jawaban menunggu sinkronisasi)` : ''}.
             </span>
           </div>

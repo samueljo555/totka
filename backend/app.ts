@@ -17,6 +17,8 @@ const JWT_EXPIRES_IN = '8h';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import { ExamError, startExam, saveExamAnswer, finishExam, examTransaction, lockExamContent, assertContentEditable } from './exam.js';
+
 import { Storage } from '@google-cloud/storage';
 
 export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
@@ -173,36 +175,53 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
         }
       }
 
-      const updatedPackage = await prisma.package.update({
-        where: { id: req.params.id },
-        data: {
-          ...(name && { name }),
-          ...(mapel && { mapel }),
-          ...(token && { token }),
-          ...(durationMinutes && { durationMinutes }),
-          ...(navigationMode && { navigationMode }),
-          ...(releaseScoreMode && { releaseScoreMode }),
-          ...(status && { status }),
+      const updatedPackage = await examTransaction(prisma, async tx => {
+        await lockExamContent(tx, true);
+        const existing = await tx.package.findUnique({ where: { id: req.params.id }, include: { questions: true } });
+        if (!existing) throw new ExamError(404, 'PACKAGE_NOT_FOUND', 'Paket tidak ditemukan.');
+        const changesContent = Object.entries({ name, mapel, token, durationMinutes, navigationMode })
+          .some(([key, value]) => value !== undefined && value !== existing[key as keyof typeof existing]);
+        const currentIds = existing.questions.map(item => item.questionId).sort();
+        const changesQuestions = questionIds !== undefined &&
+          (!Array.isArray(questionIds) || JSON.stringify([...new Set(questionIds)].sort()) !== JSON.stringify(currentIds));
+        if (changesContent || changesQuestions) await assertContentEditable(tx, 'package', req.params.id);
+        if (durationMinutes !== undefined && (!Number.isInteger(durationMinutes) || durationMinutes <= 0)) {
+          throw new ExamError(400, 'INVALID_EXAM_CONFIG', 'Durasi harus berupa bilangan bulat positif.');
         }
-      });
+        const updated = await tx.package.update({
+          where: { id: req.params.id },
+          data: {
+            ...(name && { name }),
+            ...(mapel && { mapel }),
+            ...(token && { token }),
+            ...(durationMinutes && { durationMinutes }),
+            ...(navigationMode && { navigationMode }),
+            ...(releaseScoreMode && { releaseScoreMode }),
+            ...(status && { status }),
+          }
+        });
 
-      if (questionIds) {
-        // Delete existing
-        await prisma.packageQuestion.deleteMany({ where: { packageId: req.params.id } });
-        // Create new
-        if (questionIds.length > 0) {
-          await prisma.packageQuestion.createMany({
-            data: questionIds.map((qId: string) => ({
-              packageId: req.params.id,
-              questionId: qId
-            }))
-          });
+        if (questionIds && changesQuestions) {
+          // Delete existing
+          await tx.packageQuestion.deleteMany({ where: { packageId: req.params.id } });
+          // Create new
+          if (questionIds.length > 0) {
+            await tx.packageQuestion.createMany({
+              data: questionIds.map((qId: string) => ({
+                packageId: req.params.id,
+                questionId: qId
+              }))
+            });
+          }
         }
-      }
+
+        return updated;
+      });
 
       await deleteCache('v2:api:packages');
       res.json(updatedPackage);
     } catch (error) {
+      if (error instanceof ExamError) return res.status(error.status).json({ error: error.code, message: error.message });
       console.error("Update package error:", error);
       res.status(500).json({ error: 'Failed to update package' });
     }
@@ -440,23 +459,33 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
   app.put('/api/readings/:id', async (req, res) => {
     const { title, content } = req.body;
     try {
-      const reading = await prisma.readingText.update({
-        where: { id: req.params.id },
-        data: { title, content }
+      const reading = await examTransaction(prisma, async tx => {
+        await lockExamContent(tx, true);
+        await assertContentEditable(tx, 'reading', req.params.id);
+        return await tx.readingText.update({
+          where: { id: req.params.id },
+          data: { title, content }
+        });
       });
       await Promise.all([deleteCache('v2:api:readings:all'), deleteCache(`v2:api:readings:${reading.authorId || req.user!.id}`)]);
       res.json(reading);
     } catch (error) {
+      if (error instanceof ExamError) return res.status(error.status).json({ error: error.code, message: error.message });
       res.status(500).json({ error: 'Failed to update reading' });
     }
   });
 
   app.delete('/api/readings/:id', async (req, res) => {
     try {
-      const reading = await prisma.readingText.delete({ where: { id: req.params.id } });
+      const reading = await examTransaction(prisma, async tx => {
+        await lockExamContent(tx, true);
+        await assertContentEditable(tx, 'reading', req.params.id);
+        return await tx.readingText.delete({ where: { id: req.params.id } });
+      });
       await Promise.all([deleteCache('v2:api:readings:all'), deleteCache(`v2:api:readings:${reading.authorId || req.user!.id}`)]);
       res.json({ message: 'Deleted successfully' });
     } catch (error) {
+      if (error instanceof ExamError) return res.status(error.status).json({ error: error.code, message: error.message });
       res.status(500).json({ error: 'Failed to delete reading' });
     }
   });
@@ -592,22 +621,27 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
   app.put('/api/questions/:id', async (req, res) => {
     try {
       const { type, mapel, element, content, imageUrl, options, correctAnswer, readingId } = req.body;
-      const question = await prisma.question.update({
-        where: { id: req.params.id },
-        data: {
-          type,
-          mapel,
-          element,
-          content,
-          imageUrl: imageUrl || null,
-          options: options || [],
-          correctAnswer: correctAnswer || [],
-          readingId: readingId !== undefined ? readingId : undefined,
-        }
+      const question = await examTransaction(prisma, async tx => {
+        await lockExamContent(tx, true);
+        await assertContentEditable(tx, 'question', req.params.id);
+        return await tx.question.update({
+          where: { id: req.params.id },
+          data: {
+            type,
+            mapel,
+            element,
+            content,
+            imageUrl: imageUrl || null,
+            options: options || [],
+            correctAnswer: correctAnswer || [],
+            readingId: readingId !== undefined ? readingId : undefined,
+          }
+        });
       });
       await Promise.all([deleteCache('v2:api:questions:all'), deleteCache(`v2:api:questions:${question.authorId || req.user!.id}`)]);
       res.json(question);
     } catch (error) {
+      if (error instanceof ExamError) return res.status(error.status).json({ error: error.code, message: error.message });
       console.error("Update question error:", error);
       res.status(500).json({ error: 'Failed to update question' });
     }
@@ -615,10 +649,15 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
 
   app.delete('/api/questions/:id', async (req, res) => {
     try {
-      const question = await prisma.question.delete({ where: { id: req.params.id } });
+      const question = await examTransaction(prisma, async tx => {
+        await lockExamContent(tx, true);
+        await assertContentEditable(tx, 'question', req.params.id);
+        return await tx.question.delete({ where: { id: req.params.id } });
+      });
       await Promise.all([deleteCache('v2:api:questions:all'), deleteCache(`v2:api:questions:${question.authorId || req.user!.id}`)]);
       res.json({ message: 'Deleted successfully' });
     } catch (error) {
+      if (error instanceof ExamError) return res.status(error.status).json({ error: error.code, message: error.message });
       res.status(500).json({ error: 'Failed to delete question' });
     }
   });
@@ -938,150 +977,29 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
     }
   });
 
+  const examFailure = (res: express.Response, error: unknown) => {
+    if (error instanceof ExamError) return res.status(error.status).json({ error: error.code, message: error.message });
+    console.error('Exam operation failed:', error);
+    return res.status(500).json({ error: 'EXAM_OPERATION_FAILED', message: 'Operasi ujian gagal. Silakan coba kembali.' });
+  };
+
   app.post('/api/sessions/start', async (req, res) => {
-    const studentId = req.user!.id;
-    const { token } = req.body;
-    if (!token) return res.status(400).json({ error: 'Missing token' });
-
     try {
-      let packageObj = await prisma.package.findFirst({ where: { token } });
-
-      if (!packageObj) {
-        return res.status(404).json({ error: 'Token paket tidak valid atau tidak ditemukan' });
-      }
-
-      if (packageObj.status !== 'aktif') {
-        return res.status(403).json({ error: 'Ujian ini sedang tidak aktif atau sudah ditutup.' });
-      }
-
-      let session = await prisma.examSession.findUnique({
-        where: { studentId_packageId: { studentId, packageId: packageObj.id } }
-      });
-
-      if (!session) {
-        session = await prisma.examSession.create({
-          data: {
-            studentId,
-            packageId: packageObj.id,
-            status: 'sedang_mengerjakan'
-          }
-        });
-      }
-
-      const packageQuestions = await prisma.packageQuestion.findMany({
-        where: { packageId: packageObj.id },
-        include: { question: { select: studentQuestionSelect } }
-      });
-      const questions = packageQuestions.map(pq => pq.question);
-
-      const existingAnswers = await prisma.answer.findMany({
-        where: { sessionId: session.id },
-        select: { questionId: true, answerData: true }
-      });
-
-      const { token: _token, ...safePackage } = packageObj;
-      const safeSession = { ...session, totalScore: packageObj.releaseScoreMode === 'langsung' ? session.totalScore : null };
-      res.json({ session: safeSession, package: safePackage, questions, existingAnswers });
-    } catch (error) {
-      console.error("Start session error:", error);
-      res.status(500).json({ error: 'Failed to start session' });
-    }
+      res.json(await startExam(prisma, req.user!.id, req.body?.token));
+    } catch (error) { examFailure(res, error); }
   });
 
   app.post('/api/sessions/:sessionId/answer', async (req, res) => {
-    const { sessionId } = req.params;
-    const { questionId, answerData } = req.body;
-
     try {
-      const answer = await prisma.answer.upsert({
-        where: { sessionId_questionId: { sessionId, questionId } },
-        update: { answerData },
-        create: { sessionId, questionId, answerData }
-      });
-      res.json({ questionId: answer.questionId, answerData: answer.answerData });
-    } catch (error) {
-      console.error("Save answer error:", error);
-      res.status(500).json({ error: 'Failed to save answer' });
-    }
+      const result = await saveExamAnswer(prisma, req.user!.id, req.params.sessionId, req.body?.questionId, req.body?.answerData);
+      res.status('error' in result ? 409 : 200).json(result);
+    } catch (error) { examFailure(res, error); }
   });
 
   app.post('/api/sessions/:sessionId/finish', async (req, res) => {
-    const { sessionId } = req.params;
     try {
-      const session = await prisma.examSession.findUnique({
-        where: { id: sessionId },
-        include: { package: true }
-      });
-      if (!session) return res.status(404).json({ error: 'Session not found' });
-
-      // Fetch all answers and their related questions
-      const answers = await prisma.answer.findMany({
-        where: { sessionId },
-        include: { question: true }
-      });
-
-      // Auto-Grading Logic (Equal weight)
-      let correctCount = 0;
-      for (const ans of answers) {
-        const q = ans.question;
-        const studentAnswer = ans.answerData;
-        const correctAnswer = q.correctAnswer;
-
-        let isCorrect = false;
-
-        if (q.type === 'Pilihan Ganda Sederhana') {
-          // studentAnswer is an index (number), correctAnswer is an array [index]
-          if (Array.isArray(correctAnswer) && correctAnswer.length > 0) {
-            if (studentAnswer === correctAnswer[0]) isCorrect = true;
-          }
-        } else if (q.type === 'Pilihan Ganda Kompleks') {
-          // studentAnswer is an array of selected indexes
-          if (Array.isArray(correctAnswer) && Array.isArray(studentAnswer)) {
-            // Check if arrays have same elements
-            if (correctAnswer.length === studentAnswer.length &&
-                correctAnswer.every(val => studentAnswer.includes(val))) {
-              isCorrect = true;
-            }
-          }
-        } else if (q.type === 'Pilihan Ganda Kompleks Kategori') {
-          // studentAnswer is an array of [0, 1, 0] corresponding to categories
-          if (Array.isArray(correctAnswer) && Array.isArray(studentAnswer)) {
-            if (correctAnswer.length > 0 && correctAnswer.length === studentAnswer.length &&
-                correctAnswer.every((val: any, index: number) => val === studentAnswer[index])) {
-              isCorrect = true;
-            }
-          }
-        }
-        if (isCorrect) correctCount++;
-
-        // Update individual answer correctness (optional, but good for granular analysis later)
-        await prisma.answer.update({
-          where: { id: ans.id },
-          data: { isCorrect }
-        });
-      }
-
-      // Get total questions for this package
-      const totalQuestions = await prisma.packageQuestion.count({
-        where: { packageId: session.packageId }
-      });
-
-      const finalScore = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
-
-      const finishedSession = await prisma.examSession.update({
-        where: { id: sessionId },
-        data: {
-          status: 'selesai',
-          endTime: new Date(),
-          totalScore: finalScore
-        }
-      });
-
-      res.json({ ...finishedSession, totalScore: session.package.releaseScoreMode === 'langsung' ? finishedSession.totalScore : null });
-    } catch (error) {
-      console.error("Finish session error:", error);
-      res.status(500).json({ error: 'Failed to finish session' });
-    }
+      res.json(await finishExam(prisma, req.user!.id, req.params.sessionId));
+    } catch (error) { examFailure(res, error); }
   });
 
   app.post('/api/users/siswa', async (req, res) => {

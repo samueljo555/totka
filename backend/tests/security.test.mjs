@@ -31,6 +31,12 @@ function matches(row, where = {}) {
     if (value === undefined) return true;
     if (key === 'studentId_packageId') return matches(row, value);
     if (key === 'sessionId_questionId') return matches(row, value);
+    if (key === 'id' && value && typeof value === 'object' && 'in' in value) return value.in.includes(row.id);
+    if (key === 'packageId_questionId') return matches(row, value);
+    if (key === 'package') {
+      const condition = value.questions?.some;
+      return row.packageId === 'p1' && (!condition || (condition.questionId ? condition.questionId === 'q1' : condition.question?.readingId === 'r1'));
+    }
     if (key === 'student') return matches(users.find(user => user.id === row.studentId), value);
     return row?.[key] === value;
   });
@@ -50,6 +56,11 @@ function repository(getRows, hydrate = row => row) {
       assert.ok(row, 'update targets an existing fixture');
       Object.assign(row, q.data);
       return project(hydrate(row), q);
+    },
+    async updateMany(q) {
+      const rows = getRows().filter(row => matches(row, q.where));
+      rows.forEach(row => Object.assign(row, q.data));
+      return { count: rows.length };
     },
     async createManyAndReturn(q) {
       const inserted = [];
@@ -75,6 +86,10 @@ answerRepo.upsert = async q => {
   return row ? answerRepo.update({ where: { id: row.id }, data: q.update }) : answerRepo.create({ data: q.create });
 };
 const prisma = {
+  async $transaction(action) { return action(prisma); },
+  async $queryRaw(strings) {
+    return String(strings).includes('clock_timestamp') ? [{ now: new Date() }] : [];
+  },
   user: userRepo,
   question: questionRepo,
   readingText: repository(() => readings),
@@ -83,6 +98,10 @@ const prisma = {
   packageQuestion: {
     async findMany(q) { return questions.filter(question => question.id === 'q1').map(question => project({ packageId: 'p1', questionId: question.id, question: { ...question, reading: readings[0] } }, q)); },
     async count() { return 1; },
+    async findUnique(q) {
+      const item = { packageId: 'p1', questionId: 'q1', question: questions[0] };
+      return matches(item, q.where) ? project(item, q) : null;
+    },
   },
   answer: answerRepo,
   examSession: repository(() => sessions, row => row && ({
@@ -111,13 +130,13 @@ beforeEach(() => {
   ].map(([id, role, schoolNpsn]) => ({ id, username: id, role, schoolNpsn, activeToken: `sid-${id}`, password: 'legacy-password', fullName: id }));
   readings = [{ id: 'r1', title: 'Bacaan', content: 'Isi', authorId: 'guru' }, { id: 'r2', authorId: 'guru2' }];
   questions = [
-    { id: 'q1', type: 'Pilihan Ganda Sederhana', content: 'Soal', options: [{ text: 'A' }], correctAnswer: [0], authorId: 'guru', readingId: 'r1' },
+    { id: 'q1', type: 'Pilihan Ganda Sederhana', content: 'Soal', options: [{ text: 'A' }, { text: 'B' }], correctAnswer: [0], authorId: 'guru', readingId: 'r1' },
     { id: 'q2', correctAnswer: [1], authorId: 'guru2' },
   ];
   packages = [{ id: 'p1', token: 'EXAM', status: 'aktif', releaseScoreMode: 'langsung', durationMinutes: 90 }];
   sessions = [
-    { id: 'e1', studentId: 's1', packageId: 'p1', status: 'sedang_mengerjakan', totalScore: null },
-    { id: 'e2', studentId: 's2', packageId: 'p1', status: 'selesai', totalScore: 100 },
+    { id: 'e1', studentId: 's1', packageId: 'p1', startTime: new Date(), status: 'sedang_mengerjakan', totalScore: null },
+    { id: 'e2', studentId: 's2', packageId: 'p1', startTime: new Date(), status: 'selesai', totalScore: 100 },
   ];
   answers = [];
 });
@@ -238,8 +257,8 @@ test('teacher bank is scoped and authorship cannot be supplied by the client', a
   assert.equal((await request('/questions/q2', 'guru', 'PUT', { content: 'Hijack' })).status, 403);
   assert.equal((await request('/readings/r2', 'guru', 'PUT', { content: 'Hijack' })).status, 403);
   assert.equal((await request('/questions/q1', 'guru', 'PUT', { readingId: 'r2' })).status, 403);
-  assert.equal((await request('/questions/q1', 'guru', 'PUT', { content: 'Own edit', authorId: 'admin' })).status, 200);
-  assert.equal(questions[0].authorId, 'guru');
+  assert.equal((await request(`/questions/${created.body.id}`, 'guru', 'PUT', { content: 'Own edit', authorId: 'admin' })).status, 200);
+  assert.equal(questions.find(q => q.id === created.body.id).authorId, 'guru');
   assert.equal((await request('/users', 'guru')).status, 403);
 });
 test('operator detail access is scoped before reading cache and never exposes keys', async () => {

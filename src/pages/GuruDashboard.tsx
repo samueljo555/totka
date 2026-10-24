@@ -60,6 +60,9 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         setReadingContent('');
         const data = await fetch('/api/readings').then(r => r.json());
         setReadings(data);
+      } else {
+        const error = await res.json();
+        toast.error(error.message || 'Gagal menyimpan bacaan');
       }
     } catch(err) {
       toast.error('Gagal menyimpan bacaan');
@@ -150,7 +153,8 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         const data = await fetch('/api/questions').then(r => r.json());
         setQuestions(data);
       } else {
-        toast.error("Gagal menyimpan soal");
+        const error = await res.json();
+        toast.error(error.message || 'Gagal menyimpan soal');
       }
     } catch(err) {
       toast.error("Error saving question");
@@ -371,7 +375,12 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                       </button>
                       <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: '#d32f2f' }} title="Hapus" onClick={async () => {
                         if (await confirmModal({ title: 'Konfirmasi', message: 'Yakin ingin menghapus soal ini?' })) {
-                          await fetch(`/api/questions/${soal.id}`, { method: 'DELETE' });
+                          const response = await fetch(`/api/questions/${soal.id}`, { method: 'DELETE' });
+                          if (!response.ok) {
+                            const error = await response.json();
+                            toast.error(error.message || 'Gagal menghapus soal');
+                            return;
+                          }
                           const data = await fetch('/api/questions').then(r => r.json());
                           setQuestions(data);
                         }
@@ -593,7 +602,12 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                         }}>Edit</button>
                         <button className="btn-secondary" style={{ padding: '4px 8px', color: '#d32f2f', background: 'rgba(255,0,0,0.1)' }} onClick={async () => {
                           if (await confirmModal({ title: 'Konfirmasi', message: 'Hapus bacaan ini?' })) {
-                            await fetch(`/api/readings/${r.id}`, { method: 'DELETE' });
+                            const response = await fetch(`/api/readings/${r.id}`, { method: 'DELETE' });
+                            if (!response.ok) {
+                              const error = await response.json();
+                              toast.error(error.message || 'Gagal menghapus bacaan');
+                              return;
+                            }
                             const data = await fetch('/api/readings').then(res => res.json());
                             setReadings(data);
                           }

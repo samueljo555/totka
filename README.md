@@ -28,7 +28,30 @@ Password sementara siswa hanya dikembalikan pada respons pembuatan/impor untuk a
 
 Jalankan `npm test --prefix backend` untuk build backend dan pengujian HTTP dengan repository terisolasi. Pengujian tidak mengakses database aplikasi. Jalankan `npm run build` untuk memeriksa frontend. Pengujian ini mencakup otorisasi peran, isolasi sekolah/kepemilikan, penyembunyian kredensial dan kunci jawaban, hash password, serta pencabutan sesi. Pengujian database produksi, cache Redis aktif, dan kapasitas 10.000 peserta tetap membutuhkan lingkungan pengujian tersendiri.
 
-Batas waktu ujian di server, validasi soal/jawaban, finalisasi atomik, dan sinkronisasi jawaban akan ditangani pada prioritas berikutnya; perubahan keamanan akses ini belum menyelesaikan masalah tersebut.
+## Integritas ujian
+
+Deadline dihitung dari `ExamSession.startTime + Package.durationMinutes`. Server menggunakan waktu PostgreSQL setelah memperoleh kunci sesi; timestamp dan jam perangkat siswa tidak menentukan penerimaan jawaban. Jawaban yang baru diproses setelah deadline ditolak dengan `409 EXAM_EXPIRED`. Sesi tersebut diselesaikan dari jawaban yang sudah tersimpan. Jawaban setelah sesi selesai ditolak dengan `409 EXAM_CLOSED`. Tidak ada tambahan waktu untuk antrean offline yang terlambat dikirim.
+
+Mulai ujian mengembalikan `serverTime`, `deadline`, dan `remainingSeconds`. Timer browser memakai anggaran waktu server dan jam monotonic untuk menghindari drift interval serta perubahan jam perangkat. Jawaban offline hanya dapat dinilai jika diterima dan diperiksa server sebelum deadline. Browser menunggu request penyimpanan yang masih berjalan dan sinkronisasi sebelum finalisasi manual; ketika waktu habis, ujian tetap ditutup tanpa menunggu jawaban offline yang terlambat.
+
+Penyimpanan jawaban dan finalisasi menggunakan transaksi serta row lock PostgreSQL pada sesi yang sama. Request selesai berulang mengembalikan hasil yang sudah tersimpan tanpa menghitung ulang atau mengganti waktu selesai. Flag benar/salah dan nilai akhir commit bersama; kegagalan membatalkan semuanya. Hanya soal dalam paket yang dihitung, termasuk saat database berisi jawaban lama dari soal di luar paket. Pembaruan flag jawaban menggunakan dua operasi batch, bukan satu update untuk setiap jawaban.
+
+Format jawaban: pilihan tunggal berupa indeks angka; pilihan kompleks berupa array indeks unik; kategori berupa array 0/1 dengan `null` untuk pernyataan belum dijawab. Array kategori parsial dilengkapi `null`. Jawaban kosong tidak dianggap benar. Paket baru hanya dapat dimulai jika durasi, opsi, tipe soal, dan kunci jawaban valid. Urutan soal memakai ID yang stabil; backup baru memakai ID soal, dan antrean offline lama dipulihkan berdasarkan ID soal, bukan nomor tampilan.
+
+Setelah terdapat sesi ujian, isi paket (termasuk durasi dan daftar soal), soal, serta bacaan terkait tidak dapat diedit atau dihapus melalui API. Buat konten/paket baru untuk revisi. Status paket dan pengaturan rilis nilai tetap dapat diubah. Menutup status paket mencegah peserta baru; peserta yang sudah memulai tetap dapat melanjutkan sampai deadline semula. Advisory lock bersama pada mulai ujian dan eksklusif pada perubahan konten mencegah benturan saat peserta pertama masuk. Lihat [mekanisme locking PostgreSQL](https://www.postgresql.org/docs/current/explicit-locking.html).
+
+Backend menjalankan sweep sesi kedaluwarsa saat startup dan setiap 15 detik. Setiap batch memproses maksimal 100 sesi, lalu menjadwalkan batch berikutnya jika penuh; row lock menjaga konsistensi ketika beberapa worker menjalankannya bersamaan. Sesi yang ditinggalkan browser tetap diselesaikan. Waktu selesai dibatasi pada deadline, meski sweep berjalan lebih lambat. Ini tidak memerlukan perubahan schema database.
+
+### Pengujian integritas dengan PostgreSQL
+
+`npm test --prefix backend` menjalankan pengujian keamanan dan validasi jawaban. Suite transaksi PostgreSQL hanya berjalan jika `INTEGRITY_TEST_DATABASE_URL` diberikan secara eksplisit; tidak pernah mengambil `DATABASE_URL` aplikasi sebagai fallback. Gunakan database pengujian terpisah:
+
+```bash
+cd backend
+INTEGRITY_TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/TEST_DB' npm test
+```
+
+Suite membuat schema acak dari schema Prisma terbaru, menjalankan transaksi menggunakan dua client/pool PostgreSQL, lalu menghapus schema buatannya. Pengguna database uji harus boleh membuat schema. Pengujian mencakup mulai serentak, jawaban lintas paket, payload salah, deadline setelah menunggu lock, finalisasi bersamaan, rollback, sweep multi-worker, dan perubahan konten saat peserta pertama masuk. Pengujian ini tidak membuktikan kapasitas 10.000 peserta. Perbaikan urutan versi jawaban, antrean offline, optimasi query/cache, migrasi deployment, dan load test tetap masuk prioritas berikutnya.
 
 ## 🚀 Pembaruan Terkini (Changelog)
 

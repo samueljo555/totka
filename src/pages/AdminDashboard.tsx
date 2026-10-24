@@ -246,7 +246,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         setPackages(pkgs);
       } else {
         const err = await res.json();
-        toast.error(`Gagal: ${err.error || 'Terjadi kesalahan'}`);
+        toast.error(`Gagal: ${err.message || err.error || 'Terjadi kesalahan'}`);
       }
     } catch (err) {
       toast.error("Terjadi kesalahan jaringan");
