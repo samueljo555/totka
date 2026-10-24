@@ -1,7 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import type { RequestHandler } from 'express';
 import jwt from 'jsonwebtoken';
-import crypto from 'node:crypto';
 
 export const validRoles = ['super_admin', 'admin', 'guru', 'operator', 'siswa'] as const;
 export type Role = typeof validRoles[number];
@@ -18,7 +17,6 @@ declare global {
 }
 
 export const isAdmin = (role: string) => role === 'super_admin' || role === 'admin';
-export const temporaryPassword = () => crypto.randomBytes(12).toString('base64url');
 
 // Allowlist: newly added sensitive model fields cannot accidentally enter API responses.
 export const safeUserSelect = {
@@ -41,6 +39,9 @@ const rules: [string, RegExp, Role[]][] = [
   ['POST', /^\/packages\/?$/, admins],
   ['PUT', /^\/packages\/[^/]+\/?$/, admins],
   ['GET', /^\/users\/?$/, operators],
+  ['GET', /^\/users\/login-cards\/?$/, operators],
+  ['GET', /^\/users\/[^/]+\/login-card\/?$/, operators],
+  ['POST', /^\/users\/[^/]+\/login-card\/reset\/?$/, operators],
   ['POST', /^\/users\/?$/, admins],
   ['PUT', /^\/users\/[^/]+\/?$/, admins],
   ['DELETE', /^\/users\/[^/]+\/?$/, admins],

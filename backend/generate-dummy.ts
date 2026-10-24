@@ -1,3 +1,6 @@
+import crypto from 'node:crypto';
+import { createLoginCardCipher } from './login-cards.js';
+import { loadJwtSecret } from './config.js';
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
@@ -26,6 +29,7 @@ async function main() {
   });
   console.log('✅ Sekolah Dummy Dibuat');
 
+  const cards = createLoginCardCipher(process.env.LOGIN_CARD_SECRET || loadJwtSecret());
   const passwordText = '123456';
   const hashedPassword = await bcrypt.hash(passwordText, 10);
 
@@ -44,7 +48,10 @@ async function main() {
     const studentsToCreate = [];
     for (let j = 0; j < batchSize; j++) {
       const num = i + j + 1;
+      const id = crypto.randomUUID();
       studentsToCreate.push({
+        id,
+        loginCardPassword: cards.seal(id, passwordText),
         username: `siswa${num}`,
         password: hashedPassword,
         fullName: `Siswa Dummy ${num}`,

@@ -404,10 +404,18 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         <button 
                           className="btn-secondary" 
                           style={{ padding: '6px 12px', fontSize: '0.85rem' }}
-                          onClick={() => {
+                          onClick={async () => {
+                            let loginPassword = '';
+                            if (u.role === 'siswa') {
+                              try {
+                                const response = await fetch(`/api/users/${u.id}/login-card`);
+                                if (!response.ok) throw new Error('Gagal memuat password kartu siswa');
+                                loginPassword = (await response.json()).loginPassword || '';
+                              } catch { toast.error('Password kartu belum dapat dimuat. Anda tetap dapat mengatur password baru.'); }
+                            }
                             setEditingUser(u);
                             setNewUsername(u.username);
-                            setNewPassword('');
+                            setNewPassword(loginPassword);
                             setNewFullName(u.fullName);
                             setNewRole(u.role);
                             setNewSchoolNpsn(u.schoolNpsn || '');
@@ -564,7 +572,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             </div>
             <div className="input-group">
               <label className="input-label">Password</label>
-              <input type="password" className="input-field" placeholder="Kosongkan untuk mempertahankan password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+              <input type={editingUser.role === 'siswa' ? 'text' : 'password'} className="input-field" placeholder="Kosongkan untuk mempertahankan password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">Nama Lengkap / Nama Institusi</label>

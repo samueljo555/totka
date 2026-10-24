@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
@@ -40,7 +41,7 @@ test('exam transactions on isolated PostgreSQL schema', { skip: !url, timeout: 6
     const base = `http://127.0.0.1:${server.address().port}/api`;
     async function request(path, id = 's1', method = 'POST', body = {}) {
       const token = jwt.sign({ id, sid: `sid-${id}` }, secret, { expiresIn: '5m' });
-      const response = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+      const response = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, ...(method === 'GET' ? {} : { body: JSON.stringify(body) }) });
       return { status: response.status, body: await response.json() };
     }
     async function reset() {
@@ -261,6 +262,38 @@ test('exam transactions on isolated PostgreSQL schema', { skip: !url, timeout: 6
       await prisma.question.update({ where: { id: 'q1' }, data: { correctAnswer: [] } });
       await assert.rejects(() => startExam(prisma, 's1', 'EXAM'), { code: 'INVALID_EXAM_CONFIG' });
       assert.equal(await prisma.examSession.count(), 0);
+    });
+    await t.test('login card migration adds a nullable column without replacing existing accounts or sessions', async () => {
+      const session = await open();
+      const original = await prisma.user.findUnique({ where: { id: 's1' } });
+      await prisma.$executeRawUnsafe('ALTER TABLE "User" DROP COLUMN "loginCardPassword"');
+      const migration = readFileSync(new URL('../prisma/migrations/20261024120000_student_login_cards/migration.sql', import.meta.url), 'utf8');
+      await prisma.$executeRawUnsafe(migration);
+      const after = await prisma.user.findUnique({ where: { id: 's1' } });
+      assert.equal(after.password, original.password);
+      assert.equal(after.activeToken, original.activeToken);
+      assert.equal(after.loginCardPassword, null);
+      assert.equal((await prisma.examSession.findUnique({ where: { id: session.id } })).status, 'sedang_mengerjakan');
+    });
+    await t.test('student cards survive app reload and login succeeds with the same short password', async () => {
+      const create = await request('/users/siswa', 'admin', 'POST', { nisn: '1234567890', fullName: 'Kartu' });
+      assert.equal(create.status, 200);
+      const student = await prisma.user.findUnique({ where: { username: '1234567890' } });
+      assert.match(create.body.user.tempPassword, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/);
+      assert.ok(student.loginCardPassword.startsWith('v1.'));
+      const response = await fetch(base + `/users/${student.id}/login-card`, { headers: { Authorization: `Bearer ${jwt.sign({ id: 'admin', sid: 'sid-admin' }, secret)}` } });
+      const card = await response.json();
+      assert.equal(card.loginPassword, create.body.user.tempPassword);
+      assert.ok(!('password' in card));
+      assert.ok(!('loginCardPassword' in card));
+      const login = await fetch(base + '/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: student.username, password: card.loginPassword }) });
+      assert.equal(login.status, 200);
+      const reset = await request(`/users/${student.id}/login-card/reset`, 'admin');
+      assert.equal(reset.status, 200);
+      const invalid = await fetch(base + '/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: student.username, password: card.loginPassword }) });
+      assert.equal(invalid.status, 401);
+      const fresh = await request(`/users/${student.id}/login-card`, 'admin', 'GET');
+      assert.equal(fresh.body.loginPassword, reset.body.loginPassword);
     });
   } finally {
     if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }

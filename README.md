@@ -13,7 +13,7 @@ Setelah pembaruan keamanan ini diterapkan, semua pengguna perlu login kembali ka
 | --- | --- |
 | Admin / super admin | Mengelola akun, sekolah, paket, seluruh bank soal/bacaan, dan analitik |
 | Guru | Membaca, membuat, dan mengubah soal serta bacaan miliknya; mengunggah gambar |
-| Operator | Melihat dan mendaftarkan siswa di sekolahnya; melihat paket tanpa token dan sesi sekolahnya; detail hasil hanya untuk sesi selesai di sekolahnya, tanpa kunci jawaban |
+| Operator | Melihat dan mendaftarkan siswa di sekolahnya; melihat token paket aktif dan sesi sekolahnya; detail hasil hanya untuk sesi selesai di sekolahnya, tanpa kunci jawaban |
 | Siswa | Memulai, menjawab, dan menyelesaikan sesi miliknya; tidak mendapat akses bank soal atau API administrasi |
 
 Operator tanpa sekolah ditolak. ID siswa, pembuat paket, dan penulis soal/bacaan ditentukan oleh identitas terautentikasi. Endpoint yang belum masuk daftar izin ditolak secara default. Endpoint publik hanya login dan health check. Pemeriksaan sesi juga memerlukan Bearer JWT.
@@ -22,7 +22,19 @@ Password/hash dan token aktif tidak dikirim melalui daftar pengguna maupun relas
 
 Password akun baru, termasuk akun dari seed dan generator data uji, langsung di-hash. Akun lama yang masih menggunakan plaintext tetap dapat login dan otomatis diubah menjadi bcrypt setelah login berhasil; pembaruan kode ini tidak menjalankan perubahan massal pada database yang sudah ada. Password awal operator yang dibuat dari data sekolah tetap mengikuti NPSN, sehingga admin sebaiknya menggantinya sebelum digunakan.
 
-Password sementara siswa hanya dikembalikan pada respons pembuatan/impor untuk akun yang benar-benar baru. Dasbor operator mengunduh CSV kredensial dan menyimpannya di memori halaman untuk pencetakan kartu. Simpan CSV sebelum menutup atau memuat ulang halaman; daftar pengguna tidak menyediakan pembacaan ulang password. Jika berkas hilang, admin dapat mereset password. Form edit admin membiarkan password kosong untuk mempertahankannya.
+Password siswa baru dibuat otomatis sebanyak 6 karakter huruf kapital/angka tanpa karakter 0/O dan 1/I/L yang mudah tertukar. Password untuk autentikasi tetap di-hash dengan bcrypt. Salinan untuk kartu login disimpan terenkripsi AES-256-GCM pada kolom `User.loginCardPassword`, terikat pada ID siswa. Daftar pengguna biasa, login, sesi, dan analitik tidak mengirim hash atau nilai terenkripsi tersebut.
+
+Endpoint kartu login khusus admin/operator (`GET /api/users/login-cards` dan `GET /api/users/:id/login-card`) mengembalikan `loginPassword` untuk pencetakan. Operator hanya dapat mengakses siswa di sekolahnya; siswa dan guru ditolak. Dasbor operator memuat password tersebut pada daftar siswa dan mengambil kartu terbaru sebelum mencetak. Password tetap tersedia setelah reload; CSV tidak lagi diunduh otomatis. Form edit admin dapat menampilkan password kartu siswa, dan menyimpan password yang sama saat mengubah profil tidak memutus sesi siswa.
+
+Akun lama yang masih plaintext tetap dapat dicetak dan otomatis mendapatkan salinan terenkripsi ketika login meng-upgrade password menjadi hash. Akun lama yang sudah di-hash tetapi belum memiliki salinan terenkripsi tidak dapat dipulihkan dari hash. UI menampilkan “Belum tersedia” dan menyediakan tombol Atur ulang dengan konfirmasi; reset membuat password 6 karakter, memperbarui hash dan kartu secara bersamaan, serta membatalkan sesi lama. Tidak ada reset massal atau perubahan otomatis terhadap password lama. Jika ada kartu yang belum tersedia, pencetakan dihentikan dengan pesan untuk mengatur ulang akun tersebut, agar kartu tanpa password tidak dibagikan.
+
+Token paket aktif tersedia kembali bagi operator melalui daftar paket untuk menu Pantau Ujian; token paket draft/nonaktif tetap disembunyikan. Token sesi pengguna dan kunci jawaban tetap dilindungi.
+
+### Migrasi kartu login
+
+Sebelum menjalankan versi ini pada database eksisting, tambahkan kolom nullable menggunakan migrasi `backend/prisma/migrations/20261024120000_student_login_cards/migration.sql`, lalu jalankan `prisma generate` sebelum build backend. Migrasi hanya menambahkan satu kolom; tidak mengganti password, akun, atau sesi lama. Database uji dibuat dari schema terbaru. Riwayat migrasi awal proyek masih perlu diselaraskan pada tahap deployment; jangan menginisialisasi ulang atau menjalankan seed untuk menerapkan perubahan ini.
+
+`LOGIN_CARD_SECRET` bersifat opsional dan harus minimal 32 karakter jika diisi. Bila kosong, enkripsi menggunakan key yang diturunkan dari `JWT_SECRET`. Pertahankan secret yang dipilih beserta backup database; menggantinya tanpa migrasi enkripsi membuat kartu lama tidak dapat dibaca meski login bcrypt tetap berfungsi. Untuk memisahkan rotasi JWT dari enkripsi kartu, tetapkan `LOGIN_CARD_SECRET` yang stabil sejak pertama menerapkan fitur ini. Secret tidak disimpan di repository.
 
 ### Verifikasi perubahan keamanan
 

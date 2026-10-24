@@ -47,13 +47,13 @@ function repository(getRows, hydrate = row => row) {
     async findFirst(q) { return this.findUnique(q); },
     async findMany(q = {}) { return getRows().filter(row => matches(row, q.where)).map(row => project(hydrate(row), q)); },
     async create(q) {
-      const row = { id: `created-${getRows().length}`, schoolNpsn: null, activeToken: null, ...q.data };
+      const row = { id: `created-${getRows().length}`, schoolNpsn: null, activeToken: null, loginCardPassword: null, ...q.data };
       getRows().push(row);
       return project(hydrate(row), q);
     },
     async update(q) {
       const row = getRows().find(row => matches(row, q.where));
-      assert.ok(row, 'update targets an existing fixture');
+      if (!row) { const error = new Error('Record not found'); error.code = 'P2025'; throw error; }
       Object.assign(row, q.data);
       return project(hydrate(row), q);
     },
@@ -127,7 +127,7 @@ beforeEach(() => {
     ['guru', 'guru', '11111111'], ['guru2', 'guru', '22222222'],
     ['op', 'operator', '11111111'], ['op2', 'operator', '22222222'],
     ['unassigned', 'operator', null], ['s1', 'siswa', '11111111'], ['s2', 'siswa', '22222222'],
-  ].map(([id, role, schoolNpsn]) => ({ id, username: id, role, schoolNpsn, activeToken: `sid-${id}`, password: 'legacy-password', fullName: id }));
+  ].map(([id, role, schoolNpsn]) => ({ id, username: id, role, schoolNpsn, activeToken: `sid-${id}`, loginCardPassword: null, password: 'legacy-password', fullName: id }));
   readings = [{ id: 'r1', title: 'Bacaan', content: 'Isi', authorId: 'guru' }, { id: 'r2', authorId: 'guru2' }];
   questions = [
     { id: 'q1', type: 'Pilihan Ganda Sederhana', content: 'Soal', options: [{ text: 'A' }, { text: 'B' }], correctAnswer: [0], authorId: 'guru', readingId: 'r1' },
@@ -171,7 +171,7 @@ test('invalid/expired JWTs and legacy JWTs without session binding are rejected'
 });
 test('student cannot access administration, bank, upload, or analytics even with forged role claims', async () => {
   const cases = [
-    ['/users', 'GET'], ['/users', 'POST'], ['/users/admin', 'PUT'], ['/users/admin', 'DELETE'],
+    ['/users', 'GET'], ['/users/login-cards', 'GET'], ['/users/s1/login-card', 'GET'], ['/users/s1/login-card/reset', 'POST'], ['/users', 'POST'], ['/users/admin', 'PUT'], ['/users/admin', 'DELETE'],
     ['/users/siswa', 'POST'], ['/users/siswa/batch', 'POST'], ['/schools', 'GET'], ['/schools', 'POST'],
     ['/packages', 'GET'], ['/packages', 'POST'], ['/packages/p1', 'PUT'], ['/questions', 'GET'],
     ['/questions', 'POST'], ['/readings', 'GET'], ['/upload', 'POST'], ['/sessions', 'GET'],
@@ -293,7 +293,7 @@ test('school provisioning hashes operator passwords immediately', async () => {
   assert.equal((await request('/schools/batch', 'admin', 'POST', { schools: [{ npsn: '44444444', name: 'Other' }] })).status, 200);
   assert.ok(await bcrypt.compare('44444444', users.find(u => u.username === '44444444').password));
 });
-test('operator creates students only within own school; passwords are returned once and hashed', async () => {
+test('operator creates students only within own school and hashes the generated password', async () => {
   const created = await request('/users/siswa', 'op', 'POST', { nisn: 'new-student', fullName: 'New', role: 'admin' });
   assert.equal(created.status, 200);
   const row = users.find(u => u.username === 'new-student');
@@ -335,4 +335,84 @@ test('current database role overrides stale signed admin role and unknown routes
   assert.equal((await request('/unlisted-sensitive-api', 'super')).status, 403);
   users.splice(users.findIndex(u => u.id === 's1'), 1);
   assert.equal((await request('/auth/session-check', 's1')).status, 401);
+});
+
+
+test('operators can see active package tokens; students still cannot list packages', async () => {
+  packages.push({ id: 'draft', status: 'draft', token: 'DRAFT_SECRET' });
+  const result = await request('/packages', 'op');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.find(p => p.id === 'p1').token, 'EXAM');
+  assert.equal(result.body.find(p => p.id === 'draft').token, null);
+  assert.equal((await request('/packages', 's1')).status, 403);
+});
+
+test('student cards persist across requests and never expose hashes or encrypted storage fields', async () => {
+  const created = await request('/users/siswa', 'op', 'POST', { nisn: 'card-student', fullName: 'Card' });
+  const row = users.find(u => u.username === 'card-student');
+  assert.match(created.body.user.tempPassword, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/);
+  assert.ok(row.loginCardPassword.startsWith('v1.'));
+  assert.ok(!row.loginCardPassword.includes(created.body.user.tempPassword));
+  for (let i = 0; i < 2; i++) {
+    const result = await request(`/users/${row.id}/login-card`, 'op');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.loginPassword, created.body.user.tempPassword);
+    assert.equal(result.headers.get('cache-control'), 'no-store');
+    assertNoSecrets(result.body, ['password', 'activeToken', 'loginCardPassword']);
+  }
+  assertNoSecrets((await request('/users', 'admin')).body, ['password', 'activeToken', 'loginCardPassword', 'loginPassword']);
+});
+
+test('printable credentials are restricted to students in the operator school', async () => {
+  const own = await request('/users/login-cards', 'op');
+  assert.deepEqual(own.body.map(u => u.id), ['s1']);
+  assertNoSecrets(own.body, ['password', 'activeToken', 'loginCardPassword']);
+  assert.equal((await request('/users/s2/login-card', 'op')).status, 404);
+  assert.equal((await request('/users/s2/login-card/reset', 'op', 'POST', {})).status, 404);
+  assert.equal((await request('/users/admin/login-card/reset', 'op', 'POST', {})).status, 404);
+  assert.equal(users.find(u => u.id === 's2').password, 'legacy-password');
+  assert.equal((await request('/users/login-cards', 'guru')).status, 403);
+  assert.equal((await request('/users/login-cards', 'unassigned')).status, 403);
+});
+
+test('hashed legacy passwords are not invented or reset until explicit reset request', async () => {
+  const row = users.find(u => u.id === 's1');
+  row.password = await bcrypt.hash('OLD_SECRET', 10);
+  const original = row.password;
+  const before = await request('/users/s1/login-card', 'op');
+  assert.equal(before.body.loginPassword, null);
+  assert.equal(row.password, original);
+  const reset = await request('/users/s1/login-card/reset', 'op', 'POST', {});
+  assert.equal(reset.status, 200);
+  assert.match(reset.body.loginPassword, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/);
+  assert.ok(await bcrypt.compare(reset.body.loginPassword, row.password));
+  assert.equal(row.activeToken, null);
+  assert.equal((await request('/auth/session-check', 's1')).status, 401);
+  assert.equal((await request('/users/s1/login-card', 'op')).body.loginPassword, reset.body.loginPassword);
+});
+
+test('admin can prefill student passwords without invalidating unchanged passwords on profile edits', async () => {
+  const created = await request('/users/siswa', 'op', 'POST', { nisn: 'prefill-student', fullName: 'Before' });
+  const row = users.find(u => u.username === 'prefill-student');
+  row.activeToken = 'unchanged-login';
+  const originalHash = row.password;
+  const card = await request(`/users/${row.id}/login-card`, 'admin');
+  const edited = await request(`/users/${row.id}`, 'admin', 'PUT', { password: card.body.loginPassword, fullName: 'After' });
+  assert.equal(edited.status, 200);
+  assert.equal(row.password, originalHash);
+  assert.equal(row.activeToken, 'unchanged-login');
+  await request(`/users/${row.id}`, 'admin', 'PUT', { password: 'NEW234' });
+  assert.equal((await request(`/users/${row.id}/login-card`, 'op')).body.loginPassword, 'NEW234');
+  assert.ok(await bcrypt.compare('NEW234', row.password));
+  assert.equal(row.activeToken, null);
+  assert.equal(created.status, 200);
+});
+
+test('imported students receive printable six-character passwords after reload', async () => {
+  const result = await request('/users/siswa/batch', 'op', 'POST', { students: [{ nisn: 'short-batch', fullName: 'Batch' }] });
+  const row = users.find(u => u.username === 'short-batch');
+  const card = await request(`/users/${row.id}/login-card`, 'op');
+  assert.equal(card.body.loginPassword, result.body.credentials[0].tempPassword);
+  assert.match(card.body.loginPassword, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/);
+  assert.ok(await bcrypt.compare(card.body.loginPassword, row.password));
 });

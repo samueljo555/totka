@@ -1,3 +1,6 @@
+import crypto from 'node:crypto';
+import { createLoginCardCipher } from './login-cards.js';
+import { loadJwtSecret } from './config.js';
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
@@ -44,10 +47,14 @@ async function main() {
     },
   });
   
+  const studentId = crypto.randomUUID();
+  const cards = createLoginCardCipher(process.env.LOGIN_CARD_SECRET || loadJwtSecret());
   await prisma.user.upsert({
     where: { username: 'siswa' },
     update: {},
     create: {
+      id: studentId,
+      loginCardPassword: cards.seal(studentId, '123'),
       username: 'siswa',
       password: await bcrypt.hash('123', 10),
       fullName: 'Siswa Tester',

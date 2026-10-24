@@ -9,7 +9,8 @@ import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { getOrSetCache, deleteCache } from './cache.js';
-import { authorizeApi, safeUserSelect, studentQuestionSelect, isAdmin, validRoles, temporaryPassword } from './security.js';
+import { createLoginCardCipher, studentPassword } from './login-cards.js';
+import { authorizeApi, safeUserSelect, studentQuestionSelect, isAdmin, validRoles } from './security.js';
 
 const BCRYPT_ROUNDS = 10;
 const JWT_EXPIRES_IN = '8h';
@@ -21,7 +22,8 @@ import { ExamError, startExam, saveExamAnswer, finishExam, examTransaction, lock
 
 import { Storage } from '@google-cloud/storage';
 
-export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
+export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret = process.env.LOGIN_CARD_SECRET || JWT_SECRET) {
+  const loginCards = createLoginCardCipher(cardSecret);
   const app = express();
 
   app.use(cors());
@@ -117,7 +119,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
           }
         });
       });
-      res.json(isAdmin(req.user!.role) ? packages : packages.map(({ token: _token, ...pkg }) => pkg));
+      res.json(isAdmin(req.user!.role) ? packages : packages.map(pkg => ({ ...pkg, token: pkg.status === 'aktif' ? pkg.token : null })));
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch packages' });
     }
@@ -240,6 +242,54 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
     }
   });
 
+  const cardSelect = { ...safeUserSelect, password: true, loginCardPassword: true } as const;
+  const cardDto = (user: { id: string; password: string; loginCardPassword: string | null; [key: string]: unknown }) => {
+    const { password, loginCardPassword, ...profile } = user;
+    let loginPassword: string | null = null;
+    if (loginCardPassword) {
+      try { loginPassword = loginCards.open(user.id, loginCardPassword); }
+      catch { /* The UI offers an explicit reset; never silently change a student's password. */ }
+    } else if (!/^\$2[aby]\$/.test(password)) {
+      // Existing plaintext accounts remain printable until their next login upgrades them.
+      loginPassword = password;
+    }
+    return { ...profile, loginPassword };
+  };
+  const cardScope = (req: express.Request) => ({
+    role: 'siswa', ...(req.user!.role === 'operator' ? { schoolNpsn: req.user!.schoolNpsn } : {})
+  });
+
+  app.get('/api/users/login-cards', async (req, res) => {
+    try {
+      const users = await prisma.user.findMany({ where: cardScope(req), select: cardSelect });
+      res.json(users.map(cardDto));
+    } catch { res.status(500).json({ error: 'LOGIN_CARDS_FAILED', message: 'Gagal memuat kartu login siswa.' }); }
+  });
+
+  app.get('/api/users/:id/login-card', async (req, res) => {
+    try {
+      const user = await prisma.user.findFirst({ where: { id: req.params.id, ...cardScope(req) }, select: cardSelect });
+      if (!user) return res.status(404).json({ error: 'NOT_FOUND' });
+      res.json(cardDto(user));
+    } catch { res.status(500).json({ error: 'LOGIN_CARDS_FAILED' }); }
+  });
+
+  app.post('/api/users/:id/login-card/reset', async (req, res) => {
+    try {
+      const password = studentPassword();
+      // School and role are part of the UPDATE predicate as well as the read policy.
+      const user = await prisma.user.update({
+        where: { id: req.params.id, ...cardScope(req) },
+        data: { password: await bcrypt.hash(password, BCRYPT_ROUNDS), loginCardPassword: loginCards.seal(req.params.id, password), activeToken: null },
+        select: cardSelect,
+      });
+      res.json(cardDto(user));
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') return res.status(404).json({ error: 'NOT_FOUND' });
+      res.status(500).json({ error: 'RESET_FAILED', message: 'Gagal mengatur ulang password siswa.' });
+    }
+  });
+
   app.post('/api/users', async (req, res) => {
     const { username, password, fullName, role, schoolNpsn } = req.body;
     if (!username || !password || !fullName || !role) {
@@ -256,8 +306,11 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
 
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
+      const id = crypto.randomUUID();
       const newUser = await prisma.user.create({
         data: {
+          id,
+          loginCardPassword: role === 'siswa' ? loginCards.seal(id, password) : null,
           username,
           password: hashedPassword,
           fullName,
@@ -294,8 +347,12 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
       }
 
       let finalPassword = existingUser.password;
+      let passwordChanged = false;
       if (password && password.trim() !== '') {
-        finalPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+        const hashed = /^\$2[aby]\$/.test(existingUser.password);
+        const same = hashed ? await bcrypt.compare(password, existingUser.password) : password === existingUser.password;
+        passwordChanged = !same;
+        if (!same || !hashed) finalPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
       }
 
       const updatedUser = await prisma.user.update({
@@ -305,8 +362,10 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
           password: finalPassword,
           fullName: fullName || existingUser.fullName,
           role: role || existingUser.role,
+          loginCardPassword: (role || existingUser.role) !== 'siswa' ? null
+            : password && password.trim() !== '' ? loginCards.seal(id, password) : existingUser.loginCardPassword,
           schoolNpsn: schoolNpsn !== undefined ? schoolNpsn || null : existingUser.schoolNpsn,
-          ...(password && password.trim() !== '' ? { activeToken: null } : {})
+          ...(passwordChanged ? { activeToken: null } : {})
         },
         select: safeUserSelect
       });
@@ -519,7 +578,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
           const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
           await prisma.user.update({
             where: { id: user.id },
-            data: { password: hashedPassword }
+            data: { password: hashedPassword, ...(user.role === 'siswa' ? { loginCardPassword: loginCards.seal(user.id, password) } : {}) }
           });
         }
       }
@@ -1020,11 +1079,14 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
       }
 
       // Generate a cryptographically random temporary password
-      const tempPassword = temporaryPassword();
+      const tempPassword = studentPassword();
       const hashedPassword = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS);
 
+      const id = crypto.randomUUID();
       const newUser = await prisma.user.create({
         data: {
+          id,
+          loginCardPassword: loginCards.seal(id, tempPassword),
           username: nisn,
           password: hashedPassword,
           role: 'siswa',
@@ -1057,10 +1119,13 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string) {
     try {
       const credentials: { username: string; tempPassword: string }[] = [];
       const dataToInsert = await Promise.all(students.filter((s: any, i: number) => students.findIndex((other: any) => other.nisn === s.nisn) === i).map(async s => {
-        const tempPassword = temporaryPassword();
+        const tempPassword = studentPassword();
         credentials.push({ username: s.nisn, tempPassword });
         const hashedPassword = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS);
+        const id = crypto.randomUUID();
         return {
+          id,
+          loginCardPassword: loginCards.seal(id, tempPassword),
           username: s.nisn,
           password: hashedPassword,
           role: 'siswa',

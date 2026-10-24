@@ -18,6 +18,8 @@ model User {
   id        String   @id @default(uuid())
   username  String   @unique
   password  String
+  // Encrypted printable credential for siswa; authentication continues to use bcrypt.
+  loginCardPassword String?
   fullName  String
   role      String   // super_admin, admin, guru, operator, siswa
   activeToken String?
