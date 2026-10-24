@@ -16,6 +16,23 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const [activeTab, setActiveTab] = useState('students');
   const [isAddingSiswa, setIsAddingSiswa] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
+  // Temporary passwords exist only in this page's memory after creation.
+  const [issuedPasswords, setIssuedPasswords] = useState<Record<string, string>>({});
+  const downloadCredentials = (credentials: { username: string; tempPassword: string }[]) => {
+    if (credentials.length === 0) return;
+    const csvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const csv = ['username,password', ...credentials.map(c => `${csvCell(c.username)},${csvCell(c.tempPassword)}`)].join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'kredensial-siswa-baru.csv';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const rememberCredentials = (credentials: { username: string; tempPassword: string }[]) => {
+    setIssuedPasswords(prev => ({ ...prev, ...Object.fromEntries(credentials.map(c => [c.username, c.tempPassword])) }));
+    downloadCredentials(credentials);
+  };
   const [sessions, setSessions] = useState<any[]>([]);
   const [allPackages, setAllPackages] = useState<any[]>([]);
   const [selectedHistoryPackage, setSelectedHistoryPackage] = useState<any | null>(null);
@@ -138,7 +155,9 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
           })
         });
         if (res.ok) {
-          toast.success(`Berhasil mengimpor ${studentsData.length} data siswa!`);
+          const result = await res.json();
+          rememberCredentials(result.credentials || []);
+          toast.success(`Berhasil mengimpor ${result.count} siswa. Simpan berkas kredensial yang diunduh.`);
           fetchStudents();
         } else {
           toast.error('Terjadi kesalahan saat impor data.');
@@ -156,10 +175,11 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
     const printWindow = window.open('', '_blank');
     if (!printWindow) return toast.error("Pop-up diblokir. Harap izinkan pop-up untuk mencetak kartu.");
     
+    const escapeHtml = (value: string) => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
     let html = `
       <html>
         <head>
-          <title>Kartu Login Siswa - ${user?.school?.name || 'Sekolah'}</title>
+          <title>Kartu Login Siswa - ${escapeHtml(user?.school?.name || 'Sekolah')}</title>
           <style>
             body { font-family: sans-serif; padding: 20px; }
             .card-container {
@@ -198,22 +218,22 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
       html += `
         <div class="card">
           <div class="header">KARTU UJIAN TRY OUT</div>
-          <div class="school-name">${user?.school?.name || ''}</div>
+          <div class="school-name">${escapeHtml(user?.school?.name || '')}</div>
           <div class="row">
             <span class="label">Nama:</span>
-            <span class="value">${siswa.fullName}</span>
+            <span class="value">${escapeHtml(siswa.fullName)}</span>
           </div>
           <div class="row">
             <span class="label">Kelas:</span>
-            <span class="value">${siswa.className || '-'}</span>
+            <span class="value">${escapeHtml(siswa.className || '-')}</span>
           </div>
           <div class="row">
             <span class="label">Username (NISN):</span>
-            <span class="value">${siswa.nisn || siswa.username}</span>
+            <span class="value">${escapeHtml(siswa.nisn || siswa.username)}</span>
           </div>
           <div class="row">
             <span class="label">Password:</span>
-            <span class="value">${siswa.password || '******'}</span>
+            <span class="value">${escapeHtml(issuedPasswords[siswa.username] || 'Tidak ditampilkan')}</span>
           </div>
         </div>
       `;
@@ -307,9 +327,15 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h2>Daftar Siswa</h2>
-                <p>Kelola data akun siswa di sekolah Anda (tambah satuan atau impor Excel).</p>
+                <p>Kelola data akun siswa di sekolah Anda (tambah satuan atau impor CSV).</p>
+                <p style={{ fontSize: '0.85rem' }}>Simpan CSV kredensial setelah pendaftaran. Password tidak dapat dibaca kembali setelah halaman dimuat ulang.</p>
               </div>
               <div className="flex gap-2">
+                {Object.keys(issuedPasswords).length > 0 && (
+                  <button className="btn-secondary" onClick={() => downloadCredentials(Object.entries(issuedPasswords).map(([username, tempPassword]) => ({ username, tempPassword })))}>
+                    <Download size={16} /> Unduh Kredensial Baru
+                  </button>
+                )}
                 <button className="btn-secondary" onClick={handlePrintKartuLogin} style={{ margin: 0, background: '#f8fafc', color: '#0f172a', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
                   <Printer size={16} /> Cetak Kartu Login
                 </button>
@@ -380,7 +406,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                         <span className="tag">{siswa.className || '-'}</span>
                       </td>
                       <td className="p-4 text-muted" style={{ fontFamily: 'monospace' }}>
-                        {siswa.password || '******'}
+                        {issuedPasswords[siswa.username] || 'Tidak ditampilkan'}
                       </td>
                     </tr>
                   ))
@@ -434,7 +460,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
             </div>
             
             <div className="p-4 mt-6" style={{ background: 'rgba(0, 82, 204, 0.05)', borderRadius: '8px' }}>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Catatan: Password sementara akan digenerate otomatis oleh sistem dan dapat diunduh (download) oleh operator setelah siswa didaftarkan.</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Catatan: Password sementara diunduh setelah pendaftaran. Simpan berkas tersebut dengan aman; password tidak dapat dibaca kembali setelah halaman dimuat ulang.</p>
             </div>
 
             <button 
@@ -465,7 +491,9 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                   }
                   return res.json();
                 })
-                .then(() => {
+                .then(data => {
+                  rememberCredentials([{ username: data.user.username, tempPassword: data.user.tempPassword }]);
+                  toast.success('Siswa dibuat. Simpan berkas kredensial yang diunduh.');
                   setIsSaving(false);
                   setIsAddingSiswa(false);
                   setNewNisn('');

@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -15,7 +16,7 @@ async function main() {
     update: {},
     create: {
       username: 'admin',
-      password: '123',
+      password: await bcrypt.hash('123', 10),
       fullName: 'Super Admin',
       role: 'super_admin'
     },
@@ -26,7 +27,7 @@ async function main() {
     update: {},
     create: {
       username: 'guru',
-      password: '123',
+      password: await bcrypt.hash('123', 10),
       fullName: 'Guru Tester',
       role: 'guru'
     },
@@ -37,7 +38,7 @@ async function main() {
     update: {},
     create: {
       username: 'operator',
-      password: '123',
+      password: await bcrypt.hash('123', 10),
       fullName: 'Operator Tester',
       role: 'operator'
     },
@@ -48,7 +49,7 @@ async function main() {
     update: {},
     create: {
       username: 'siswa',
-      password: '123',
+      password: await bcrypt.hash('123', 10),
       fullName: 'Siswa Tester',
       role: 'siswa'
     },

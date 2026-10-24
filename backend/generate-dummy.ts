@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -26,6 +27,7 @@ async function main() {
   console.log('✅ Sekolah Dummy Dibuat');
 
   const passwordText = '123456';
+  const hashedPassword = await bcrypt.hash(passwordText, 10);
 
   // 3. Buat 10.000 Siswa dalam batch (chunk)
   const totalStudents = 10000;
@@ -44,7 +46,7 @@ async function main() {
       const num = i + j + 1;
       studentsToCreate.push({
         username: `siswa${num}`,
-        password: passwordText,
+        password: hashedPassword,
         fullName: `Siswa Dummy ${num}`,
         role: 'siswa',
         nisn: (1000000000 + num).toString(),

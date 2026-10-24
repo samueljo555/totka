@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
@@ -24,7 +25,7 @@ async function main() {
   const admin = await prisma.user.create({
     data: {
       username: 'admin',
-      password: 'adminpassword123',
+      password: await bcrypt.hash('adminpassword123', 10),
       fullName: 'Super Admin Utama',
       role: 'super_admin',
     },

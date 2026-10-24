@@ -130,7 +130,9 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
       data = await clone.json();
     } catch {}
 
-    if (data?.error === 'TOKEN_EXPIRED') {
+    if (data?.error === 'SESSION_KICKED') {
+      triggerSessionExpired(data.message || 'Sesi dinonaktifkan. Silakan login kembali.');
+    } else if (data?.error === 'TOKEN_EXPIRED') {
       triggerSessionExpired(data.message || 'Sesi login telah berakhir. Silakan login kembali.');
     } else if (data?.error === 'UNAUTHORIZED') {
       triggerSessionExpired(data.message || 'Token otentikasi tidak valid atau telah usang.');

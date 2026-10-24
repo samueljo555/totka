@@ -2,6 +2,34 @@
 
 Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Bank Soal, Paket Ujian, manajemen peserta didik, dan penilaian otomatis.
 
+
+## Keamanan API dan konfigurasi JWT
+
+Backend membaca `backend/.env` ketika dijalankan dari direktori `backend` (konfigurasi PM2 sudah menggunakan direktori tersebut). Isi `JWT_SECRET` dengan secret acak minimal 32 karakter; gunakan `openssl rand -hex 32` untuk membuatnya. Aplikasi menolak startup jika secret kosong atau terlalu pendek. Jangan gunakan nilai contoh sebagai secret produksi.
+
+Setelah pembaruan keamanan ini diterapkan, semua pengguna perlu login kembali karena JWT sekarang menyertakan pengenal sesi aktif (`sid`). Login pada perangkat lain atau reset password membatalkan token sebelumnya. Backend membaca identitas, peran, sekolah, dan sesi aktif dari database pada setiap request terproteksi; optimasi kapasitas pembacaan ini tetap perlu diuji pada tahap performa.
+
+| Peran | Akses |
+| --- | --- |
+| Admin / super admin | Mengelola akun, sekolah, paket, seluruh bank soal/bacaan, dan analitik |
+| Guru | Membaca, membuat, dan mengubah soal serta bacaan miliknya; mengunggah gambar |
+| Operator | Melihat dan mendaftarkan siswa di sekolahnya; melihat paket tanpa token dan sesi sekolahnya; detail hasil hanya untuk sesi selesai di sekolahnya, tanpa kunci jawaban |
+| Siswa | Memulai, menjawab, dan menyelesaikan sesi miliknya; tidak mendapat akses bank soal atau API administrasi |
+
+Operator tanpa sekolah ditolak. ID siswa, pembuat paket, dan penulis soal/bacaan ditentukan oleh identitas terautentikasi. Endpoint yang belum masuk daftar izin ditolak secara default. Endpoint publik hanya login dan health check. Pemeriksaan sesi juga memerlukan Bearer JWT.
+
+Password/hash dan token aktif tidak dikirim melalui daftar pengguna maupun relasi siswa pada sesi/analitik. Respons login tetap mengirim token milik pengguna itu sendiri. Kunci jawaban tidak dikirim melalui respons ujian siswa atau hasil operator. Nilai siswa yang ditunda juga disembunyikan oleh API.
+
+Password akun baru, termasuk akun dari seed dan generator data uji, langsung di-hash. Akun lama yang masih menggunakan plaintext tetap dapat login dan otomatis diubah menjadi bcrypt setelah login berhasil; pembaruan kode ini tidak menjalankan perubahan massal pada database yang sudah ada. Password awal operator yang dibuat dari data sekolah tetap mengikuti NPSN, sehingga admin sebaiknya menggantinya sebelum digunakan.
+
+Password sementara siswa hanya dikembalikan pada respons pembuatan/impor untuk akun yang benar-benar baru. Dasbor operator mengunduh CSV kredensial dan menyimpannya di memori halaman untuk pencetakan kartu. Simpan CSV sebelum menutup atau memuat ulang halaman; daftar pengguna tidak menyediakan pembacaan ulang password. Jika berkas hilang, admin dapat mereset password. Form edit admin membiarkan password kosong untuk mempertahankannya.
+
+### Verifikasi perubahan keamanan
+
+Jalankan `npm test --prefix backend` untuk build backend dan pengujian HTTP dengan repository terisolasi. Pengujian tidak mengakses database aplikasi. Jalankan `npm run build` untuk memeriksa frontend. Pengujian ini mencakup otorisasi peran, isolasi sekolah/kepemilikan, penyembunyian kredensial dan kunci jawaban, hash password, serta pencabutan sesi. Pengujian database produksi, cache Redis aktif, dan kapasitas 10.000 peserta tetap membutuhkan lingkungan pengujian tersendiri.
+
+Batas waktu ujian di server, validasi soal/jawaban, finalisasi atomik, dan sinkronisasi jawaban akan ditangani pada prioritas berikutnya; perubahan keamanan akses ini belum menyelesaikan masalah tersebut.
+
 ## 🚀 Pembaruan Terkini (Changelog)
 
 ### 1. Implementasi Master Data Sekolah dengan NPSN

@@ -407,7 +407,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                           onClick={() => {
                             setEditingUser(u);
                             setNewUsername(u.username);
-                            setNewPassword(u.password);
+                            setNewPassword('');
                             setNewFullName(u.fullName);
                             setNewRole(u.role);
                             setNewSchoolNpsn(u.schoolNpsn || '');
@@ -564,7 +564,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             </div>
             <div className="input-group">
               <label className="input-label">Password</label>
-              <input type="text" className="input-field" placeholder="Ketik password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+              <input type="password" className="input-field" placeholder="Kosongkan untuk mempertahankan password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">Nama Lengkap / Nama Institusi</label>
@@ -596,7 +596,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               style={{ width: '100%', opacity: isSavingUser ? 0.7 : 1 }} 
               disabled={isSavingUser}
               onClick={() => {
-                if (!newUsername || !newPassword || !newFullName) {
+                if (!newUsername || !newFullName) {
                   setUserErrorMsg('Semua kolom wajib diisi.');
                   return;
                 }

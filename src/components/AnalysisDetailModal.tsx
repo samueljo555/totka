@@ -244,7 +244,7 @@ const AnalysisDetailModal: React.FC<AnalysisDetailModalProps> = ({ sessionId, on
                     <div className="p-3 bg-green-50/50 rounded border border-green-100">
                       <div className="text-xs text-green-600 font-semibold mb-1">Kunci Jawaban</div>
                       <div className="text-slate-700 font-mono text-xs overflow-auto">
-                        {JSON.stringify(q.correctAnswer)}
+                        {q.correctAnswer === undefined ? 'Tidak ditampilkan untuk peran ini' : JSON.stringify(q.correctAnswer)}
                       </div>
                     </div>
                   </div>
