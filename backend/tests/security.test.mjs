@@ -30,6 +30,11 @@ function project(row, query = {}) {
 function matches(row, where = {}) {
   return Object.entries(where).every(([key, value]) => {
     if (value === undefined) return true;
+    if (key === 'AND') return (Array.isArray(value) ? value : [value]).every(condition => matches(row, condition));
+    if (key === 'OR') return value.some(condition => matches(row, condition));
+    if (value && typeof value === 'object' && 'gt' in value) return row?.[key] > value.gt;
+    if (value && typeof value === 'object' && 'contains' in value) return value.mode === 'insensitive' ? String(row?.[key] || '').toLowerCase().includes(value.contains.toLowerCase()) : String(row?.[key] || '').includes(value.contains);
+    if (value && typeof value === 'object' && 'not' in value) return row?.[key] !== value.not;
     if (key === 'studentId_packageId') return matches(row, value);
     if (key === 'sessionId_questionId') return matches(row, value);
     if (key === 'id' && value && typeof value === 'object' && 'in' in value) return value.in.includes(row.id);
@@ -46,7 +51,13 @@ function repository(getRows, hydrate = row => row) {
   return {
     async findUnique(q) { return project(hydrate(getRows().find(row => matches(row, q.where))), q); },
     async findFirst(q) { return this.findUnique(q); },
-    async findMany(q = {}) { return getRows().filter(row => matches(row, q.where)).map(row => project(hydrate(row), q)); },
+    async findMany(q = {}) {
+      let rows = getRows().filter(row => matches(row, q.where));
+      const order = q.orderBy && !Array.isArray(q.orderBy) ? Object.entries(q.orderBy)[0] : null;
+      if (order) rows = [...rows].sort((a,b) => String(a[order[0]]).localeCompare(String(b[order[0]])) * (order[1] === 'desc' ? -1 : 1));
+      return rows.slice(q.skip || 0, q.take === undefined ? undefined : (q.skip || 0) + q.take).map(row => project(hydrate(row), q));
+    },
+    async aggregate(q) { const rows = getRows().filter(row => matches(row, q.where)); return { _avg: { totalScore: rows.length ? rows.reduce((n,r) => n + Number(r.totalScore || 0),0) / rows.length : null } }; },
     async create(q) {
       const row = { id: `created-${getRows().length}`, schoolNpsn: null, activeToken: null, loginCardPassword: null, version: 0, mutationId: null, ...q.data };
       getRows().push(row);
@@ -150,7 +161,8 @@ async function request(path, id, method = 'GET', body, extra = {}) {
   if (method === 'POST' && /\/sessions\/[^/]+\/finish$/.test(path)) body = { expectedAnswers: [], ...body };
   const headers = { 'Content-Type': 'application/json', ...(id ? { Authorization: `Bearer ${tokenFor(id)}` } : {}), ...extra };
   const response = await fetch(base + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-  return { status: response.status, headers: response.headers, body: await response.json() };
+  const data = await response.json();
+  return { status: response.status, headers: response.headers, body: Array.isArray(data.items) ? data.items : data };
 }
 function assertNoSecrets(value, forbidden = ['password', 'activeToken', 'correctAnswer']) {
   if (!value || typeof value !== 'object') return;
@@ -198,7 +210,7 @@ test('admin and super admin receive safe user DTOs, including nested session stu
 });
 test('operator sees only own school students and sessions, and cannot choose another school', async () => {
   for (const [id, expected] of [['op', 's1'], ['op2', 's2']]) {
-    const result = await request('/users?schoolNpsn=ignored', id);
+    const result = await request('/users', id);
     assert.equal(result.status, 200);
     assert.deepEqual(result.body.map(user => user.id), [expected]);
     assertNoSecrets(result.body);
@@ -207,6 +219,7 @@ test('operator sees only own school students and sessions, and cannot choose ano
     assertNoSecrets(own.body, ['password', 'activeToken', 'token']);
   }
   assert.equal((await request('/sessions?schoolNpsn=22222222', 'op')).status, 403);
+  assert.equal((await request('/users?schoolNpsn=22222222', 'op')).status, 403);
   assert.equal((await request('/users', 'unassigned')).status, 403);
 });
 test('operator cannot create an admin or mutate accounts through administrative endpoints', async () => {

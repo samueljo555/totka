@@ -1,3 +1,6 @@
+import { Pagination } from '../components/Pagination';
+import { RemoteSelect } from '../components/RemoteSelect';
+import { usePagedList, useDebounced } from '../lib/paging';
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react';
@@ -21,28 +24,22 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   const confirmModal = useConfirm();
   const [activeTab, setActiveTab] = useState('bank');
   const [isAdding, setIsAdding] = useState(false);
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [readings, setReadings] = useState<any[]>([]);
+
+
   const [isAddingReading, setIsAddingReading] = useState(false);
   const [editingReadingId, setEditingReadingId] = useState<string | null>(null);
   const [readingTitle, setReadingTitle] = useState('');
   const [readingContent, setReadingContent] = useState('');
 
-  useEffect(() => {
-    fetch('/api/questions')
-      .then(res => res.json())
-      .then(data => setQuestions(data))
-      .catch(err => console.error(err));
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === 'bacaan') {
-      fetch('/api/readings')
-        .then(res => res.json())
-        .then(data => setReadings(data))
-        .catch(err => console.error(err));
-    }
-  }, [activeTab]);
+  const [questionPage, setQuestionPage] = useState(1);
+  const [readingPage, setReadingPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [filterSubject, setFilterSubject] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const query = useDebounced(search);
+  const questionList = usePagedList<any>('/api/questions', questionPage, 20, { search: query, mapel: filterSubject, type: filterType }, activeTab === 'bank');
+  const readingList = usePagedList<any>('/api/readings', readingPage, 20, { search: query }, activeTab === 'bacaan');
+  const questions = questionList.items, readings = readingList.items;
 
   const handleSaveReading = async () => {
     try {
@@ -58,8 +55,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         setEditingReadingId(null);
         setReadingTitle('');
         setReadingContent('');
-        const data = await fetch('/api/readings').then(r => r.json());
-        setReadings(data);
+        await readingList.reload();
       } else {
         const error = await res.json();
         toast.error(error.message || 'Gagal menyimpan bacaan');
@@ -150,8 +146,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         setEditingQuestionId(null);
         setIsAdding(false);
         setOptions([{ id: 1, text: '' }, { id: 2, text: '' }, { id: 3, text: '' }, { id: 4, text: '' }]);
-        const data = await fetch('/api/questions').then(r => r.json());
-        setQuestions(data);
+        await questionList.reload();
       } else {
         const error = await res.json();
         toast.error(error.message || 'Gagal menyimpan soal');
@@ -279,13 +274,15 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
           <div className="flex items-center gap-4">
             <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input type="text" className="input-field" placeholder="Cari soal/bacaan..." style={{ paddingLeft: '40px', width: '250px' }} />
+              <input type="text" className="input-field" placeholder="Cari soal/bacaan..." value={search} onChange={event => { setSearch(event.target.value); setQuestionPage(1); setReadingPage(1); }} style={{ paddingLeft: '40px', width: '250px' }} />
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#00b8d9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
               GP
             </div>
           </div>
         </header>
+        {(questionList.loading || readingList.loading) && <p role="status">Memuat data...</p>}
+        {(questionList.error || readingList.error) && <p role="alert">{questionList.error || readingList.error}</p>}
 
         {activeTab === 'bank' && !isAdding && (
           <div className="animate-fade-in glass-panel p-8">
@@ -312,16 +309,16 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
             </div>
 
             <div className="flex gap-4 mb-6">
-              <select className="input-field" style={{ width: '200px' }}>
-                <option>Semua Mata Pelajaran</option>
+              <select className="input-field" style={{ width: '200px' }} value={filterSubject} onChange={event => { setFilterSubject(event.target.value); setQuestionPage(1); }}>
+                <option value="">Semua Mata Pelajaran</option>
                 <option>Matematika</option>
                 <option>Bahasa Indonesia</option>
               </select>
-              <select className="input-field" style={{ width: '200px' }}>
-                <option>Semua Tipe Soal</option>
-                <option>PG Sederhana</option>
-                <option>PG Kompleks</option>
-                <option>PG Kategori</option>
+              <select className="input-field" style={{ width: '200px' }} value={filterType} onChange={event => { setFilterType(event.target.value); setQuestionPage(1); }}>
+                <option value="">Semua Tipe Soal</option>
+                <option value="Pilihan Ganda Sederhana">PG Sederhana</option>
+                <option value="Pilihan Ganda Kompleks">PG Kompleks</option>
+                <option value="Pilihan Ganda Kompleks Kategori">PG Kategori</option>
               </select>
             </div>
 
@@ -381,8 +378,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                             toast.error(error.message || 'Gagal menghapus soal');
                             return;
                           }
-                          const data = await fetch('/api/questions').then(r => r.json());
-                          setQuestions(data);
+                          await questionList.reload();
                         }
                       }}>
                         <Trash2 size={16}/>
@@ -396,6 +392,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 )}
               </tbody>
             </table>
+            <Pagination page={questionPage} total={questionList.total} pageSize={20} onChange={setQuestionPage} loading={questionList.loading} />
           </div>
         )}
 
@@ -461,12 +458,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 </div>
                 <div className="input-group">
                   <label className="input-label">Tautan Bacaan (Opsional)</label>
-                  <select className="input-field" value={selectedReadingId} onChange={e => setSelectedReadingId(e.target.value)}>
-                    <option value="">-- Tidak Terpaut Bacaan --</option>
-                    {readings.map(r => (
-                      <option key={r.id} value={r.id}>{r.title}</option>
-                    ))}
-                  </select>
+                  <RemoteSelect url="/api/readings" value={selectedReadingId} onChange={setSelectedReadingId} labelField="title" placeholder="Pilih bacaan" />
                 </div>
               </div>
 
@@ -608,8 +600,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                               toast.error(error.message || 'Gagal menghapus bacaan');
                               return;
                             }
-                            const data = await fetch('/api/readings').then(res => res.json());
-                            setReadings(data);
+                            await readingList.reload();
                           }
                         }}>Hapus</button>
                       </div>
@@ -620,6 +611,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 )}
               </tbody>
             </table>
+            <Pagination page={readingPage} total={readingList.total} pageSize={20} onChange={setReadingPage} loading={readingList.loading} />
           </div>
         )}
 

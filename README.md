@@ -7,7 +7,7 @@ Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Ba
 
 Backend membaca `backend/.env` ketika dijalankan dari direktori `backend` (konfigurasi PM2 sudah menggunakan direktori tersebut). Isi `JWT_SECRET` dengan secret acak minimal 32 karakter; gunakan `openssl rand -hex 32` untuk membuatnya. Aplikasi menolak startup jika secret kosong atau terlalu pendek. Jangan gunakan nilai contoh sebagai secret produksi.
 
-Setelah pembaruan keamanan ini diterapkan, semua pengguna perlu login kembali karena JWT sekarang menyertakan pengenal sesi aktif (`sid`). Login pada perangkat lain atau reset password membatalkan token sebelumnya. Backend membaca identitas, peran, sekolah, dan sesi aktif dari database pada setiap request terproteksi; optimasi kapasitas pembacaan ini tetap perlu diuji pada tahap performa.
+Setelah pembaruan keamanan ini diterapkan, semua pengguna perlu login kembali karena JWT sekarang menyertakan pengenal sesi aktif (`sid`). Login pada perangkat lain atau reset password membatalkan token sebelumnya. Backend membaca identitas, peran, sekolah, dan sesi aktif dari database pada setiap request terproteksi; pool koneksi dibatasi per proses dan kapasitas aktual tetap perlu dibuktikan melalui load test.
 
 | Peran | Akses |
 | --- | --- |
@@ -63,7 +63,7 @@ cd backend
 INTEGRITY_TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/TEST_DB' npm test
 ```
 
-Suite membuat schema acak dari schema Prisma terbaru, menjalankan transaksi menggunakan dua client/pool PostgreSQL, lalu menghapus schema buatannya. Pengguna database uji harus boleh membuat schema. Pengujian mencakup mulai serentak, jawaban lintas paket, payload salah, deadline setelah menunggu lock, finalisasi bersamaan, rollback, sweep multi-worker, dan perubahan konten saat peserta pertama masuk. Pengujian ini tidak membuktikan kapasitas 10.000 peserta. Optimasi query/cache, penyelarasan migrasi deployment, dan load test kapasitas tetap masuk prioritas berikutnya.
+Suite membuat schema acak dari schema Prisma terbaru, menjalankan transaksi menggunakan dua client/pool PostgreSQL, lalu menghapus schema buatannya. Pengguna database uji harus boleh membuat schema. Pengujian mencakup mulai serentak, jawaban lintas paket, payload salah, deadline setelah menunggu lock, finalisasi bersamaan, rollback, sweep multi-worker, dan perubahan konten saat peserta pertama masuk. Pengujian ini tidak membuktikan kapasitas 10.000 peserta. Optimasi query/cache dijelaskan pada bagian P1 di bawah. Penyelarasan migrasi deployment dan load test kapasitas tetap masuk prioritas berikutnya.
 
 ## Keandalan penyimpanan jawaban (P1)
 
@@ -96,6 +96,46 @@ Jalankan SQL hanya jika kolom tersebut belum ada. Jika database sudah dibuat dar
 ### Pengujian antrean
 
 `npm run test:sync` mengompilasi modul antrean ke `.test-build` yang diabaikan Git, lalu menjalankan skenario koneksi putus, reload, respons hilang/terlambat, perubahan selama sinkronisasi, konflik, batas retry, kegagalan storage, dan finalisasi. Backend diuji dengan perintah PostgreSQL pada bagian sebelumnya, termasuk request bersamaan/tidak berurutan, replay idempoten, manifest finalisasi, serta migrasi yang mempertahankan jawaban lama. Skrip k6 disesuaikan dengan protokol versi dan manifest; pengujian beban 10.000 peserta belum dijalankan.
+
+## Performa query dan dashboard (P1)
+
+Daftar akun, kartu login, sekolah, soal, bacaan, paket, sesi, paket analitik, dan hasil siswa sekarang memakai pagination di server. Respons berbentuk `{ items, total, page, pageSize, totalPages, hasMore, nextCursor }`. Default 50 baris dengan batas 100; kontrol yang tidak valid ditolak. `search`, sekolah, kelas, mata pelajaran, tipe soal, dan status yang relevan diterapkan sebelum `skip/take`, bukan sesudah browser mengunduh seluruh data. Urutan ID stabil mendukung nomor halaman dan cursor `after`. Batas sekolah operator selalu berasal dari akun terautentikasi, dan permintaan sekolah lain ditolak.
+
+Dashboard admin memakai agregasi jumlah pengguna/peran/paket untuk ringkasan. Daftar akun, sekolah, paket, soal, dan hasil siswa memakai halaman server; pemilih sekolah/bacaan memiliki pencarian terbatas 50 pilihan. Guru dapat mencari dan memfilter bank soal tanpa memuat seluruh bank. Operator membaca kartu login per halaman dan membuka peserta per paket di Pantau Ujian. Ringkasan paket tidak dihitung dari siswa yang sedang terlihat: angka selesai, mengerjakan, belum mulai, dan statistik nilai dihitung database untuk seluruh sekolah. Token paket aktif dan password kartu login tetap tersedia sesuai hak akses. Pantauan diperbarui setiap 15 detik saat tab terlihat, atau melalui tombol Perbarui.
+
+Cetak kartu tetap mencakup seluruh siswa sekolah, bukan hanya halaman yang sedang tampil. Cetak dan ekspor CSV meminta cursor berikutnya dalam batch maksimal 100; operasi tersebut tetap menggunakan memori browser untuk hasil akhirnya, karena pengguna memang meminta seluruh kartu/file. Paging cursor menghindari pergeseran offset ketika membaca banyak halaman. Hasil lintas halaman bukan snapshot historis: perubahan data bersamaan tetap dapat memengaruhi ekspor.
+
+Rata-rata, nilai tertinggi/terendah, dan jumlah peserta hasil ujian menggunakan sesi selesai. Jumlah siswa terdaftar dilaporkan terpisah; siswa yang belum ikut tidak lagi dianggap memperoleh nilai nol. Agregasi sekolah dan analisis butir dijalankan PostgreSQL, tanpa memuat seluruh jawaban ke Node.js. Analitik hasil siswa hanya mengambil siswa pada halaman yang diminta, dengan agregasi elemen untuk sesi pada halaman tersebut. Denominator elemen mencakup seluruh soal paket pada elemen itu, termasuk yang tidak dijawab. Rata-rata pembanding pada detail sesi memakai `AVG` database. Detail jawaban individual yang masih berubah tidak di-cache.
+
+Cache Redis memakai revisi tag: hasil fetch lama tidak bisa mengisi generasi cache yang dibaca setelah invalidasi. Key menyertakan scope dan parameter halaman/filter. Cold read yang sama digabung per worker, termasuk saat Redis mati; tidak ada penyimpanan hasil mutable di memori worker tanpa Redis. Perubahan akun/sekolah/bank/paket menginvalidasi tag terkait; mulai/finalisasi/sweep menginvalidasi analitik dan daftar paket hasil setelah transaksi commit. TTL daftar/ringkasan dibuat singkat (15–30 detik). Cache bersifat best effort; invalidasi Redis yang gagal dapat menyisakan hasil ringkasan sampai TTL, tetapi autentikasi, kepemilikan, deadline, jawaban, dan nilai final tetap diperiksa di database.
+
+Konten lengkap ujian di-cache hanya setelah ada sesi committed yang mengunci konten. Sebelum sesi pertama, Redis dilewati sehingga invalidasi yang terlewat saat bank masih diedit tidak dapat menghidupkan materi lama. Respons siswa tetap diproyeksikan tanpa kunci jawaban. Redis menggunakan status ready, antrean offline dinonaktifkan, antrean command dibatasi, dan timeout command 150 ms; kegagalan cache beralih ke PostgreSQL.
+
+### Koneksi database dan worker
+
+PM2 default dua worker. Ubah jumlahnya melalui `WEB_CONCURRENCY` pada environment proses PM2. `APP_WORKERS` diisi otomatis dari jumlah worker, atau dapat ditentukan dari shell untuk mencerminkan total proses pada beberapa host. Jangan menganggap konfigurasi ini mendeteksi host lain secara otomatis. Jika jumlah instance aplikasi yang sudah berjalan berbeda, sesuaikan juga jumlah proses PM2 sebelum memakai anggaran tersebut.
+
+Pool default per proses maksimal 5 koneksi, dengan `DB_CONNECTION_BUDGET=40` untuk semua proses yang dihitung dalam `APP_WORKERS`. Nilai efektif adalah minimum `DB_POOL_MAX` dan `floor(DB_CONNECTION_BUDGET / APP_WORKERS)`; konfigurasi yang mustahil ditolak. Timeout menunggu koneksi default 5 detik, statement 15 detik, query 16 detik, koneksi idle 30 detik. Sisakan koneksi PostgreSQL untuk administrasi dan layanan lain di luar budget aplikasi. Shutdown menghentikan sweep, menunggu HTTP selesai, lalu menutup Prisma, pool, dan Redis; PM2 diberi waktu 20 detik untuk shutdown.
+
+Variabel opsional tersedia di `backend/.env_example`: `DB_POOL_MAX`, `DB_CONNECTION_BUDGET`, `DB_CONNECTION_TIMEOUT_MS`, `DB_STATEMENT_TIMEOUT_MS`, dan `DB_QUERY_TIMEOUT_MS`. Nilai default adalah titik awal yang konservatif, bukan jaminan throughput. Pencarian `contains` dapat memerlukan scan; indeks baru terutama menargetkan filter exact, relasi, pengelompokan sesi, dan paging berurutan.
+
+### Migrasi indeks dan verifikasi
+
+Migrasi `backend/prisma/migrations/20261024160000_query_indexes/migration.sql` menambahkan 11 indeks tanpa mengubah akun, password, jawaban, atau nilai. Indeks berada pada kombinasi peran/sekolah/kelas, penulis dan bacaan soal, token/status paket, relasi paket–soal, paket/status sesi, sesi aktif/waktu mulai, dan soal/kebenaran jawaban. Jalankan pembentukan indeks di luar jadwal ujian karena `CREATE INDEX` dapat menahan penulisan selama pembentukan:
+
+```bash
+cd backend
+npx prisma db execute --file prisma/migrations/20261024160000_query_indexes/migration.sql
+npx prisma migrate resolve --applied 20261024160000_query_indexes
+npx prisma generate
+npm run build
+cd ..
+npm run build
+```
+
+Jika indeks sudah dibuat lewat `db push` memakai schema terbaru, jangan jalankan SQL yang sama lagi. Riwayat migrasi awal masih perlu diselaraskan pada prioritas deployment. Frontend/backend harus diperbarui bersama karena kontrak respons daftar berubah menjadi pagination. Pengujian tidak mengubah database aplikasi aktif.
+
+Suite PostgreSQL menggunakan schema terisolasi dengan 10.050 siswa dan 502.500 jawaban untuk memverifikasi paging, filter sekolah, agregasi, cetak/ekspor yang dapat ditelusuri cursor, migrasi indeks, dan query plan indeks. Unit test menguji batas paging, budget pool, cold miss bersamaan, invalidasi antar-worker, serta kegagalan cache. Jalankan `INTEGRITY_TEST_DATABASE_URL=... npm test --prefix backend`, `npm run test:sync`, dan `npm run build`. Volume fixture ini bukan simulasi 10.000 pengguna bersamaan; stress test, ukuran server, backup/restore, dan konfigurasi hosting tetap membutuhkan tahap berikutnya.
 
 ## 🚀 Pembaruan Terkini (Changelog)
 

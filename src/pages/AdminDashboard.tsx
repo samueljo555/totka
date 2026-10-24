@@ -24,6 +24,9 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import { Pagination } from '../components/Pagination';
+import { RemoteSelect } from '../components/RemoteSelect';
+import { usePagedList, useDebounced, readJson, readAllPages } from '../lib/paging';
 import AnalysisDetailModal from '../components/AnalysisDetailModal';
 
 const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
@@ -32,11 +35,11 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [isAddingPackage, setIsAddingPackage] = useState(false);
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
-  const [users, setUsers] = useState<any[]>([]);
+
   const [userPage, setUserPage] = useState(1);
   const usersPerPage = 10;
   
-  const [packages, setPackages] = useState<any[]>([]);
+
   
   // Package Form State
   const [newPackageName, setNewPackageName] = useState('');
@@ -49,20 +52,20 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [isSavingPackage, setIsSavingPackage] = useState(false);
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
   
-  const [schools, setSchools] = useState<any[]>([]);
+
   const [schoolPage, setSchoolPage] = useState(1);
   const schoolsPerPage = 10;
 
-  const [questions, setQuestions] = useState<any[]>([]);
+
   const [questionPage, setQuestionPage] = useState(1);
   const questionsPerPage = 5;
   
   // Analytics State
-  const [analyticsPackages, setAnalyticsPackages] = useState<any[]>([]);
+
   const [selectedAnalyticsPackage, setSelectedAnalyticsPackage] = useState<any>(null);
   const [packageAnalyticsData, setPackageAnalyticsData] = useState<any>(null);
   const [selectedAnalyticsSchool, setSelectedAnalyticsSchool] = useState<any>(null);
-  const [schoolStudentsData, setSchoolStudentsData] = useState<any[]>([]);
+
   const [analyticsStudentPage, setAnalyticsStudentPage] = useState(1);
   const analyticsStudentsPerPage = 15;
   const [selectedItemAnalysisPackage, setSelectedItemAnalysisPackage] = useState<any>(null);
@@ -88,50 +91,25 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [userErrorMsg, setUserErrorMsg] = useState('');
 
-  const fetchUsers = () => {
-    fetch('/api/users')
-      .then(res => res.json())
-      .then(data => setUsers(data))
-      .catch(err => console.error("Error fetching users:", err));
-  };
-
-  const fetchSchools = () => {
-    fetch('/api/schools')
-      .then(res => res.json())
-      .then(data => setSchools(data))
-      .catch(err => console.error("Error fetching schools:", err));
-  };
-
+  const [search, setSearch] = useState('');
+  const query = useDebounced(search);
+  const [packagePage, setPackagePage] = useState(1);
+  const [resultPage, setResultPage] = useState(1);
+  const [overview, setOverview] = useState({ totalUsers: 0, students: 0, teachers: 0, packages: 0 });
+  const userList = usePagedList<any>('/api/users', userPage, usersPerPage, { search: query }, activeTab === 'accounts');
+  const schoolList = usePagedList<any>('/api/schools', schoolPage, schoolsPerPage, { search: query }, activeTab === 'schools');
+  const packageList = usePagedList<any>('/api/packages', packagePage, 20, { search: query }, activeTab === 'packages');
+  const questionList = usePagedList<any>('/api/questions', questionPage, questionsPerPage, { search: query }, activeTab === 'packages' && isAddingPackage);
+  const resultList = usePagedList<any>('/api/analytics/packages', resultPage, 20, { search: query }, activeTab === 'results');
+  const studentList = usePagedList<any>(`/api/analytics/packages/${selectedAnalyticsPackage?.id}/schools/${selectedAnalyticsSchool?.npsn}`, analyticsStudentPage, analyticsStudentsPerPage, { search: query }, activeTab === 'results' && !!selectedAnalyticsSchool);
+  const users = userList.items, schools = schoolList.items, packages = packageList.items, questions = questionList.items, analyticsPackages = resultList.items, schoolStudentsData = studentList.items;
+  const fetchUsers = () => { void userList.reload(); };
+  const fetchSchools = () => { void schoolList.reload(); };
   useEffect(() => {
     if (activeTab === 'overview') {
-      fetchUsers();
-      fetch('/api/packages')
-        .then(res => res.json())
-        .then(data => setPackages(data))
-        .catch(err => console.error("Error fetching packages:", err));
-    } else if (activeTab === 'accounts') {
-      fetchUsers();
-      fetchSchools();
-    } else if (activeTab === 'schools') {
-      fetchSchools();
-    } else if (activeTab === 'packages') {
-      const fetchPackages = () => {
-        fetch('/api/packages')
-          .then(res => res.json())
-          .then(data => setPackages(data))
-          .catch(err => console.error("Error fetching packages:", err));
-      };
-      fetchPackages();
-
-      fetch('/api/questions')
-        .then(res => res.json())
-        .then(data => setQuestions(data))
-        .catch(err => console.error("Error fetching questions:", err));
-    } else if (activeTab === 'results') {
-      fetch('/api/analytics/packages')
-        .then(res => res.json())
-        .then(data => setAnalyticsPackages(data))
-        .catch(err => console.error("Error fetching analytics packages:", err));
+      const controller = new AbortController();
+      readJson<typeof overview>('/api/overview', controller.signal).then(setOverview).catch(() => {});
+      return () => controller.abort();
     }
   }, [activeTab]);
 
@@ -147,11 +125,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   const handleSelectAnalyticsSchool = (school: any) => {
     setSelectedAnalyticsSchool(school);
-    setSchoolStudentsData([]);
-    fetch(`/api/analytics/packages/${selectedAnalyticsPackage.id}/schools/${school.npsn}`)
-      .then(res => res.json())
-      .then(data => setSchoolStudentsData(data))
-      .catch(err => console.error(err));
+    setAnalyticsStudentPage(1);
   };
 
   const handleViewItemAnalysis = (pkg: any) => {
@@ -242,8 +216,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         setNewPackageToken('');
         setSelectedQuestionIds([]);
         // Re-fetch packages
-        const pkgs = await fetch('/api/packages').then(r => r.json());
-        setPackages(pkgs);
+        await packageList.reload();
       } else {
         const err = await res.json();
         toast.error(`Gagal: ${err.message || err.error || 'Terjadi kesalahan'}`);
@@ -277,7 +250,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           {tabs.map(tab => (
             <button 
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => { setActiveTab(tab.id); setSearch(''); setUserPage(1); setSchoolPage(1); setPackagePage(1); setResultPage(1); }}
               className="flex items-center gap-4"
               style={{
                 width: '100%',
@@ -327,36 +300,38 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           <div className="flex items-center gap-4">
             <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input type="text" className="input-field" placeholder="Cari..." style={{ paddingLeft: '40px', width: '250px' }} />
+              <input type="text" className="input-field" placeholder="Cari..." value={search} onChange={event => { setSearch(event.target.value); setUserPage(1); setSchoolPage(1); setQuestionPage(1); setPackagePage(1); setResultPage(1); setAnalyticsStudentPage(1); }} style={{ paddingLeft: '40px', width: '250px' }} />
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-light)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
               SA
             </div>
           </div>
         </header>
+        {[userList, schoolList, packageList, questionList, resultList, studentList].some(list => list.loading) && <p role="status">Memuat data...</p>}
+        {[userList, schoolList, packageList, questionList, resultList, studentList].filter(list => list.error).map((list, index) => <p role="alert" key={index}>{list.error}</p>)}
 
         {activeTab === 'overview' && (
           <div className="animate-fade-in">
             <div className="dashboard-grid" style={{ marginTop: 0 }}>
               <div className="glass-panel card flex flex-col justify-center">
                 <p>Total Pengguna Sistem</p>
-                <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{users.length}</h2>
+                <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{overview.totalUsers}</h2>
               </div>
               <div className="glass-panel card flex flex-col justify-center">
-                <p>Total Siswa Aktif</p>
+                <p>Total Siswa</p>
                 <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>
-                  {users.filter(u => u.role === 'siswa').length}
+                  {overview.students}
                 </h2>
               </div>
               <div className="glass-panel card flex flex-col justify-center">
                 <p>Guru Penulis Soal</p>
                 <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>
-                  {users.filter(u => u.role === 'guru').length}
+                  {overview.teachers}
                 </h2>
               </div>
               <div className="glass-panel card flex flex-col justify-center">
-                <p>Paket Try Out Aktif</p>
-                <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packages.length}</h2>
+                <p>Total Paket Try Out</p>
+                <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{overview.packages}</h2>
               </div>
             </div>
           </div>
@@ -380,7 +355,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </tr>
               </thead>
               <tbody>
-                {users.length > 0 ? users.slice((userPage - 1) * usersPerPage, userPage * usersPerPage).map((u) => (
+                {users.length > 0 ? users.map((u) => (
                   <tr key={u.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td className="p-5 font-semibold text-main">
                       {u.fullName}
@@ -450,13 +425,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             </table>
             
             {/* Pagination for Users */}
-            {users.length > usersPerPage && (
-              <div className="flex justify-between items-center mt-6 p-4" style={{ background: '#f8fafc', borderRadius: '8px' }}>
-                <button className="btn-secondary" disabled={userPage === 1} onClick={() => setUserPage(p => Math.max(1, p - 1))} style={{ opacity: userPage === 1 ? 0.5 : 1 }}>Sebelumnya</button>
-                <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Halaman {userPage} dari {Math.ceil(users.length / usersPerPage)}</span>
-                <button className="btn-secondary" disabled={userPage >= Math.ceil(users.length / usersPerPage)} onClick={() => setUserPage(p => Math.min(Math.ceil(users.length / usersPerPage), p + 1))} style={{ opacity: userPage >= Math.ceil(users.length / usersPerPage) ? 0.5 : 1 }}>Selanjutnya</button>
-              </div>
-            )}
+            <Pagination page={userPage} total={userList.total} pageSize={usersPerPage} onChange={setUserPage} loading={userList.loading} />
           </div>
         )}
 
@@ -496,12 +465,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             {(newRole === 'operator' || newRole === 'guru') && (
               <div className="input-group">
                 <label className="input-label">Sekolah / Instansi (Opsional)</label>
-                <select className="input-field" value={newSchoolNpsn} onChange={e => setNewSchoolNpsn(e.target.value)}>
-                  <option value="">Pilih Sekolah...</option>
-                  {schools.map(s => (
-                    <option key={s.npsn} value={s.npsn}>{s.name} (NPSN: {s.npsn})</option>
-                  ))}
-                </select>
+                <RemoteSelect url="/api/schools" value={newSchoolNpsn} onChange={setNewSchoolNpsn} valueField="npsn" placeholder="Pilih sekolah" />
               </div>
             )}
 
@@ -590,12 +554,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             {(newRole === 'operator' || newRole === 'guru' || newRole === 'siswa') && (
               <div className="input-group">
                 <label className="input-label">Sekolah / Instansi (Opsional)</label>
-                <select className="input-field" value={newSchoolNpsn} onChange={e => setNewSchoolNpsn(e.target.value)}>
-                  <option value="">Pilih Sekolah...</option>
-                  {schools.map(s => (
-                    <option key={s.npsn} value={s.npsn}>{s.name} (NPSN: {s.npsn})</option>
-                  ))}
-                </select>
+                <RemoteSelect url="/api/schools" value={newSchoolNpsn} onChange={setNewSchoolNpsn} valueField="npsn" placeholder="Pilih sekolah" />
               </div>
             )}
 
@@ -672,7 +631,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </tr>
               </thead>
               <tbody>
-                {schools.length > 0 ? schools.slice((schoolPage - 1) * schoolsPerPage, schoolPage * schoolsPerPage).map((s) => (
+                {schools.length > 0 ? schools.map((s) => (
                   <tr key={s.npsn} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td className="p-5 font-semibold text-muted">{s.npsn}</td>
                     <td className="p-5 font-semibold text-main">{s.name}</td>
@@ -715,13 +674,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             </table>
             
             {/* Pagination for Schools */}
-            {schools.length > schoolsPerPage && (
-              <div className="flex justify-between items-center mt-6 p-4" style={{ background: '#f8fafc', borderRadius: '8px' }}>
-                <button className="btn-secondary" disabled={schoolPage === 1} onClick={() => setSchoolPage(p => Math.max(1, p - 1))} style={{ opacity: schoolPage === 1 ? 0.5 : 1 }}>Sebelumnya</button>
-                <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Halaman {schoolPage} dari {Math.ceil(schools.length / schoolsPerPage)}</span>
-                <button className="btn-secondary" disabled={schoolPage >= Math.ceil(schools.length / schoolsPerPage)} onClick={() => setSchoolPage(p => Math.min(Math.ceil(schools.length / schoolsPerPage), p + 1))} style={{ opacity: schoolPage >= Math.ceil(schools.length / schoolsPerPage) ? 0.5 : 1 }}>Selanjutnya</button>
-              </div>
-            )}
+            <Pagination page={schoolPage} total={schoolList.total} pageSize={schoolsPerPage} onChange={setSchoolPage} loading={schoolList.loading} />
           </div>
         )}
 
@@ -792,6 +745,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               </button>
             </div>
             
+            <Pagination page={packagePage} total={packageList.total} pageSize={20} onChange={setPackagePage} loading={packageList.loading} />
             <div className="dashboard-grid" style={{ marginTop: 0 }}>
               {packages.length > 0 ? packages.map((pkg) => (
                 <div key={pkg.id} className="glass-panel card flex flex-col">
@@ -828,8 +782,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ status: 'aktif' })
                           });
-                          const pkgs = await fetch('/api/packages').then(r => r.json());
-                          setPackages(pkgs);
+                          await packageList.reload();
                         }
                       }}>Buka Ujian</button>
                     ) : (
@@ -840,8 +793,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ status: 'draft' })
                           });
-                          const pkgs = await fetch('/api/packages').then(r => r.json());
-                          setPackages(pkgs);
+                          await packageList.reload();
                         }
                       }}>Tutup Ujian</button>
                     )}
@@ -914,10 +866,10 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </div>
                 <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', background: 'white' }}>
                   <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Menampilkan soal (Total: {questions.length})</span>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Menampilkan soal (Total: {questionList.total})</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {questions.slice((questionPage - 1) * questionsPerPage, questionPage * questionsPerPage).map((q, idx) => ( 
+                    {questions.map((q, idx) => (
                       <label key={q.id} className="flex items-start gap-4 p-5" style={{ borderBottom: '1px solid #e2e8f0', cursor: 'pointer', background: idx % 2 === 0 ? '#f8fafc' : 'white', transition: 'all 0.2s ease' }}>
                         <input type="checkbox" style={{ marginTop: '5px', width: '18px', height: '18px' }} checked={selectedQuestionIds.includes(q.id)} onChange={(e) => {
                           if (e.target.checked) setSelectedQuestionIds([...selectedQuestionIds, q.id]);
@@ -944,19 +896,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       <div className="p-8 text-center text-muted">Belum ada soal di bank soal.</div>
                     )}
                   </div>
-                  {questions.length > questionsPerPage && (
-                    <div className="flex justify-between items-center p-4" style={{ borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                      <button className="btn-secondary" disabled={questionPage === 1} onClick={() => setQuestionPage(p => Math.max(1, p - 1))} style={{ padding: '6px 12px', fontSize: '0.85rem', opacity: questionPage === 1 ? 0.5 : 1 }}>Sebelumnya</button>
-                      <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Halaman {questionPage} dari {Math.ceil(questions.length / questionsPerPage)}</span>
-                      <button className="btn-secondary" disabled={questionPage >= Math.ceil(questions.length / questionsPerPage)} onClick={() => setQuestionPage(p => Math.min(Math.ceil(questions.length / questionsPerPage), p + 1))} style={{ padding: '6px 12px', fontSize: '0.85rem', opacity: questionPage >= Math.ceil(questions.length / questionsPerPage) ? 0.5 : 1 }}>Selanjutnya</button>
-                    </div>
-                  )}
+                  <Pagination page={questionPage} total={questionList.total} pageSize={questionsPerPage} onChange={setQuestionPage} loading={questionList.loading} />
                 </div>
                 
                 <div className="flex justify-between items-center mt-4 p-4" style={{ background: 'rgba(0, 82, 204, 0.05)', borderRadius: '8px' }}>
                   <div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Total Soal Terpilih</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-color)' }}>{selectedQuestionIds.length} / {questions.length}</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-color)' }}>{selectedQuestionIds.length} soal dipilih</div>
                   </div>
                   <button className="btn" disabled={isSavingPackage} style={{ opacity: isSavingPackage ? 0.7 : 1 }} onClick={handleSavePackage}>
                     {isSavingPackage ? 'Menyimpan...' : 'Simpan Paket Try Out'}
@@ -1046,6 +992,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   <h3 className="text-lg font-semibold text-slate-800 m-0">Pilih Paket Ujian</h3>
                 </div>
                 
+                <Pagination page={resultPage} total={resultList.total} pageSize={20} onChange={setResultPage} loading={resultList.loading} />
                 {analyticsPackages.length === 0 ? (
                   <div className="p-12 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                     <BarChart2 size={48} className="mb-4 opacity-50" />
@@ -1108,8 +1055,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                                   onClick={async (e) => {
                                     e.stopPropagation();
                                     try {
-                                      const res = await fetch(`/api/analytics/packages/${pkg.id}/all-students`);
-                                      const data = await res.json();
+                                      const data = await readAllPages<any>(`/api/analytics/packages/${pkg.id}/all-students`);
                                       const header = "NISN,Nama Siswa,NPSN,Sekolah,Skor Total,Lama Mengerjakan (Menit),Status,Catatan\n";
                                       const csv = data.map((a: any) => {
                                         let timeStr = '';
@@ -1163,7 +1109,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   <>
                     <div className="dashboard-grid" style={{ marginTop: 0, marginBottom: '2rem' }}>
                       <div className="glass-panel card flex flex-col justify-center">
-                        <p>Total Peserta</p>
+                        <p>Peserta Selesai</p>
                         <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.totalParticipants || 0}</h2>
                       </div>
                       <div className="glass-panel card flex flex-col justify-center">
@@ -1209,7 +1155,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                                 <td className="p-5">
                                   <div className="flex items-center gap-2">
                                     <Users size={16} className="text-muted" />
-                                    {sch.participantCount} Siswa
+                                    {sch.participantCount} selesai / {sch.registeredCount} siswa
                                   </div>
                                 </td>
                                 <td className="p-5">
@@ -1252,9 +1198,11 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       <div className="text-sm text-slate-500 mt-1">NPSN: {selectedAnalyticsSchool.npsn}</div>
                     </div>
                   </div>
-                  <button className="btn-secondary" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => {
+                  <button className="btn-secondary" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={async () => {
+                    try {
+                    const exportRows = await readAllPages<any>(`/api/analytics/packages/${selectedAnalyticsPackage.id}/schools/${selectedAnalyticsSchool.npsn}`);
                     const header = "NISN,Nama Siswa,NPSN,Skor Total,Lama Mengerjakan (Menit),Status,Catatan\n";
-                    const csv = schoolStudentsData.map((a: any) => {
+                    const csv = exportRows.map((a: any) => {
                       let timeStr = '';
                       if (a.startTime && a.endTime) {
                         timeStr = String(Math.round((new Date(a.endTime).getTime() - new Date(a.startTime).getTime()) / 60000));
@@ -1268,6 +1216,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     a.href = url;
                     a.download = `analitik_${selectedAnalyticsSchool.npsn}.csv`;
                     a.click();
+                    } catch { toast.error('Gagal mengunduh data sekolah'); }
                   }}>
                     <Download size={18} /> Unduh CSV Sekolah
                   </button>
@@ -1294,7 +1243,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                           </tr>
                         </thead>
                         <tbody>
-                          {schoolStudentsData.slice((analyticsStudentPage - 1) * analyticsStudentsPerPage, analyticsStudentPage * analyticsStudentsPerPage).map((item: any, idx: number) => (
+                          {schoolStudentsData.map((item: any, idx: number) => (
                             <tr 
                               key={idx} 
                               style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} 
@@ -1330,13 +1279,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       </table>
                     </div>
                   )}
-                  {schoolStudentsData.length > analyticsStudentsPerPage && (
-                    <div className="flex justify-between items-center mt-6 p-4 bg-slate-50 rounded-lg">
-                      <button className="btn-secondary" disabled={analyticsStudentPage === 1} onClick={() => setAnalyticsStudentPage(p => Math.max(1, p - 1))} style={{ padding: '6px 12px', fontSize: '0.85rem', opacity: analyticsStudentPage === 1 ? 0.5 : 1 }}>Sebelumnya</button>
-                      <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Halaman {analyticsStudentPage} dari {Math.ceil(schoolStudentsData.length / analyticsStudentsPerPage)}</span>
-                      <button className="btn-secondary" disabled={analyticsStudentPage >= Math.ceil(schoolStudentsData.length / analyticsStudentsPerPage)} onClick={() => setAnalyticsStudentPage(p => Math.min(Math.ceil(schoolStudentsData.length / analyticsStudentsPerPage), p + 1))} style={{ padding: '6px 12px', fontSize: '0.85rem', opacity: analyticsStudentPage >= Math.ceil(schoolStudentsData.length / analyticsStudentsPerPage) ? 0.5 : 1 }}>Selanjutnya</button>
-                    </div>
-                  )}
+                  <Pagination page={analyticsStudentPage} total={studentList.total} pageSize={analyticsStudentsPerPage} onChange={setAnalyticsStudentPage} loading={studentList.loading} />
                 </div>
               </div>
             )}

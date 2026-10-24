@@ -1,0 +1,11 @@
+CREATE INDEX "User_role_schoolNpsn_id_idx" ON "User"("role", "schoolNpsn", "id");
+CREATE INDEX "User_schoolNpsn_role_className_id_idx" ON "User"("schoolNpsn", "role", "className", "id");
+CREATE INDEX "Question_authorId_id_idx" ON "Question"("authorId", "id");
+CREATE INDEX "Question_readingId_idx" ON "Question"("readingId");
+CREATE INDEX "ReadingText_authorId_id_idx" ON "ReadingText"("authorId", "id");
+CREATE INDEX "Package_token_idx" ON "Package"("token");
+CREATE INDEX "Package_status_id_idx" ON "Package"("status", "id");
+CREATE INDEX "PackageQuestion_questionId_packageId_idx" ON "PackageQuestion"("questionId", "packageId");
+CREATE INDEX "ExamSession_packageId_status_studentId_idx" ON "ExamSession"("packageId", "status", "studentId");
+CREATE INDEX "ExamSession_status_startTime_id_idx" ON "ExamSession"("status", "startTime", "id");
+CREATE INDEX "Answer_questionId_isCorrect_idx" ON "Answer"("questionId", "isCorrect");

@@ -8,7 +8,9 @@ import fs from 'fs';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { getOrSetCache, deleteCache } from './cache.js';
+import { registerQueryRoutes } from './query-routes.js';
+import { pagination, pageResult, afterId, studentWhere, QueryError } from './pagination.js';
+import { deleteCache } from './cache.js';
 import { createLoginCardCipher, studentPassword } from './login-cards.js';
 import { authorizeApi, safeUserSelect, studentQuestionSelect, isAdmin, validRoles } from './security.js';
 
@@ -109,21 +111,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   });
 
   // Example route: Get all packages
-  app.get('/api/packages', async (req, res) => {
-    try {
-      const packages = await getOrSetCache('v2:api:packages', 60, async () => {
-        return await prisma.package.findMany({
-          include: {
-            _count: { select: { questions: true } },
-            questions: true
-          }
-        });
-      });
-      res.json(isAdmin(req.user!.role) ? packages : packages.map(pkg => ({ ...pkg, token: pkg.status === 'aktif' ? pkg.token : null })));
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch packages' });
-    }
-  });
+
 
   app.post('/api/packages', async (req, res) => {
     try {
@@ -229,19 +217,6 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
     }
   });
 
-  app.get('/api/users', async (req, res) => {
-    try {
-      const schoolNpsn = req.user!.role === 'operator' ? req.user!.schoolNpsn! : null;
-      const users = await prisma.user.findMany({
-        where: schoolNpsn ? { schoolNpsn, role: 'siswa' } : {},
-        select: safeUserSelect
-      });
-      res.json(users);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch users' });
-    }
-  });
-
   const cardSelect = { ...safeUserSelect, password: true, loginCardPassword: true } as const;
   const cardDto = (user: { id: string; password: string; loginCardPassword: string | null; [key: string]: unknown }) => {
     const { password, loginCardPassword, ...profile } = user;
@@ -259,11 +234,20 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
     role: 'siswa', ...(req.user!.role === 'operator' ? { schoolNpsn: req.user!.schoolNpsn } : {})
   });
 
+  registerQueryRoutes(app, prisma);
   app.get('/api/users/login-cards', async (req, res) => {
     try {
-      const users = await prisma.user.findMany({ where: cardScope(req), select: cardSelect });
-      res.json(users.map(cardDto));
-    } catch { res.status(500).json({ error: 'LOGIN_CARDS_FAILED', message: 'Gagal memuat kartu login siswa.' }); }
+      const p = pagination(req.query), where = studentWhere(req);
+      const [users, total] = await Promise.all([
+        prisma.user.findMany({ where: { AND: [where, afterId(p.after)] }, select: cardSelect, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }),
+        prisma.user.count({ where }),
+      ]);
+      const result = pageResult(users, total, p, row => row.id);
+      res.json({ ...result, items: result.items.map(cardDto) });
+    } catch (error) {
+      if (error instanceof QueryError) return res.status(error.status).json({ error: 'INVALID_QUERY', message: error.message });
+      res.status(500).json({ error: 'LOGIN_CARDS_FAILED', message: 'Gagal memuat kartu login siswa.' });
+    }
   });
 
   app.get('/api/users/:id/login-card', async (req, res) => {
@@ -391,20 +375,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   });
 
   // School CRUD
-  app.get('/api/schools', async (req, res) => {
-    try {
-      const schools = await getOrSetCache('api:schools', 3600, async () => {
-        return await prisma.school.findMany({
-          include: {
-            _count: { select: { users: true } }
-          }
-        });
-      });
-      res.json(schools);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch schools' });
-    }
-  });
+
 
   app.post('/api/schools', async (req, res) => {
     const { npsn, name, region } = req.body;
@@ -424,7 +395,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
         }
       }).catch(() => {}); // ignore if user already exists
 
-      await deleteCache('api:schools');
+      await Promise.all([deleteCache('api:schools'), deleteCache('api:users')]);
       res.json({ message: 'School created successfully', school });
     } catch (error) {
       res.status(500).json({ error: 'Failed to create school' });
@@ -454,7 +425,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
         skipDuplicates: true
       });
 
-      await deleteCache('api:schools');
+      await Promise.all([deleteCache('api:schools'), deleteCache('api:users')]);
       res.json({ message: `Successfully imported ${result.count} schools and generated their operator accounts` });
     } catch (error) {
       res.status(500).json({ error: 'Failed to import schools' });
@@ -470,7 +441,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
         where: { npsn },
         data: { name, region }
       });
-      await deleteCache('api:schools');
+      await Promise.all([deleteCache('api:schools'), deleteCache('api:users')]);
       res.json({ message: 'School updated successfully', school });
     } catch (error) {
       res.status(500).json({ error: 'Failed to update school' });
@@ -481,7 +452,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
     const { npsn } = req.params;
     try {
       await prisma.school.delete({ where: { npsn } });
-      await deleteCache('api:schools');
+      await Promise.all([deleteCache('api:schools'), deleteCache('api:users')]);
       res.json({ message: 'School deleted successfully' });
     } catch (error) {
       res.status(500).json({ error: 'Failed to delete school' });
@@ -489,19 +460,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   });
 
   // Reading Text CRUD
-  app.get('/api/readings', async (req, res) => {
-    try {
-      const readings = await getOrSetCache(`v2:api:readings:${isAdmin(req.user!.role) ? 'all' : req.user!.id}`, 1800, async () => {
-        return await prisma.readingText.findMany({
-          where: isAdmin(req.user!.role) ? {} : { authorId: req.user!.id },
-          include: { _count: { select: { questions: true } } }
-        });
-      });
-      res.json(readings);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch readings' });
-    }
-  });
+
 
   app.post('/api/readings', async (req, res) => {
     const { title, content } = req.body;
@@ -638,17 +597,6 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
     return res.json({ status: 'valid' });
   });
 
-  app.get('/api/questions', async (req, res) => {
-    try {
-      const questions = await getOrSetCache(`v2:api:questions:${isAdmin(req.user!.role) ? 'all' : req.user!.id}`, 1800, async () => {
-        return await prisma.question.findMany({ where: isAdmin(req.user!.role) ? {} : { authorId: req.user!.id } });
-      });
-      res.json(questions);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch questions' });
-    }
-  });
-
   app.post('/api/questions', async (req, res) => {
     const { type, mapel, element, content, imageUrl, options, correctAnswer, readingId } = req.body;
     if (!content || !type || !mapel || !element) {
@@ -721,266 +669,6 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
     }
   });
 
-  app.get('/api/sessions', async (req, res) => {
-    try {
-      const schoolNpsn = req.user!.role === 'operator' ? req.user!.schoolNpsn : req.query.schoolNpsn;
-      if (req.user!.role === 'operator' && req.query.schoolNpsn && req.query.schoolNpsn !== schoolNpsn) {
-        return res.status(403).json({ error: 'FORBIDDEN' });
-      }
-      const whereClause = schoolNpsn ? {
-        student: {
-          schoolNpsn: String(schoolNpsn)
-        }
-      } : {};
-
-      const sessions = await prisma.examSession.findMany({
-        where: whereClause,
-        include: { student: { select: safeUserSelect }, package: true }
-      });
-      res.json(isAdmin(req.user!.role) ? sessions : sessions.map(s => {
-        const { token: _token, ...pkg } = s.package;
-        return { ...s, package: pkg };
-      }));
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch sessions' });
-    }
-  });
-
-  app.get('/api/analytics/packages', async (req, res) => {
-    try {
-      const packages = await getOrSetCache('api:analytics:packages_dropdown', 300, async () => {
-        return await prisma.package.findMany({
-          where: { examSessions: { some: { status: 'selesai' } } },
-          select: { id: true, name: true, mapel: true }
-        });
-      });
-      res.json(packages);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch analytics packages' });
-    }
-  });
-
-  app.get('/api/analytics/packages/:packageId', async (req, res) => {
-    const { packageId } = req.params;
-    try {
-      const data = await getOrSetCache(`api:analytics:pkg:${packageId}:summary`, 300, async () => {
-        const allStudents = await prisma.user.findMany({
-          where: { role: 'siswa' },
-          include: {
-            school: true,
-            examSessions: { where: { packageId } }
-          }
-        });
-
-        if (allStudents.length === 0) return { summary: null, schools: [] };
-
-        let total = 0, highest = -1, lowest = 101;
-        const schoolGroups: Record<string, { npsn: string, name: string, count: number, sum: number }> = {};
-
-        allStudents.forEach(student => {
-          const session = student.examSessions[0];
-          const score = (session && session.status === 'selesai') ? Number(session.totalScore || 0) : 0;
-
-          total += score;
-          if (score > highest) highest = score;
-          if (score < lowest) lowest = score;
-
-          const npsn = student.schoolNpsn || 'UNKNOWN';
-          const name = student.school?.name || 'Tanpa Sekolah';
-
-          if (!schoolGroups[npsn]) schoolGroups[npsn] = { npsn, name, count: 0, sum: 0 };
-          schoolGroups[npsn].count += 1;
-          schoolGroups[npsn].sum += score;
-        });
-
-        const average = total / allStudents.length;
-        const schools = Object.values(schoolGroups).map(sg => ({
-          npsn: sg.npsn,
-          name: sg.name,
-          participantCount: sg.count,
-          averageScore: sg.sum / sg.count
-        }));
-
-        return {
-          summary: { average, highest: highest === -1 ? 0 : highest, lowest: lowest === 101 ? 0 : lowest, totalParticipants: allStudents.length },
-          schools
-        };
-      });
-
-      res.json(data);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch package analytics' });
-    }
-  });
-
-  app.get('/api/analytics/packages/:packageId/schools/:schoolNpsn', async (req, res) => {
-    const { packageId, schoolNpsn } = req.params;
-    try {
-      const data = await getOrSetCache(`api:analytics:pkg:${packageId}:school:${schoolNpsn}`, 300, async () => {
-        const npsnFilter = schoolNpsn === 'UNKNOWN' ? null : schoolNpsn;
-
-        const allStudents = await prisma.user.findMany({
-          where: { role: 'siswa', schoolNpsn: npsnFilter },
-          include: {
-            school: true,
-            examSessions: {
-              where: { packageId },
-              include: { answers: { include: { question: true } } }
-            }
-          }
-        });
-
-        return allStudents.map(student => {
-          const session = student.examSessions[0];
-          const isFinished = session && session.status === 'selesai';
-          const elementBreakdown: Record<string, { total: number, correct: number }> = {};
-
-          if (isFinished && session.answers) {
-            session.answers.forEach((ans: any) => {
-              const el = ans.question.element || 'Umum';
-              if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
-              elementBreakdown[el].total += 1;
-              if (ans.isCorrect) elementBreakdown[el].correct += 1;
-            });
-          }
-
-          return {
-            sessionId: session?.id || null,
-            studentName: student.fullName,
-            nisn: student.username,
-            npsn: student.schoolNpsn || '-',
-            school: student.school?.name || '-',
-            score: isFinished ? session.totalScore : 0,
-            endTime: isFinished ? session.endTime : null,
-            startTime: session ? session.startTime : null,
-            elementBreakdown,
-            status: isFinished ? 'Selesai' : (session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan')
-          };
-        });
-      });
-
-      res.json(data);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to fetch school analytics' });
-    }
-  });
-
-  app.get('/api/analytics/packages/:packageId/all-students', async (req, res) => {
-    const { packageId } = req.params;
-    try {
-      const data = await getOrSetCache(`api:analytics:pkg:${packageId}:all_students`, 300, async () => {
-        const allStudents = await prisma.user.findMany({
-          where: { role: 'siswa' },
-          include: {
-            school: true,
-            examSessions: {
-              where: { packageId },
-              include: { answers: { include: { question: true } } }
-            }
-          }
-        });
-
-        return allStudents.map(student => {
-          const session = student.examSessions[0];
-          const isFinished = session && session.status === 'selesai';
-          const elementBreakdown: Record<string, { total: number, correct: number }> = {};
-
-          if (isFinished && session.answers) {
-            session.answers.forEach((ans: any) => {
-              const el = ans.question.element || 'Umum';
-              if (!elementBreakdown[el]) elementBreakdown[el] = { total: 0, correct: 0 };
-              elementBreakdown[el].total += 1;
-              if (ans.isCorrect) elementBreakdown[el].correct += 1;
-            });
-          }
-
-          return {
-            sessionId: session?.id || null,
-            studentName: student.fullName,
-            nisn: student.username,
-            npsn: student.schoolNpsn || '-',
-            school: student.school?.name || '-',
-            score: isFinished ? session.totalScore : 0,
-            startTime: session ? session.startTime : null,
-            endTime: isFinished ? session.endTime : null,
-            elementBreakdown,
-            status: isFinished ? 'Selesai' : (session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan')
-          };
-        });
-      });
-
-      res.json(data);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to fetch all students analytics' });
-    }
-  });
-
-  app.get('/api/analytics/packages/:packageId/items', async (req, res) => {
-    const { packageId } = req.params;
-    try {
-      const data = await getOrSetCache(`api:analytics:pkg:${packageId}:items`, 300, async () => {
-        const pkg = await prisma.package.findUnique({
-          where: { id: packageId },
-          include: {
-            questions: {
-              include: { question: true }
-            }
-          }
-        });
-
-        if (!pkg) return null;
-
-        const sessions = await prisma.examSession.findMany({
-          where: { packageId, status: 'selesai' },
-          include: { answers: true }
-        });
-
-        const items = pkg.questions.map((pq, idx) => {
-          const qId = pq.questionId;
-          let totalAttempts = 0;
-          let correctCount = 0;
-
-          sessions.forEach(session => {
-            const answer = session.answers.find(a => a.questionId === qId);
-            if (answer) {
-              totalAttempts++;
-              if (answer.isCorrect) {
-                correctCount++;
-              }
-            }
-          });
-
-          const difficultyIndex = totalAttempts > 0 ? (correctCount / totalAttempts) : 0;
-          let category = 'Sedang';
-          if (difficultyIndex > 0.7) category = 'Mudah';
-          else if (difficultyIndex < 0.3) category = 'Sulit';
-
-          return {
-            questionId: qId,
-            questionNumber: idx + 1,
-            content: pq.question.content,
-            cognitiveLevel: (pq.question as any).cognitiveLevel || 'C3',
-            totalAttempts,
-            correctCount,
-            difficultyIndex,
-            category
-          };
-        });
-
-        return { package: pkg.name, items };
-      });
-
-      if (!data) return res.status(404).json({ error: 'Package not found' });
-
-      res.json(data);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to fetch item analytics' });
-    }
-  });
-
   app.get('/api/analytics/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     try {
@@ -991,7 +679,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
         });
         if (!owned) return res.status(403).json({ error: 'FORBIDDEN' });
       }
-      const data = await getOrSetCache(`v2:api:analytics:session:${sessionId}:${req.user!.role}:${req.user!.schoolNpsn || 'all'}`, 300, async () => {
+      const data = await (async () => {
         const questionAccess = isAdmin(req.user!.role)
           ? { include: { reading: true } } as const
           : { select: studentQuestionSelect };
@@ -1000,32 +688,23 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
           include: {
             student: { select: safeUserSelect },
             package: { include: { questions: { include: { question: questionAccess } } } },
-            answers: { include: { question: questionAccess } }
+            answers: { select: { id: true, questionId: true, answerData: true, isCorrect: true } }
           }
         });
 
         if (!session) return null;
 
         // We also want to compute average score for this package to show comparison
-        const packageSessions = await prisma.examSession.findMany({
+        const scores = await prisma.examSession.aggregate({
           where: { packageId: session.packageId, status: 'selesai',
             ...(req.user!.role === 'operator' ? { student: { schoolNpsn: req.user!.schoolNpsn } } : {}) },
-          select: { totalScore: true }
+          _avg: { totalScore: true }
         });
-
-        let totalScoreSum = 0;
-        let validCount = 0;
-        packageSessions.forEach(s => {
-          if (s.totalScore !== null) {
-            totalScoreSum += Number(s.totalScore);
-            validCount++;
-          }
-        });
-        const averageScore = validCount > 0 ? totalScoreSum / validCount : 0;
+        const averageScore = Number(scores._avg.totalScore || 0);
 
         if (!isAdmin(req.user!.role)) session.package.token = null;
         return { session, averageScore, rank: 0 };
-      });
+      })();
 
       if (!data) return res.status(404).json({ error: 'Session not found' });
 

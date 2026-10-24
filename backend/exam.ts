@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
-import { studentQuestionSelect } from './security.js';
+import { getOrSetCache, invalidateExamCache } from './cache.js';
 
 type Tx = Prisma.TransactionClient;
 type QuestionSpec = { type: string; options: unknown; correctAnswer: unknown };
@@ -139,44 +139,56 @@ async function finalize(tx: Tx, session: Session, now: Date): Promise<Session> {
 
 export async function startExam(prisma: PrismaClient, studentId: string, token: unknown) {
   if (typeof token !== 'string' || !token.trim()) throw new ExamError(400, 'INVALID_TOKEN', 'Token ujian wajib diisi.');
-  return examTransaction(prisma, async tx => {
+  let changed = false;
+  const result = await examTransaction(prisma, async tx => {
     await lockExamContent(tx, false);
     // Serialize simultaneous starts for this student/package, not the whole cohort.
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(84722, hashtext(${studentId + ':' + token}))::text`;
     const pkg = await tx.package.findFirst({ where: { token } });
     if (!pkg) throw new ExamError(404, 'INVALID_TOKEN', 'Token paket tidak ditemukan.');
     let session = await tx.examSession.findUnique({ where: { studentId_packageId: { studentId, packageId: pkg.id } }, include: { package: true } });
-    const items = await tx.packageQuestion.findMany({
+    // Cache only after a committed session has frozen this package's content.
+    // A missed Redis invalidation must never resurrect an editable pre-exam bank.
+    const frozen = !!session || !!await tx.examSession.findFirst({ where: { packageId: pkg.id }, select: { id: true } });
+    const items = await getOrSetCache(`exam:frozen-content:${pkg.id}`, frozen ? 300 : 0, () => tx.packageQuestion.findMany({
       where: { packageId: pkg.id }, orderBy: { questionId: 'asc' },
       include: { question: { include: { reading: true } } },
-    });
+    }), ['v2:api:packages', 'v2:api:questions:all', 'v2:api:readings:all']);
     if (!session) {
       if (pkg.status !== 'aktif') throw new ExamError(403, 'EXAM_INACTIVE', 'Ujian tidak menerima peserta baru.');
       if (!Number.isInteger(pkg.durationMinutes) || pkg.durationMinutes <= 0 || !items.length || items.some(item => !validQuestion(item.question))) {
         throw new ExamError(409, 'INVALID_EXAM_CONFIG', 'Paket harus memiliki durasi, opsi, dan kunci jawaban yang valid.');
       }
+      changed = true;
       session = await tx.examSession.create({ data: { studentId, packageId: pkg.id, startTime: await databaseNow(tx), status: ACTIVE }, include: { package: true } });
     }
     session = await lockedSession(tx, session.id, studentId);
     const now = await databaseNow(tx);
     const deadline = deadlineFor(session);
-    if (session.status === ACTIVE && now >= deadline) session = await finalize(tx, session, now);
+    if (session.status === ACTIVE && now >= deadline) { session = await finalize(tx, session, now); changed = true; }
     if (![ACTIVE, FINISHED].includes(session.status)) throw new ExamError(409, 'EXAM_CLOSED', 'Sesi tidak dapat dilanjutkan.');
-    const questions = await tx.packageQuestion.findMany({ where: { packageId: pkg.id }, orderBy: { questionId: 'asc' }, include: { question: { select: studentQuestionSelect } } });
+    const questions = items.map(({ question: q }) => ({
+      id: q.id, type: q.type, mapel: q.mapel, element: q.element, content: q.content, imageUrl: q.imageUrl, options: q.options,
+      reading: q.reading ? { id: q.reading.id, title: q.reading.title, content: q.reading.content } : null
+    }));
     const existingAnswers = await tx.answer.findMany({ where: { sessionId: session.id }, select: { questionId: true, answerData: true, version: true, mutationId: true } });
     const { token: _token, ...safePackage } = session.package;
-    return { session: summary(session), package: safePackage, questions: questions.map(item => item.question), existingAnswers, serverTime: now, deadline, remainingSeconds: session.status === FINISHED ? 0 : Math.max(0, Math.ceil((deadline.getTime() - now.getTime()) / 1000)) };
+    return { session: summary(session), package: safePackage, questions, existingAnswers, serverTime: now, deadline, remainingSeconds: session.status === FINISHED ? 0 : Math.max(0, Math.ceil((deadline.getTime() - now.getTime()) / 1000)) };
   });
+  if (changed) await invalidateExamCache(result.session.packageId);
+  return result;
 }
 
 export async function saveExamAnswer(prisma: PrismaClient, studentId: string, sessionId: string, questionId: unknown, answerData: unknown, metadata: { version?: unknown; mutationId?: unknown } = {}) {
-  return examTransaction(prisma, async tx => {
+  let changedPackage: string | null = null;
+  const result = await examTransaction(prisma, async tx => {
     let session = await lockedSession(tx, sessionId, studentId);
     const now = await databaseNow(tx);
     if (session.status === FINISHED) return { error: 'EXAM_CLOSED', session: summary(session) } as const;
     if (session.status !== ACTIVE) throw new ExamError(409, 'EXAM_CLOSED', 'Sesi tidak menerima jawaban.');
     if (now >= deadlineFor(session)) {
       session = await finalize(tx, session, now);
+      changedPackage = session.packageId;
       // Return, rather than throw: the expiry finalization must commit before 409.
       return { error: 'EXAM_EXPIRED', session: summary(session) } as const;
     }
@@ -209,10 +221,13 @@ export async function saveExamAnswer(prisma: PrismaClient, studentId: string, se
     });
     return { ...dto(answer), acknowledged: true };
   });
+  if (changedPackage) await invalidateExamCache(changedPackage);
+  return result;
 }
 
 export async function finishExam(prisma: PrismaClient, studentId: string, sessionId: string, expectedAnswers: unknown) {
-  return examTransaction(prisma, async tx => {
+  let changedPackage: string | null = null;
+  const result = await examTransaction(prisma, async tx => {
     const session = await lockedSession(tx, sessionId, studentId);
     const now = await databaseNow(tx);
     if (session.status === ACTIVE && now < deadlineFor(session)) {
@@ -230,8 +245,11 @@ export async function finishExam(prisma: PrismaClient, studentId: string, sessio
         return !current || current.version !== answer.version || current.mutationId !== answer.mutationId;
       })) throw new ExamError(409, 'ANSWERS_NOT_SYNCED', 'Jawaban terbaru belum dikonfirmasi server. Sinkronkan jawaban sebelum menyelesaikan ujian.');
     }
+    if (session.status === ACTIVE) changedPackage = session.packageId;
     return summary(await finalize(tx, session, now));
   });
+  if (changedPackage) await invalidateExamCache(changedPackage);
+  return result;
 }
 
 /** Finalize abandoned expired sessions too, without trusting an open browser. */
@@ -242,11 +260,13 @@ export async function finalizeExpiredExams(prisma: PrismaClient, limit = 100): P
       AND s."startTime" + p."durationMinutes" * interval '1 minute' <= clock_timestamp() AT TIME ZONE 'UTC'
     ORDER BY s."startTime" LIMIT ${limit}`;
   for (const item of expired) {
-    await examTransaction(prisma, async tx => {
+    const changed = await examTransaction(prisma, async tx => {
       const session = await lockedSession(tx, item.id);
       const now = await databaseNow(tx);
-      if (session.status === ACTIVE && now >= deadlineFor(session)) await finalize(tx, session, now);
+      if (session.status === ACTIVE && now >= deadlineFor(session)) { await finalize(tx, session, now); return session.packageId; }
+      return null;
     });
+    if (changed) await invalidateExamCache(changed);
   }
   return expired.length;
 }

@@ -1,90 +1,75 @@
 import { createClient } from 'redis';
-import dotenv from 'dotenv';
+import 'dotenv/config';
 
-dotenv.config();
-
-const USE_REDIS = process.env.USE_REDIS === 'true';
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-
-let redisClient: ReturnType<typeof createClient> | null = null;
-let isRedisConnected = false;
-
-if (USE_REDIS) {
-  redisClient = createClient({ url: REDIS_URL });
-
-  redisClient.on('error', (err) => {
-    console.error('Redis Client Error:', err);
-    isRedisConnected = false;
-  });
-
-  redisClient.on('connect', () => {
-    console.log('Connected to Redis');
-    isRedisConnected = true;
-  });
-
-  redisClient.connect().catch((err) => {
-    console.error('Failed to connect to Redis initially:', err);
-    isRedisConnected = false;
-  });
+export interface CacheBackend {
+  get(key: string): Promise<string | null>;
+  mGet(keys: string[]): Promise<(string | null)[]>;
+  setEx(key: string, ttl: number, value: string): Promise<unknown>;
+  del(key: string): Promise<unknown>;
+  incr(key: string): Promise<unknown>;
 }
 
-/**
- * Mendapatkan data dari cache, atau menjalankan fallback function (misal query DB) jika cache kosong/Redis mati.
- */
-export async function getOrSetCache<T>(key: string, ttlSeconds: number, fetcher: () => Promise<T>): Promise<T> {
-  // Jika redis tidak aktif atau belum connect, langsung fallback ke fungsi fetcher (Postgres)
-  if (!USE_REDIS || !redisClient || !isRedisConnected) {
-    return await fetcher();
-  }
-
-  try {
-    const cachedData = await redisClient.get(key);
-    if (cachedData) {
-      return JSON.parse(cachedData) as T;
-    }
-  } catch (err) {
-    console.error(`Redis Get Error for key ${key}:`, err);
-    // Lanjutkan ke DB jika Redis error (graceful fallback)
-  }
-
-  // Jika tidak ada di cache, jalankan fetcher
-  const data = await fetcher();
-
-  try {
-    if (isRedisConnected) {
-      await redisClient.setEx(key, ttlSeconds, JSON.stringify(data));
-    }
-  } catch (err) {
-    console.error(`Redis Set Error for key ${key}:`, err);
-  }
-
-  return data;
+/** Coalesce concurrent misses even without Redis. Revisions prevent a fetch begun
+ * before invalidation from repopulating a key that new readers will consume. */
+export function createCache(backend: () => CacheBackend | null) {
+  const pending = new Map<string, Promise<unknown>>();
+  const generations = new Map<string, number>();
+  return {
+    async get<T>(key: string, ttl: number, fetcher: () => Promise<T>, tags: string[] = [key]): Promise<T> {
+      const local = tags.map(tag => generations.get(tag) || 0).join(':');
+      const client = ttl > 0 ? backend() : null;
+      let versionedKey: string | null = null;
+      if (client) {
+        try {
+          const revisions = await client.mGet(tags.map(tag => `tka:revision:${tag}`));
+          versionedKey = `tka:v4:${key}:${revisions.map(value => value || '0').join(':')}`;
+        } catch { /* Bypass Redis on failure; no offline command queue. */ }
+      }
+      const flightKey = `${key}:${tags.join('|')}:${local}:${versionedKey || 'db'}`;
+      const existing = pending.get(flightKey);
+      if (existing) return existing as Promise<T>;
+      const task = (async () => {
+        if (client && versionedKey) {
+          try {
+            const cached = await client.get(versionedKey);
+            if (cached !== null) return JSON.parse(cached) as T;
+          } catch { versionedKey = null; }
+        }
+        const data = await fetcher();
+        if (client && versionedKey) {
+          try { await client.setEx(versionedKey, ttl, JSON.stringify(data)); }
+          catch { /* Cache failure must not fail the database operation. */ }
+        }
+        return data;
+      })().finally(() => { if (pending.get(flightKey) === task) pending.delete(flightKey); });
+      pending.set(flightKey, task);
+      return task;
+    },
+    async invalidate(tag: string) {
+      generations.set(tag, (generations.get(tag) || 0) + 1);
+      const client = backend();
+      if (!client) return;
+      try { await client.incr(`tka:revision:${tag}`); await client.del(tag); }
+      catch { /* Short TTLs limit staleness while Redis is unavailable. */ }
+    },
+  };
 }
 
-export async function deleteCache(key: string) {
-  if (!USE_REDIS || !redisClient || !isRedisConnected) return;
-  try {
-    await redisClient.del(key);
-  } catch (err) {
-    console.error(`Redis Del Error for key ${key}:`, err);
-  }
+const enabled = process.env.USE_REDIS === 'true';
+const client = enabled ? createClient({
+  url: process.env.REDIS_URL || 'redis://localhost:6379',
+  disableOfflineQueue: true,
+  commandsQueueMaxLength: 1000,
+  socket: { connectTimeout: 1000, reconnectStrategy: retries => Math.min(10000, 500 * (retries + 1)) },
+}) : null;
+if (client) {
+  client.on('error', () => { /* Requests fall back to PostgreSQL without logging credentials. */ });
+  void client.connect().catch(() => {});
 }
-
-export async function setUserActiveToken(userId: string, token: string) {
-  if (!USE_REDIS || !redisClient || !isRedisConnected) return;
-  try {
-    await redisClient.setEx(`user:active_token:${userId}`, 86400, token); // 24 jam
-  } catch (err) {
-    console.error(`Redis Set Active Token Error for ${userId}:`, err);
-  }
-}
-
-export async function getUserActiveToken(userId: string): Promise<string | null> {
-  if (!USE_REDIS || !redisClient || !isRedisConnected) return null;
-  try {
-    return await redisClient.get(`user:active_token:${userId}`);
-  } catch (err) {
-    console.error(`Redis Get Active Token Error for ${userId}:`, err);
-    return null;
-  }
+const cache = createCache(() => client?.isReady ? client.withCommandOptions({ timeout: 150 }) as unknown as CacheBackend : null);
+export const getOrSetCache = cache.get;
+export const deleteCache = cache.invalidate;
+export async function closeCache() { if (client?.isOpen) client.destroy(); }
+export async function invalidateExamCache(packageId: string) {
+  await Promise.all([deleteCache(`analytics:pkg:${packageId}`), deleteCache('analytics:packages'), deleteCache('monitoring')]);
 }

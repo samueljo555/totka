@@ -1,6 +1,6 @@
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Activity, 
@@ -10,6 +10,9 @@ import {
   Download,
   Printer
 } from 'lucide-react';
+import { Pagination } from '../components/Pagination';
+import { OperatorExams } from '../components/OperatorExams';
+import { usePagedList, useDebounced, readAllPages, readJson } from '../lib/paging';
 import { FilterBar } from '../components/FilterBar';
 import { apiFetch } from '../lib/api';
 
@@ -18,16 +21,16 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const [resettingStudentId, setResettingStudentId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('students');
   const [isAddingSiswa, setIsAddingSiswa] = useState(false);
-  const [students, setStudents] = useState<any[]>([]);
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [allPackages, setAllPackages] = useState<any[]>([]);
-  const [selectedHistoryPackage, setSelectedHistoryPackage] = useState<any | null>(null);
+
+
+
+
 
   // Search, Filter & Loading States (Tahap 4 & 5)
   const [searchQuery, setSearchQuery] = useState('');
   const [filterClass, setFilterClass] = useState('');
-  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
-  const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
+
+
 
   // State for new siswa form
   const [newNisn, setNewNisn] = useState('');
@@ -36,75 +39,15 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Derived State: Daftar Kelas Unik (Tahap 4)
-  const uniqueClasses = useMemo(() => {
-    const classes = new Set<string>();
-    students.forEach((s) => {
-      if (s.className && typeof s.className === 'string' && s.className.trim()) {
-        classes.add(s.className.trim());
-      }
-    });
-    return Array.from(classes).sort();
-  }, [students]);
-
-  // Derived State: Hasil Filter Siswa (Tahap 4)
-  const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchSearch =
-        !q ||
-        (s.fullName && s.fullName.toLowerCase().includes(q)) ||
-        (s.nisn && s.nisn.toLowerCase().includes(q)) ||
-        (s.className && s.className.toLowerCase().includes(q)) ||
-        (s.username && s.username.toLowerCase().includes(q));
-
-      const matchClass = !filterClass || s.className === filterClass;
-
-      return matchSearch && matchClass;
-    });
-  }, [students, searchQuery, filterClass]);
-
-  const fetchStudents = () => {
-    setIsLoadingStudents(true);
-    apiFetch('/api/users/login-cards')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          const schoolStudents = data.filter((u: any) => u.role === 'siswa' && u.schoolNpsn === user?.school?.npsn);
-          setStudents(schoolStudents);
-        }
-      })
-      .catch(err => console.error(err))
-      .finally(() => {
-        setIsLoadingStudents(false);
-      });
-  };
-
-  useEffect(() => {
-    if (activeTab === 'students') {
-      fetchStudents();
-    } else if (activeTab === 'monitoring' || activeTab === 'history') {
-      setIsLoadingMonitoring(true);
-      const npsn = user?.school?.npsn || '';
-      
-      Promise.all([
-        apiFetch('/api/users').then(r => r.json()),
-        apiFetch(`/api/sessions?schoolNpsn=${npsn}`).then(r => r.json()),
-        apiFetch('/api/packages').then(r => r.json())
-      ])
-        .then(([usersData, sessionsData, packagesData]) => {
-          if (Array.isArray(usersData)) {
-            setStudents(usersData.filter((u: any) => u.role === 'siswa' && u.schoolNpsn === user?.school?.npsn));
-          }
-          if (Array.isArray(sessionsData)) setSessions(sessionsData);
-          if (Array.isArray(packagesData)) setAllPackages(packagesData);
-        })
-        .catch(err => console.error(err))
-        .finally(() => {
-          setIsLoadingMonitoring(false);
-        });
-    }
-  }, [activeTab, user]);
+  const [page, setPage] = useState(1);
+  const [uniqueClasses, setUniqueClasses] = useState<string[]>([]);
+  const query = useDebounced(searchQuery);
+  const studentList = usePagedList<any>('/api/users/login-cards', page, 50, { search: query, className: filterClass }, activeTab === 'students');
+  const students = studentList.items;
+  const filteredStudents = students;
+  const isLoadingStudents = studentList.loading;
+  const fetchStudents = () => { void studentList.reload(); void readJson<string[]>('/api/users/classes').then(setUniqueClasses).catch(() => {}); };
+  useEffect(() => { readJson<string[]>('/api/users/classes').then(setUniqueClasses).catch(() => {}); }, []);
 
   const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -162,7 +105,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
       const response = await apiFetch(`/api/users/${student.id}/login-card/reset`, { method: 'POST' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Gagal mengatur ulang password.');
-      setStudents(previous => previous.map(row => row.id === student.id ? data : row));
+      void studentList.reload();
       toast.success('Password baru tersimpan dan siap dicetak.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Gagal mengatur ulang password.');
@@ -170,15 +113,12 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   };
 
   const handlePrintKartuLogin = async () => {
-    if (students.length === 0) return toast('Belum ada data siswa untuk dicetak.');
+    if (studentList.total === 0) return toast('Belum ada data siswa untuk dicetak.');
     const printWindow = window.open('', '_blank');
     if (!printWindow) return toast.error('Pop-up diblokir. Harap izinkan pop-up untuk mencetak kartu.');
     let cards: any[];
     try {
-      const response = await apiFetch('/api/users/login-cards');
-      if (!response.ok) throw new Error('Gagal memuat kartu login terbaru.');
-      cards = await response.json();
-      setStudents(cards);
+      cards = await readAllPages<any>('/api/users/login-cards');
       const missing = cards.filter(student => !student.loginPassword).length;
       if (missing) throw new Error(`${missing} siswa belum memiliki password kartu. Gunakan Atur ulang pada siswa tersebut sebelum mencetak.`);
     } catch (error) {
@@ -333,6 +273,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
             </div>
           </div>
         </header>
+        {studentList.error && <p role="alert">{studentList.error}</p>}
 
         {activeTab === 'students' && !isAddingSiswa && (
           <div className="animate-fade-in glass-panel p-8">
@@ -364,10 +305,10 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
             {/* Reusable FilterBar (Tahap 4 & 6) */}
             <FilterBar
               searchValue={searchQuery}
-              onSearchChange={setSearchQuery}
+              onSearchChange={value => { setSearchQuery(value); setPage(1); }}
               searchPlaceholder="Cari siswa (Nama / NISN / Kelas)..."
               filterValue={filterClass}
-              onFilterChange={setFilterClass}
+              onFilterChange={value => { setFilterClass(value); setPage(1); }}
               filterOptions={uniqueClasses}
               filterPlaceholder="Semua Kelas"
               onReset={() => {
@@ -440,6 +381,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 )}
               </tbody>
             </table>
+            <Pagination page={page} total={studentList.total} pageSize={50} onChange={setPage} loading={studentList.loading} />
           </div>
         )}
 
@@ -521,225 +463,8 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
           </div>
         )}
 
-        {activeTab === 'monitoring' && (() => {
-          const activePackages = allPackages.filter(p => p.status === 'aktif');
-          
-          return (
-            <div className="animate-fade-in glass-panel p-8">
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2>Pantau Pengerjaan Ujian</h2>
-                  <p>Monitor status try out siswa secara real-time untuk paket ujian yang sedang aktif.</p>
-                </div>
-              </div>
+        {(activeTab === 'monitoring' || activeTab === 'history') && <OperatorExams key={activeTab} history={activeTab === 'history'} />}
 
-              {isLoadingMonitoring ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  <div className="skeleton-shimmer" style={{ height: '140px', borderRadius: '12px' }} />
-                  <div className="skeleton-shimmer" style={{ height: '140px', borderRadius: '12px' }} />
-                </div>
-              ) : activePackages.length === 0 ? (
-                <div className="p-8 text-center text-muted" style={{ border: '1px dashed #cbd5e1', borderRadius: '12px' }}>
-                  Tidak ada paket ujian yang sedang aktif saat ini.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                  {activePackages.map(pkg => {
-                    const pkgSessions = sessions.filter(s => s.packageId === pkg.id);
-                    const finished = pkgSessions.filter(s => s.status === 'selesai').length;
-                    const ongoing = pkgSessions.filter(s => s.status === 'sedang_mengerjakan').length;
-                    const notStarted = Math.max(0, students.length - finished - ongoing);
-
-                    return (
-                      <div key={pkg.id} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-                        <div style={{ padding: '1.5rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>{pkg.name}</h3>
-                            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Token: <strong style={{ letterSpacing: '1px', color: 'var(--primary-color)' }}>{pkg.token}</strong></div>
-                          </div>
-                          <span className="tag" style={{ background: 'rgba(0,128,0,0.1)', color: 'green' }}>AKTIF</span>
-                        </div>
-                        
-                        <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', padding: '1.5rem', margin: 0, gap: '1rem' }}>
-                          <div className="card" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1rem' }}>
-                            <h3 style={{ fontSize: '2rem', color: '#64748b', margin: 0 }}>{notStarted}</h3>
-                            <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Belum Mengerjakan</p>
-                          </div>
-                          <div className="card" style={{ background: 'rgba(0, 184, 217, 0.1)', border: '1px solid rgba(0, 184, 217, 0.3)', borderRadius: '12px', padding: '1rem' }}>
-                            <h3 style={{ fontSize: '2rem', color: '#00b8d9', margin: 0 }}>{ongoing}</h3>
-                            <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Sedang Mengerjakan</p>
-                          </div>
-                          <div className="card" style={{ background: 'rgba(0, 128, 0, 0.1)', border: '1px solid rgba(0, 128, 0, 0.3)', borderRadius: '12px', padding: '1rem' }}>
-                            <h3 style={{ fontSize: '2rem', color: 'green', margin: 0 }}>{finished}</h3>
-                            <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Selesai Ujian</p>
-                          </div>
-                        </div>
-
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', borderTop: '1px solid #e2e8f0' }}>
-                          <thead>
-                            <tr style={{ background: '#f8fafc' }}>
-                              <th className="p-4" style={{ fontSize: '0.85rem', color: '#64748b' }}>Nama Siswa</th>
-                              <th className="p-4" style={{ fontSize: '0.85rem', color: '#64748b' }}>Kelas</th>
-                              <th className="p-4" style={{ fontSize: '0.85rem', color: '#64748b' }}>Status Pengerjaan</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {students.length > 0 ? students.map((student) => {
-                              const session = pkgSessions.find(s => s.studentId === student.id);
-                              return (
-                                <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                                  <td className="p-4 font-semibold text-main">{student.fullName || '-'}</td>
-                                  <td className="p-4">{student.className || '-'}</td>
-                                  <td className="p-4">
-                                    {!session ? (
-                                      <span className="tag" style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', fontSize: '0.75rem' }}>Belum Mengerjakan</span>
-                                    ) : session.status === 'selesai' ? (
-                                      <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green', fontSize: '0.75rem' }}>Selesai</span>
-                                    ) : (
-                                      <span className="tag" style={{ background: 'rgba(0, 184, 217, 0.1)', color: '#00b8d9', border: '1px solid #00b8d9', fontSize: '0.75rem' }}>Sedang Mengerjakan</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            }) : (
-                              <tr>
-                                <td colSpan={3} className="p-4 text-center text-muted" style={{ fontSize: '0.9rem' }}>Belum ada data siswa di sekolah ini.</td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {activeTab === 'history' && (
-          <div className="animate-fade-in glass-panel p-8">
-            {selectedHistoryPackage ? (
-              <div>
-                <div className="flex items-center gap-4 mb-6">
-                  <button className="btn-secondary" onClick={() => setSelectedHistoryPackage(null)}>← Kembali</button>
-                  <h2 style={{ margin: 0 }}>Riwayat Ujian: {selectedHistoryPackage.name}</h2>
-                </div>
-                
-                {(() => {
-                  const pkgSessions = sessions.filter(s => s.packageId === selectedHistoryPackage.id);
-                  const finishedSessions = pkgSessions.filter(s => s.status === 'selesai');
-                  const finished = finishedSessions.length;
-                  const notStarted = Math.max(0, students.length - pkgSessions.length);
-
-                  let highest = 0;
-                  let lowest = 101;
-                  let totalSum = 0;
-
-                  students.forEach(student => {
-                    const session = pkgSessions.find(s => s.studentId === student.id);
-                    const score = (session && session.status === 'selesai') ? (Number(session.totalScore) || 0) : 0;
-                    
-                    if (score > highest) highest = score;
-                    if (score < lowest) lowest = score;
-                    totalSum += score;
-                  });
-
-                  if (students.length === 0) lowest = 0;
-                  const average = students.length > 0 ? (totalSum / students.length).toFixed(2) : 0;
-
-                  return (
-                    <>
-                      <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginTop: 0, marginBottom: '2rem', gap: '1rem' }}>
-                        <div className="card" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1.5rem' }}>
-                          <h3 style={{ fontSize: '2rem', color: '#64748b', margin: 0 }}>{notStarted}</h3>
-                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Tidak Ikut</p>
-                        </div>
-                        <div className="card" style={{ background: 'rgba(0, 128, 0, 0.1)', border: '1px solid rgba(0, 128, 0, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
-                          <h3 style={{ fontSize: '2rem', color: 'green', margin: 0 }}>{finished}</h3>
-                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Selesai</p>
-                        </div>
-                        <div className="card" style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
-                          <h3 style={{ fontSize: '2rem', color: '#ca8a04', margin: 0 }}>{highest}</h3>
-                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Tertinggi</p>
-                        </div>
-                        <div className="card" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
-                          <h3 style={{ fontSize: '2rem', color: '#dc2626', margin: 0 }}>{lowest}</h3>
-                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Terendah</p>
-                        </div>
-                        <div className="card" style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '12px', padding: '1.5rem' }}>
-                          <h3 style={{ fontSize: '2rem', color: '#2563eb', margin: 0 }}>{average}</h3>
-                          <p style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Rata-rata</p>
-                        </div>
-                      </div>
-
-                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                        <thead>
-                          <tr style={{ background: '#f8fafc', borderBottom: '2px solid var(--glass-border)' }}>
-                            <th className="p-4">Nama Siswa</th>
-                            <th className="p-4">Kelas</th>
-                            <th className="p-4">Nilai</th>
-                            <th className="p-4">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {students.length > 0 ? students.map((student) => {
-                            const session = pkgSessions.find(s => s.studentId === student.id);
-                            return (
-                              <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                                <td className="p-4 font-semibold text-main">{student.fullName || '-'}</td>
-                                <td className="p-4">{student.className || '-'}</td>
-                                <td className="p-4 font-bold">{session?.totalScore !== undefined && session?.totalScore !== null ? session.totalScore : '-'}</td>
-                                <td className="p-4">
-                                  {!session ? (
-                                    <span className="tag" style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', fontSize: '0.75rem' }}>Tidak Mengerjakan</span>
-                                  ) : session.status === 'selesai' ? (
-                                    <span className="tag" style={{ background: 'rgba(0, 128, 0, 0.1)', color: 'green', border: '1px solid green', fontSize: '0.75rem' }}>Selesai</span>
-                                  ) : (
-                                    <span className="tag" style={{ background: 'rgba(255, 165, 0, 0.1)', color: 'orange', border: '1px solid orange', fontSize: '0.75rem' }}>Tidak Selesai</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          }) : (
-                            <tr>
-                              <td colSpan={4} className="p-4 text-center text-muted">Belum ada data siswa di sekolah ini.</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </>
-                  );
-                })()}
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-center mb-8">
-                  <div>
-                    <h2>Riwayat Semua Ujian</h2>
-                    <p>Lihat daftar paket ujian yang pernah dikerjakan oleh sekolah Anda.</p>
-                  </div>
-                </div>
-
-                <div className="dashboard-grid">
-                  {allPackages.filter(pkg => pkg.status !== 'aktif').length > 0 ? allPackages.filter(pkg => pkg.status !== 'aktif').map(pkg => (
-                    <div key={pkg.id} className="glass-panel card flex flex-col hover:shadow-lg transition-all" style={{ cursor: 'pointer' }} onClick={() => setSelectedHistoryPackage(pkg)}>
-                      <div className="flex justify-between mb-4">
-                        <span className="tag">{pkg.mapel}</span>
-                      </div>
-                      <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{pkg.name}</h3>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Token: {pkg.token}</p>
-                    </div>
-                  )) : (
-                    <div className="p-8 text-center text-muted col-span-full">
-                      Belum ada riwayat ujian yang telah selesai.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </main>
     </div>
   );
