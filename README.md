@@ -63,7 +63,39 @@ cd backend
 INTEGRITY_TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/TEST_DB' npm test
 ```
 
-Suite membuat schema acak dari schema Prisma terbaru, menjalankan transaksi menggunakan dua client/pool PostgreSQL, lalu menghapus schema buatannya. Pengguna database uji harus boleh membuat schema. Pengujian mencakup mulai serentak, jawaban lintas paket, payload salah, deadline setelah menunggu lock, finalisasi bersamaan, rollback, sweep multi-worker, dan perubahan konten saat peserta pertama masuk. Pengujian ini tidak membuktikan kapasitas 10.000 peserta. Perbaikan urutan versi jawaban, antrean offline, optimasi query/cache, migrasi deployment, dan load test tetap masuk prioritas berikutnya.
+Suite membuat schema acak dari schema Prisma terbaru, menjalankan transaksi menggunakan dua client/pool PostgreSQL, lalu menghapus schema buatannya. Pengguna database uji harus boleh membuat schema. Pengujian mencakup mulai serentak, jawaban lintas paket, payload salah, deadline setelah menunggu lock, finalisasi bersamaan, rollback, sweep multi-worker, dan perubahan konten saat peserta pertama masuk. Pengujian ini tidak membuktikan kapasitas 10.000 peserta. Optimasi query/cache, penyelarasan migrasi deployment, dan load test kapasitas tetap masuk prioritas berikutnya.
+
+## Keandalan penyimpanan jawaban (P1)
+
+Setiap jawaban memiliki `version` yang meningkat per soal dan `mutationId` unik. Request simpan wajib menyertakan keduanya. Server memeriksa versi di dalam transaksi sesi: versi lebih tinggi disimpan; pengiriman ulang versi/ID/payload yang sama dikonfirmasi tanpa perubahan; versi lama atau benturan ID/versi ditolak dengan `409 ANSWER_VERSION_CONFLICT` disertai jawaban server saat ini. Respons mulai ujian menyertakan metadata ini pada `existingAnswers`. ID dan versi menentukan urutan, bukan timestamp perangkat. Klien lama yang belum mengirim metadata ditolak; frontend dan backend perlu diperbarui bersama, lalu halaman ujian dimuat ulang.
+
+Browser menyimpan perubahan ke outbox per sesi dan ID soal sebelum mengirim request. Pilihan baru tetap tersimpan ketika request sebelumnya masih berjalan; respons lama hanya boleh menghapus entri dengan versi dan ID yang cocok. Konfirmasi server juga disimpan terpisah agar respons tertunda dari tab lain tidak menurunkan tampilan jawaban terbaru. Reload membandingkan outbox dengan versi server: pengiriman yang sudah diterima tidak dikirim ulang, pilihan baru dilanjutkan, dan perbedaan yang belum dapat dipastikan ditampilkan sebagai konflik. Pilih “Gunakan jawaban server” atau konfirmasikan “Kirim jawaban saya”; konflik tidak diselesaikan dengan menimpa data otomatis. Cadangan P0 dipulihkan berdasarkan ID soal, dan data tanpa versi yang berbeda dari server juga meminta pilihan eksplisit.
+
+Pengiriman menggabungkan klik cepat selama 150 ms dan menggunakan satu request aktif per halaman. Gangguan jaringan, timeout 15 detik, HTTP 408/429/5xx dicoba ulang memakai ID dan versi yang sama, maksimal lima percobaan termasuk percobaan pertama. Jeda meningkat dari sekitar 1, 2, 4, 8 detik dengan jitter, batas normal 30 detik; `Retry-After` dapat memperpanjang jeda sampai lima menit. Setelah batas percobaan, siswa dapat menekan “Coba kirim ulang”. Error validasi/otorisasi permanen dan konflik tidak diulang otomatis. Error server tidak dianggap sebagai perubahan status koneksi browser. Deadline server tetap berlaku dan pengiriman otomatis berhenti ketika anggaran waktu habis.
+
+Status ditampilkan per soal dan pada ringkasan: tersimpan, menunggu pengiriman/koneksi, menyimpan, menunggu kirim ulang, gagal, atau konflik. Navigasi soal berwarna oranye untuk perubahan yang belum dikonfirmasi dan merah untuk kegagalan/konflik. Kegagalan penyimpanan perangkat ditampilkan secara eksplisit; siswa tidak dijanjikan pemulihan setelah reload jika penyimpanan perangkat gagal. Cadangan yang rusak tidak dihapus diam-diam dan memblokir finalisasi manual sampai diperiksa; penutupan otomatis saat deadline tetap berlaku.
+
+Finalisasi manual menunggu antrean dan menyertakan `expectedAnswers` berupa `{ questionId, version, mutationId }` untuk jawaban yang telah dikonfirmasi. Di dalam lock sesi yang sama, server menolak manifest yang tidak cocok dengan `409 ANSWERS_NOT_SYNCED`, tanpa mengubah status atau nilai. Ketika deadline sudah lewat, sesi tetap ditutup dari jawaban yang sudah diterima. Entri outbox dihapus setelah versi yang tepat dikonfirmasi; seluruh cadangan sesi dibersihkan setelah server mengonfirmasi sesi selesai; navigasi keluar atau sesi login berakhir mempertahankan cadangan.
+
+### Migrasi versi jawaban
+
+Database eksisting membutuhkan dua kolom tambahan. Migrasi ini mempertahankan isi dan hasil jawaban lama, dengan versi awal nol:
+
+```bash
+cd backend
+npx prisma db execute --file prisma/migrations/20261024140000_answer_versions/migration.sql
+npx prisma migrate resolve --applied 20261024140000_answer_versions
+npx prisma generate
+npm run build
+cd ..
+npm run build
+```
+
+Jalankan SQL hanya jika kolom tersebut belum ada. Jika database sudah dibuat dari schema terbaru melalui `db push`, tidak perlu menambahkan kolom yang sama lagi. Riwayat migrasi awal proyek belum selaras, sehingga jangan menjalankan reset/seed untuk pembaruan ini. Database aplikasi aktif tidak diubah oleh pengujian.
+
+### Pengujian antrean
+
+`npm run test:sync` mengompilasi modul antrean ke `.test-build` yang diabaikan Git, lalu menjalankan skenario koneksi putus, reload, respons hilang/terlambat, perubahan selama sinkronisasi, konflik, batas retry, kegagalan storage, dan finalisasi. Backend diuji dengan perintah PostgreSQL pada bagian sebelumnya, termasuk request bersamaan/tidak berurutan, replay idempoten, manifest finalisasi, serta migrasi yang mempertahankan jawaban lama. Skrip k6 disesuaikan dengan protokol versi dan manifest; pengujian beban 10.000 peserta belum dijalankan.
 
 ## 🚀 Pembaruan Terkini (Changelog)
 

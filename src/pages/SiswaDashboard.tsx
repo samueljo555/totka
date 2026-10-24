@@ -2,6 +2,8 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import { useState, useEffect, useRef } from 'react';
 import { Clock, ChevronRight, ChevronLeft, CheckCircle2, ZoomIn, WifiOff, RefreshCw, AlertCircle } from 'lucide-react';
+import { AnswerSync } from '../lib/answer-sync';
+import type { SyncSnapshot } from '../lib/answer-sync';
 import { ImageModal } from '../components/ImageModal';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -21,14 +23,17 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [questions, setQuestions] = useState<any[]>([]);
   const totalQuestions = questions.length;
   const [answers, setAnswers] = useState<Record<number, any>>({});
+  const hasAnswer = (value: any) => value !== undefined && value !== null && (Array.isArray(value) ? value.some(item => item !== null && item !== undefined) : typeof value === 'number');
+  const answeredCount = Object.values(answers).filter(hasAnswer).length;
   const [timeLeft, setTimeLeft] = useState(90 * 60); // 90 minutes
   const [isFinished, setIsFinished] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [releaseScoreMode, setReleaseScoreMode] = useState<string>('langsung');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = useRef(false);
-  const inFlightAnswers = useRef(new Set<Promise<void>>());
-  const syncTask = useRef<Promise<void> | null>(null);
+  const sync = useRef<AnswerSync | null>(null);
+  const finishResult = useRef<(session: any, rejected?: boolean) => void>(() => {});
+  const startAttempt = useRef(0);
   const deadlineAt = useRef<number | null>(null);
   const finishHandler = useRef<(expired?: boolean) => Promise<void>>(async () => {});
   const finishedRef = useRef(false);
@@ -36,9 +41,8 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   // Offline & Auto-Sync State
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [pendingSyncCount, setPendingSyncCount] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncSuccessNotice, setSyncSuccessNotice] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncSnapshot | null>(null);
+  const pendingSyncCount = syncStatus?.pendingCount || 0;
 
   // Single Device Policy State (Kicked)
   const [kickedData, setKickedData] = useState<{ show: boolean; message: string } | null>(null);
@@ -63,8 +67,8 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   }, [hasEnteredToken, isFinished]);
 
   const acceptFinishedSession = (session: any, rejected = false) => {
-    if (!sessionId || session?.status !== 'selesai') return;
-    if (rejected || getQueue(sessionId).length > 0) {
+    if (session?.status !== 'selesai') return;
+    if (rejected || (sync.current?.snapshot().pendingCount || 0) > 0) {
       toast.error('Ujian telah ditutup. Jawaban yang belum diterima server sebelum batas waktu tidak dinilai.', { duration: 8000 });
     }
     finishedRef.current = true;
@@ -72,9 +76,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     setFinalScore(session.totalScore === null ? null : Number(session.totalScore));
     setIsFinished(true);
     sessionStorage.removeItem('activeExamToken');
-    localStorage.removeItem(`tka_queue_${sessionId}`);
-    localStorage.removeItem(`tka_answers_${sessionId}`);
-    setPendingSyncCount(0);
+    sync.current?.complete();
   };
 
   const formatTime = (seconds: number) => {
@@ -83,232 +85,51 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Helper Antrian Jawaban Lokal (Offline Queue)
-  const getQueue = (sId: string): any[] => {
-    try {
-      const q = localStorage.getItem(`tka_queue_${sId}`);
-      return q ? JSON.parse(q) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const saveQueue = (sId: string, queue: any[]) => {
-    try {
-      localStorage.setItem(`tka_queue_${sId}`, JSON.stringify(queue));
-      setPendingSyncCount(queue.length);
-    } catch (e) {
-      console.error("Failed to save local queue:", e);
-    }
-  };
-
-  const addToQueue = (sId: string, item: { questionId: string; answerData: any; qNumber: number }) => {
-    const queue = getQueue(sId);
-    const filtered = queue.filter(q => q.questionId !== item.questionId);
-    filtered.push(item);
-    saveQueue(sId, filtered);
-  };
-
-  // Sinkronisasi Jawaban Tertunda ke Server secara Otomatis
-  const runPendingQueue = async () => {
-    if (!sessionId || finishedRef.current || !navigator.onLine) return;
-    const queue = getQueue(sessionId);
-    if (queue.length === 0) {
-      setPendingSyncCount(0);
-      return;
-    }
-
-    setIsSyncing(true);
-    let remaining = [...queue];
-
-    for (const item of queue) {
-      try {
-        const res = await fetch(`/api/sessions/${sessionId}/answer`, {
-          method: 'POST',
-          signal: AbortSignal.timeout(15000),
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-session-token': user?.activeToken || '',
-            'x-student-id': user?.id || ''
-          },
-          body: JSON.stringify({ 
-            questionId: item.questionId, 
-            answerData: item.answerData,
-            studentId: user?.id,
-            sessionToken: user?.activeToken
-          })
-        });
-
-        if (res.status === 401) {
-          const data = await res.json();
-          if (data.error === 'SESSION_KICKED') {
-            setKickedData({ show: true, message: data.message });
-            setIsSyncing(false);
-            return;
-          }
-        }
-
-        if (res.status === 409) {
-          const data = await res.json();
-          if (data.session?.status === 'selesai') {
-            acceptFinishedSession(data.session, true);
-            break;
-          }
-        }
-        if (res.ok) {
-          remaining = remaining.filter(q => q.questionId !== item.questionId);
-          saveQueue(sessionId, remaining);
-        } else {
-          break; // Berhenti sementara dan coba lagi nanti
-        }
-      } catch (err) {
-        setIsOnline(false);
-        break;
-      }
-    }
-
-    setIsSyncing(false);
-    if (remaining.length === 0) {
-      setSyncSuccessNotice(true);
-      setTimeout(() => setSyncSuccessNotice(false), 3500);
-    }
-  };
-
-  const syncPendingQueue = () => {
-    if (syncTask.current) return syncTask.current;
-    const task = runPendingQueue().finally(() => { syncTask.current = null; });
-    syncTask.current = task;
-    return task;
-  };
-
-  // Deteksi Status Jaringan Online / Offline
+  // Listeners call the current engine, so closures never retain an old queue.
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      if (sessionId) {
-        syncPendingQueue();
-      }
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    const online = () => { setIsOnline(true); sync.current?.wake(); };
+    const offline = () => { setIsOnline(false); sync.current?.wake(); };
+    const storage = () => sync.current?.refresh();
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    window.addEventListener('storage', storage);
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('storage', storage);
+      startAttempt.current += 1;
+      sync.current?.dispose();
     };
-  }, [sessionId]);
+  }, []);
 
-  // Heartbeat Single Device Check & Auto-Sync Rutin
   useEffect(() => {
-    if (!hasEnteredToken || isFinished || !user?.id || !user?.activeToken) return;
-
-    const interval = setInterval(async () => {
-      if (navigator.onLine && sessionId) {
-        const q = getQueue(sessionId);
-        if (q.length > 0) {
-          syncPendingQueue();
+    if (!hasEnteredToken || isFinished || !user?.id) return;
+    const heartbeat = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const response = await fetch(`/api/auth/session-check?studentId=${user.id}`, { signal: AbortSignal.timeout(15000) });
+        if (response.status === 401) {
+          const data = await response.json();
+          sync.current?.dispose();
+          setKickedData({ show: true, message: data.message || 'Sesi login tidak aktif.' });
         }
-      }
-
-      if (navigator.onLine) {
-        try {
-          const res = await fetch(`/api/auth/session-check?studentId=${user.id}`, {
-            headers: { 'x-session-token': user.activeToken }
-          });
-          if (res.status === 401) {
-            const data = await res.json();
-            if (data.error === 'SESSION_KICKED') {
-              setKickedData({ show: true, message: data.message });
-            }
-          }
-        } catch {
-          // Abaikan glitch jaringan sementara
-        }
-      }
-    }, 15000); // Cek setiap 15 detik
-
-    return () => clearInterval(interval);
-  }, [hasEnteredToken, isFinished, sessionId, user?.id, user?.activeToken]);
-
-  const persistAnswer = async (qNumber: number, answer: any) => {
-    setAnswers(prev => ({ ...prev, [qNumber]: answer }));
-
-    if (!sessionId || !questions[qNumber - 1]) return;
-    const questionId = questions[qNumber - 1].id;
-
-    // Backup ke LocalStorage
-    try {
-      localStorage.setItem(`tka_answers_${sessionId}`, JSON.stringify({ byQuestionId: Object.fromEntries(Object.entries({ ...answers, [qNumber]: answer }).map(([number, value]) => [questions[Number(number) - 1]?.id, value])) }));
-    } catch (e) {}
-
-    // Jika sedang offline, masukkan langsung ke antrian offline
-    if (!navigator.onLine) {
-      setIsOnline(false);
-      addToQueue(sessionId, { questionId, answerData: answer, qNumber });
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/sessions/${sessionId}/answer`, {
-        method: 'POST',
-          signal: AbortSignal.timeout(15000),
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-session-token': user?.activeToken || '',
-          'x-student-id': user?.id || ''
-        },
-        body: JSON.stringify({ 
-          questionId, 
-          answerData: answer,
-          studentId: user?.id,
-          sessionToken: user?.activeToken
-        })
-      });
-
-      if (res.status === 401) {
-        const data = await res.json();
-        if (data.error === 'SESSION_KICKED') {
-          setKickedData({ show: true, message: data.message });
-          return;
-        }
-      }
-
-      if (res.status === 409) {
-        const data = await res.json();
-        if (data.session?.status === 'selesai') { acceptFinishedSession(data.session, true); return; }
-      }
-      if (res.status === 400) {
-        const data = await res.json();
-        toast.error(data.message || 'Jawaban ditolak oleh server.');
-        return;
-      }
-      if (!res.ok) {
-        throw new Error('Gagal menyimpan jawaban');
-      }
-
-      // Jika berhasil dan sebelumnya ada di antrian, bersihkan
-      const currentQueue = getQueue(sessionId);
-      if (currentQueue.some(q => q.questionId === questionId)) {
-        saveQueue(sessionId, currentQueue.filter(q => q.questionId !== questionId));
-      }
-    } catch (err) {
-      setIsOnline(false);
-      addToQueue(sessionId, { questionId, answerData: answer, qNumber });
-    }
-  };
+      } catch { /* Heartbeat failure does not mean navigator is offline. */ }
+    };
+    const timer = setInterval(() => { void heartbeat(); }, 15000);
+    return () => clearInterval(timer);
+  }, [hasEnteredToken, isFinished, user?.id]);
 
   const handleAnswer = (qNumber: number, answer: any) => {
     if (submittingRef.current || finishedRef.current || (deadlineAt.current !== null && performance.now() >= deadlineAt.current)) return;
-    const task = persistAnswer(qNumber, answer);
-    inFlightAnswers.current.add(task);
-    void task.finally(() => inFlightAnswers.current.delete(task));
+    const question = questions[qNumber - 1];
+    if (!question || !sync.current) return;
+    try { sync.current.enqueue(question.id, answer); }
+    catch (error) { toast.error(error instanceof Error ? error.message : 'Jawaban belum dapat disimpan.'); }
   };
 
   const startExamWithToken = async (examToken: string) => {
     if (examToken.length < 3) return;
+    const attempt = ++startAttempt.current;
     setIsLoading(true);
     setErrorMsg('');
     try {
@@ -327,6 +148,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         })
       });
       const data = await res.json();
+      if (attempt !== startAttempt.current) return;
 
       if (res.status === 401 && data.error === 'SESSION_KICKED') {
         setKickedData({ show: true, message: data.message });
@@ -344,38 +166,35 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       setQuestions(data.questions || []);
       setReleaseScoreMode(data.package?.releaseScoreMode || 'langsung');
       
-      // Update pending queue count jika ada sisa antrian di perangkat ini
-      const localQueue = getQueue(data.session.id);
-      setPendingSyncCount(localQueue.length);
-
-      // Map existing answers to our qNumber format
-      const loadedAnswers: Record<number, any> = {};
-      if (data.questions && data.existingAnswers) {
-        data.questions.forEach((q: any, idx: number) => {
-          const ans = data.existingAnswers.find((a: any) => a.questionId === q.id);
-          if (ans) loadedAnswers[idx + 1] = ans.answerData;
-        });
-      }
-
-      // Timpa dengan backup lokal jika ada jawaban offline yang belum sempat terkirim
-      try {
-        const localBackup = localStorage.getItem(`tka_answers_${data.session.id}`);
-        if (localBackup) {
-          const parsed = JSON.parse(localBackup);
-          // New backups use stable question IDs. Legacy index-based backups cannot
-          // safely override the server when question order has changed.
+      sync.current?.dispose();
+      const engine = new AnswerSync({
+        sessionId: data.session.id,
+        questionIds: data.questions.map((q: any) => q.id),
+        existingAnswers: data.existingAnswers || [],
+        storage: {
+          getItem: key => localStorage.getItem(key),
+          setItem: (key, value) => localStorage.setItem(key, value),
+          removeItem: key => localStorage.removeItem(key),
+        },
+        online: () => navigator.onLine,
+        canSend: () => deadlineAt.current !== null && performance.now() < deadlineAt.current && !finishedRef.current,
+        send: (answer, signal) => fetch(`/api/sessions/${data.session.id}/answer`, {
+          method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ questionId: answer.questionId, answerData: answer.answerData, version: answer.version, mutationId: answer.mutationId }),
+        }),
+        onChange: snapshot => {
+          const loaded: Record<number, any> = {};
           data.questions.forEach((q: any, index: number) => {
-            if (parsed.byQuestionId && Object.hasOwn(parsed.byQuestionId, q.id)) loadedAnswers[index + 1] = parsed.byQuestionId[q.id];
+            if (Object.hasOwn(snapshot.answers, q.id)) loaded[index + 1] = snapshot.answers[q.id];
           });
-        }
-      } catch (e) {}
-
-      localQueue.forEach(item => {
-        const index = data.questions.findIndex((q: any) => q.id === item.questionId);
-        if (index >= 0) loadedAnswers[index + 1] = item.answerData;
+          setAnswers(loaded);
+          setSyncStatus(snapshot);
+        },
+        onClosed: session => finishResult.current(session, true),
+        onAuthError: message => setKickedData({ show: true, message }),
       });
-      setAnswers(loadedAnswers);
-      
+      sync.current = engine;
+
       const remaining = Math.max(0, Number(data.remainingSeconds) || 0);
       deadlineAt.current = performance.now() + remaining * 1000;
       setTimeLeft(remaining);
@@ -383,17 +202,16 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       setHasEnteredToken(true);
       if (data.session.status === 'selesai') {
         finishedRef.current = true;
-        if (localQueue.length) toast.error('Waktu ujian telah berakhir. Jawaban offline yang belum diterima server tidak dinilai.', { duration: 8000 });
-        localStorage.removeItem(`tka_queue_${data.session.id}`);
-        localStorage.removeItem(`tka_answers_${data.session.id}`);
+        if (engine.snapshot().pendingCount) toast.error('Waktu ujian telah berakhir. Jawaban offline yang belum diterima server tidak dinilai.', { duration: 8000 });
+        engine.complete();
         sessionStorage.removeItem('activeExamToken');
         setFinalScore(data.session.totalScore === null ? null : Number(data.session.totalScore));
         setIsFinished(true);
-      }
+      } else engine.wake();
     } catch (err: any) {
-      setErrorMsg(err.message);
+      if (attempt === startAttempt.current) setErrorMsg(err.message);
     } finally {
-      setIsLoading(false);
+      if (attempt === startAttempt.current) setIsLoading(false);
     }
   };
 
@@ -416,13 +234,12 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     submittingRef.current = true;
     setIsSubmitting(true);
     try {
-      await Promise.all([...inFlightAnswers.current]);
-      if (finishedRef.current) return;
       if (!expired) {
-        await syncPendingQueue();
+        const snapshot = await sync.current?.flush();
         if (finishedRef.current) return;
-        if (getQueue(sessionId).length > 0) {
-          toast.error('Masih ada jawaban yang belum tersimpan. Coba kembali sebelum batas waktu.');
+        expired = deadlineAt.current !== null && performance.now() >= deadlineAt.current;
+        if (!expired && (!snapshot || snapshot.pendingCount > 0 || snapshot.recoveryError)) {
+          toast.error('Masih ada jawaban yang belum dikonfirmasi. Periksa status penyimpanan dan coba kembali.');
           return;
         }
       }
@@ -435,8 +252,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           'x-student-id': user?.id || ''
         },
         body: JSON.stringify({
-          studentId: user?.id,
-          sessionToken: user?.activeToken
+          expectedAnswers: sync.current?.manifest() || []
         })
       });
 
@@ -452,7 +268,8 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         const data = await res.json();
         acceptFinishedSession(data, expired);
       } else {
-        toast.error("Gagal mengakhiri sesi ujian.");
+        const data = await res.json();
+        toast.error(data.message || 'Gagal mengakhiri sesi ujian.');
       }
     } catch (error) {
       console.error(error);
@@ -464,6 +281,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   };
 
   finishHandler.current = handleFinishExam;
+  finishResult.current = acceptFinishedSession;
 
   if (!hasEnteredToken) {
     return (
@@ -773,72 +591,33 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           </div>
         </header>
 
-        {/* Offline & Auto-Sync Alert Banners */}
-        {!isOnline && (
-          <div style={{
-            background: '#fee2e2',
-            borderBottom: '1px solid #f87171',
-            color: '#991b1b',
-            padding: '10px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-            zIndex: 9
-          }}>
-            <WifiOff size={18} style={{ color: '#dc2626' }} />
-            <span>
-              Koneksi Internet Terputus! Anda sedang mode offline. Jawaban disimpan sementara di perangkat dan harus diterima server sebelum waktu ujian habis
-              {pendingSyncCount > 0 ? ` (${pendingSyncCount} jawaban menunggu sinkronisasi)` : ''}.
-            </span>
-          </div>
-        )}
-
-        {isOnline && isSyncing && (
-          <div style={{
-            background: '#fef3c7',
-            borderBottom: '1px solid #fcd34d',
-            color: '#92400e',
-            padding: '10px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            zIndex: 9
-          }}>
-            <RefreshCw size={16} className="animate-spin" />
-            <span>Koneksi pulih! Sedang menyinkronkan {pendingSyncCount} jawaban tertunda ke server...</span>
-          </div>
-        )}
-
-        {isOnline && syncSuccessNotice && (
-          <div style={{
-            background: '#dcfce7',
-            borderBottom: '1px solid #86efac',
-            color: '#166534',
-            padding: '10px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            zIndex: 9
-          }}>
-            <CheckCircle2 size={18} style={{ color: '#16a34a' }} />
-            <span>Semua jawaban berhasil tersimpan aman di server!</span>
-          </div>
-        )}
+        <div role="status" aria-live="polite" style={{ padding: '10px 24px', background: pendingSyncCount ? '#fff7ed' : '#f0fdf4', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          {!isOnline ? <WifiOff size={18} /> : syncStatus?.sending ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+          <span>{!isOnline ? 'Koneksi terputus. ' : ''}{pendingSyncCount ? `${pendingSyncCount} jawaban belum dikonfirmasi server.` : answeredCount ? 'Semua perubahan jawaban telah dikonfirmasi server.' : 'Belum ada jawaban yang perlu dikirim.'} Jawaban harus diterima sebelum waktu ujian habis.</span>
+          {Object.values(syncStatus?.pending || {}).some(record => record.retryable) && <button className="btn-secondary" disabled={!isOnline || isSubmitting || timeLeft === 0} onClick={() => sync.current?.retry()}>Coba kirim ulang</button>}
+        </div>
+        {syncStatus?.storageWarning && <div role="alert" style={{ padding: '10px 24px', background: '#fee2e2', color: '#991b1b' }}>{syncStatus.storageWarning}</div>}
 
         {/* Question Area */}
         <main style={{ flex: 1, padding: '3rem', overflowY: 'auto' }}>
           <div className="glass-panel p-8" style={{ maxWidth: '800px', margin: '0 auto', background: 'rgba(255,255,255,0.9)' }}>
             {renderQuestion()}
+            {(() => {
+              const id = questions[currentQuestion - 1]?.id;
+              const state = syncStatus?.states[id] || 'unanswered';
+              const pending = syncStatus?.pending[id];
+              const labels = { unanswered: 'Belum dijawab', saved: 'Tersimpan di server', pending: isOnline ? 'Menunggu pengiriman' : 'Menunggu koneksi', sending: 'Menyimpan...', retry: 'Menunggu kirim ulang', failed: 'Gagal disimpan — perlu tindakan', conflict: 'Ada perbedaan dengan jawaban server' };
+              return <div role="status" style={{ marginTop: '1rem', padding: '0.75rem', background: ['failed', 'conflict'].includes(state) ? '#fee2e2' : '#f8fafc', borderRadius: '8px' }}>
+                <strong>{labels[state]}</strong>
+                {pending?.message && <p>{pending.message}</p>}
+                {state === 'conflict' && <div className="flex gap-2 mt-2">
+                  <button className="btn-secondary" disabled={isSubmitting || timeLeft === 0} onClick={() => sync.current?.resolve(id, 'server')}>Gunakan jawaban server</button>
+                  <button className="btn-secondary" disabled={!isOnline || isSubmitting || timeLeft === 0} onClick={async () => {
+                    if (await confirmModal({ title: 'Konfirmasi jawaban', message: 'Kirim pilihan yang tampil di halaman ini untuk menggantikan jawaban di server?' })) sync.current?.resolve(id, 'local');
+                  }}>Kirim jawaban saya</button>
+                </div>}
+              </div>;
+            })()}
 
             <div className="flex justify-between mt-12 pt-6" style={{ borderTop: '1px solid rgba(0,0,0,0.1)' }}>
               <button 
@@ -898,19 +677,23 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
             {Array.from({ length: totalQuestions }).map((_, i) => {
               const qNum = i + 1;
-              const isAnswered = answers[qNum] !== undefined && (typeof answers[qNum] !== 'object' || Object.keys(answers[qNum]).length > 0);
+              const isAnswered = hasAnswer(answers[qNum]);
+              const saveState = syncStatus?.states[questions[i]?.id] || 'unanswered';
+              const saveProblem = ['failed', 'conflict'].includes(saveState);
+              const unsynced = !['saved', 'unanswered'].includes(saveState);
               const isCurrent = currentQuestion === qNum;
               
               return (
                 <button
                   key={qNum}
+                  title={`Soal ${qNum}: ${saveState === 'saved' ? 'tersimpan' : saveProblem ? 'perlu tindakan' : unsynced ? 'belum tersimpan' : 'belum dijawab'}`}
                   onClick={() => setCurrentQuestion(qNum)}
                   style={{
                     aspectRatio: '1',
                     borderRadius: '8px',
                     border: isCurrent ? '2px solid var(--primary-color)' : isAnswered ? '1px solid var(--primary-color)' : '1px solid #cbd5e1',
-                    background: isAnswered ? 'var(--primary-color)' : 'white',
-                    color: isAnswered ? 'white' : 'var(--text-main)',
+                    background: saveProblem ? '#b91c1c' : unsynced ? '#b45309' : isAnswered ? 'var(--primary-color)' : 'white',
+                    color: isAnswered || unsynced ? 'white' : 'var(--text-main)',
                     fontWeight: 600,
                     cursor: 'pointer',
                     boxShadow: isCurrent ? '0 0 0 3px rgba(0,82,204,0.2)' : 'none',
@@ -923,14 +706,15 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             })}
           </div>
 
+          <p style={{ marginTop: '1rem', fontSize: '0.85rem' }}>Oranye: belum dikonfirmasi server. Merah: perlu tindakan.</p>
           <div className="mt-8">
             <div className="flex items-center gap-2 mb-2" style={{ fontSize: '0.85rem' }}>
               <div style={{ width: '16px', height: '16px', background: 'var(--primary-color)', borderRadius: '4px' }}></div>
-              <span>Sudah Dijawab ({Object.keys(answers).length})</span>
+              <span>Sudah Dijawab ({answeredCount})</span>
             </div>
             <div className="flex items-center gap-2" style={{ fontSize: '0.85rem' }}>
               <div style={{ width: '16px', height: '16px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '4px' }}></div>
-              <span>Belum Dijawab ({totalQuestions - Object.keys(answers).length})</span>
+              <span>Belum Dijawab ({totalQuestions - answeredCount})</span>
             </div>
           </div>
         </div>

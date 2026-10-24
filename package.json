@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:sync": "tsc -p tsconfig.sync-tests.json && node --test tests/answer-sync.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",

@@ -2,6 +2,7 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import crypto from 'node:crypto';
 
 // Exercise the actual HTTP middleware and handlers with an isolated repository.
 // These tests never connect to or alter the configured application database.
@@ -47,7 +48,7 @@ function repository(getRows, hydrate = row => row) {
     async findFirst(q) { return this.findUnique(q); },
     async findMany(q = {}) { return getRows().filter(row => matches(row, q.where)).map(row => project(hydrate(row), q)); },
     async create(q) {
-      const row = { id: `created-${getRows().length}`, schoolNpsn: null, activeToken: null, loginCardPassword: null, ...q.data };
+      const row = { id: `created-${getRows().length}`, schoolNpsn: null, activeToken: null, loginCardPassword: null, version: 0, mutationId: null, ...q.data };
       getRows().push(row);
       return project(hydrate(row), q);
     },
@@ -145,6 +146,8 @@ function tokenFor(id, claims = {}) {
   return jwt.sign({ id, sid: `sid-${id}`, role: user?.role, ...claims }, secret, { expiresIn: '5m' });
 }
 async function request(path, id, method = 'GET', body, extra = {}) {
+  if (method === 'POST' && /\/sessions\/[^/]+\/answer$/.test(path) && body) body = { version: 1, mutationId: crypto.randomUUID(), ...body };
+  if (method === 'POST' && /\/sessions\/[^/]+\/finish$/.test(path)) body = { expectedAnswers: [], ...body };
   const headers = { 'Content-Type': 'application/json', ...(id ? { Authorization: `Bearer ${tokenFor(id)}` } : {}), ...extra };
   const response = await fetch(base + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   return { status: response.status, headers: response.headers, body: await response.json() };

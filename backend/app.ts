@@ -1050,14 +1050,15 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
 
   app.post('/api/sessions/:sessionId/answer', async (req, res) => {
     try {
-      const result = await saveExamAnswer(prisma, req.user!.id, req.params.sessionId, req.body?.questionId, req.body?.answerData);
+      const result = await saveExamAnswer(prisma, req.user!.id, req.params.sessionId, req.body?.questionId, req.body?.answerData,
+        { version: req.body?.version, mutationId: req.body?.mutationId });
       res.status('error' in result ? 409 : 200).json(result);
     } catch (error) { examFailure(res, error); }
   });
 
   app.post('/api/sessions/:sessionId/finish', async (req, res) => {
     try {
-      res.json(await finishExam(prisma, req.user!.id, req.params.sessionId));
+      res.json(await finishExam(prisma, req.user!.id, req.params.sessionId, req.body?.expectedAnswers));
     } catch (error) { examFailure(res, error); }
   });
 

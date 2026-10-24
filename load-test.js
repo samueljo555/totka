@@ -92,6 +92,9 @@ export default function () {
 
   const sessionId = res.json('session.id');
   const questions = res.json('questions') || [];
+  const existingAnswers = res.json('existingAnswers') || [];
+  const expectedAnswers = [];
+  if (res.json('session.status') === 'selesai') { sleep(10); return; }
 
   // --- MENGERJAKAN SOAL (Satu per satu) ---
   for (let i = 0; i < questions.length; i++) {
@@ -102,7 +105,9 @@ export default function () {
 
     const answerPayload = {
       questionId: q.id,
-      answerData: { selected: "A" }
+      answerData: q.type === 'Pilihan Ganda Kompleks' ? [0] : q.type === 'Pilihan Ganda Kompleks Kategori' ? q.options.map(() => 0) : 0,
+      version: (existingAnswers.find(a => a.questionId === q.id)?.version || 0) + 1,
+      mutationId: `${Date.now()}-${__VU}-${__ITER}-${i}`
     };
 
     let ansRes = http.post(
@@ -115,6 +120,9 @@ export default function () {
       'submit jawaban OK': (r) => r.status === 200,
     });
 
+    if (answerOk) {
+      expectedAnswers.push({ questionId: q.id, version: ansRes.json('version'), mutationId: ansRes.json('mutationId') });
+    }
     if (!answerOk) {
       console.error(
         `[SUBMIT JAWABAN GAGAL] user=${username} soal=${i + 1} ` +
@@ -124,7 +132,8 @@ export default function () {
   }
 
   // --- SELESAI UJIAN ---
-  res = http.post(`${BASE_URL}/sessions/${sessionId}/finish`, JSON.stringify({}), authHeaders);
+  if (expectedAnswers.length !== questions.length) { sleep(10); return; }
+  res = http.post(`${BASE_URL}/sessions/${sessionId}/finish`, JSON.stringify({ expectedAnswers }), authHeaders);
 
   const finishOk = check(res, {
     'ujian selesai OK': (r) => r.status === 200,

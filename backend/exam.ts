@@ -163,13 +163,13 @@ export async function startExam(prisma: PrismaClient, studentId: string, token: 
     if (session.status === ACTIVE && now >= deadline) session = await finalize(tx, session, now);
     if (![ACTIVE, FINISHED].includes(session.status)) throw new ExamError(409, 'EXAM_CLOSED', 'Sesi tidak dapat dilanjutkan.');
     const questions = await tx.packageQuestion.findMany({ where: { packageId: pkg.id }, orderBy: { questionId: 'asc' }, include: { question: { select: studentQuestionSelect } } });
-    const existingAnswers = await tx.answer.findMany({ where: { sessionId: session.id }, select: { questionId: true, answerData: true } });
+    const existingAnswers = await tx.answer.findMany({ where: { sessionId: session.id }, select: { questionId: true, answerData: true, version: true, mutationId: true } });
     const { token: _token, ...safePackage } = session.package;
     return { session: summary(session), package: safePackage, questions: questions.map(item => item.question), existingAnswers, serverTime: now, deadline, remainingSeconds: session.status === FINISHED ? 0 : Math.max(0, Math.ceil((deadline.getTime() - now.getTime()) / 1000)) };
   });
 }
 
-export async function saveExamAnswer(prisma: PrismaClient, studentId: string, sessionId: string, questionId: unknown, answerData: unknown) {
+export async function saveExamAnswer(prisma: PrismaClient, studentId: string, sessionId: string, questionId: unknown, answerData: unknown, metadata: { version?: unknown; mutationId?: unknown } = {}) {
   return examTransaction(prisma, async tx => {
     let session = await lockedSession(tx, sessionId, studentId);
     const now = await databaseNow(tx);
@@ -184,19 +184,53 @@ export async function saveExamAnswer(prisma: PrismaClient, studentId: string, se
     const item = await tx.packageQuestion.findUnique({ where: { packageId_questionId: { packageId: session.packageId, questionId } }, include: { question: true } });
     if (!item) throw new ExamError(400, 'INVALID_QUESTION', 'Soal bukan bagian dari paket ujian.');
     const normalized = normalizeAnswer(item.question, answerData);
+    const { version, mutationId } = metadata;
+    if (!Number.isInteger(version) || (version as number) < 1 || (version as number) > 2147483647 ||
+        typeof mutationId !== 'string' || !/^[A-Za-z0-9:_-]{16,128}$/.test(mutationId)) {
+      throw new ExamError(400, 'INVALID_ANSWER_VERSION', 'Versi jawaban dan ID pengiriman wajib valid. Muat ulang aplikasi jika masih memakai versi lama.');
+    }
+    const previous = await tx.answer.findUnique({ where: { sessionId_questionId: { sessionId, questionId } } });
+    const dto = (answer: { questionId: string; answerData: unknown; version: number; mutationId: string | null }) => ({
+      questionId: answer.questionId, answerData: answer.answerData, version: answer.version, mutationId: answer.mutationId,
+    });
+    if (previous && (version as number) <= previous.version) {
+      if (version === previous.version && mutationId === previous.mutationId && JSON.stringify(normalized) === JSON.stringify(previous.answerData)) {
+        return { ...dto(previous), acknowledged: true };
+      }
+      return { error: 'ANSWER_VERSION_CONFLICT', message: 'Server sudah memiliki versi jawaban yang berbeda.', currentAnswer: dto(previous) } as const;
+    }
+    if (previous?.mutationId === mutationId) {
+      return { error: 'ANSWER_VERSION_CONFLICT', message: 'ID pengiriman yang sama tidak boleh digunakan untuk perubahan baru.', currentAnswer: dto(previous) } as const;
+    }
     const answer = await tx.answer.upsert({
       where: { sessionId_questionId: { sessionId, questionId } },
-      create: { sessionId, questionId, answerData: normalized === null ? Prisma.JsonNull : normalized },
-      update: { answerData: normalized === null ? Prisma.JsonNull : normalized, isCorrect: null },
+      create: { sessionId, questionId, answerData: normalized === null ? Prisma.JsonNull : normalized, version: version as number, mutationId },
+      update: { answerData: normalized === null ? Prisma.JsonNull : normalized, isCorrect: null, version: version as number, mutationId },
     });
-    return { questionId: answer.questionId, answerData: answer.answerData };
+    return { ...dto(answer), acknowledged: true };
   });
 }
 
-export async function finishExam(prisma: PrismaClient, studentId: string, sessionId: string) {
+export async function finishExam(prisma: PrismaClient, studentId: string, sessionId: string, expectedAnswers: unknown) {
   return examTransaction(prisma, async tx => {
     const session = await lockedSession(tx, sessionId, studentId);
-    return summary(await finalize(tx, session, await databaseNow(tx)));
+    const now = await databaseNow(tx);
+    if (session.status === ACTIVE && now < deadlineFor(session)) {
+      if (!Array.isArray(expectedAnswers) || expectedAnswers.length > 10000 || expectedAnswers.some(answer =>
+        !answer || typeof answer.questionId !== 'string' || !Number.isInteger(answer.version) || answer.version < 0 ||
+        answer.version > 2147483647 || (answer.version === 0 ? answer.mutationId !== null :
+          typeof answer.mutationId !== 'string' || !/^[A-Za-z0-9:_-]{16,128}$/.test(answer.mutationId)))) {
+        throw new ExamError(400, 'INVALID_ANSWER_MANIFEST', 'Daftar konfirmasi penyimpanan jawaban wajib disertakan sebelum menyelesaikan ujian.');
+      }
+      const stored = await tx.answer.findMany({ where: { sessionId }, select: { questionId: true, version: true, mutationId: true } });
+      const versions = new Map(stored.map(answer => [answer.questionId, answer]));
+      const unique = new Set(expectedAnswers.map(answer => answer.questionId));
+      if (unique.size !== expectedAnswers.length || expectedAnswers.some(answer => {
+        const current = versions.get(answer.questionId);
+        return !current || current.version !== answer.version || current.mutationId !== answer.mutationId;
+      })) throw new ExamError(409, 'ANSWERS_NOT_SYNCED', 'Jawaban terbaru belum dikonfirmasi server. Sinkronkan jawaban sebelum menyelesaikan ujian.');
+    }
+    return summary(await finalize(tx, session, now));
   });
 }
 

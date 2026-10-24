@@ -11,7 +11,10 @@ import jwt from 'jsonwebtoken';
 process.env.USE_REDIS = 'false';
 process.env.STORAGE_PROVIDER = 'LOCAL';
 const { createApp } = await import('../dist/app.js');
-const { startExam, saveExamAnswer, finishExam, finalizeExpiredExams } = await import('../dist/exam.js');
+const { startExam, saveExamAnswer: versionedSave, finishExam: versionedFinish, finalizeExpiredExams } = await import('../dist/exam.js');
+
+const saveExamAnswer = (...args) => versionedSave(...args, { version: 1, mutationId: crypto.randomUUID() });
+const finishExam = (...args) => versionedFinish(...args, []);
 
 // Explicit opt-in only; never fall back to DATABASE_URL or reuse an existing schema.
 const url = process.env.INTEGRITY_TEST_DATABASE_URL;
@@ -40,6 +43,8 @@ test('exam transactions on isolated PostgreSQL schema', { skip: !url, timeout: 6
     await new Promise(resolve => server.once('listening', resolve));
     const base = `http://127.0.0.1:${server.address().port}/api`;
     async function request(path, id = 's1', method = 'POST', body = {}) {
+      if (method === 'POST' && /\/sessions\/[^/]+\/answer$/.test(path)) body = { version: 1, mutationId: crypto.randomUUID(), ...body };
+      if (method === 'POST' && /\/sessions\/[^/]+\/finish$/.test(path)) body = { expectedAnswers: [], ...body };
       const token = jwt.sign({ id, sid: `sid-${id}` }, secret, { expiresIn: '5m' });
       const response = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, ...(method === 'GET' ? {} : { body: JSON.stringify(body) }) });
       return { status: response.status, body: await response.json() };
@@ -262,6 +267,89 @@ test('exam transactions on isolated PostgreSQL schema', { skip: !url, timeout: 6
       await prisma.question.update({ where: { id: 'q1' }, data: { correctAnswer: [] } });
       await assert.rejects(() => startExam(prisma, 's1', 'EXAM'), { code: 'INVALID_EXAM_CONFIG' });
       assert.equal(await prisma.examSession.count(), 0);
+    });
+    await t.test('late old versions cannot overwrite the latest answer and retries are idempotent', async () => {
+      const session = await open();
+      const old = { version: 1, mutationId: crypto.randomUUID() };
+      const latest = { version: 2, mutationId: crypto.randomUUID() };
+      assert.equal((await versionedSave(prisma, 's1', session.id, 'q1', 1, latest)).acknowledged, true);
+      const stale = await versionedSave(other, 's1', session.id, 'q1', 0, old);
+      assert.equal(stale.error, 'ANSWER_VERSION_CONFLICT');
+      assert.equal(stale.currentAnswer.version, 2);
+      assert.equal(stale.currentAnswer.answerData, 1);
+      const replay = await versionedSave(other, 's1', session.id, 'q1', 1, latest);
+      assert.equal(replay.acknowledged, true);
+      assert.equal(replay.version, 2);
+      assert.equal(await prisma.answer.count({ where: { sessionId: session.id } }), 1);
+      const changedReplay = await versionedSave(prisma, 's1', session.id, 'q1', 0, latest);
+      assert.equal(changedReplay.error, 'ANSWER_VERSION_CONFLICT');
+      const reusedId = await versionedSave(prisma, 's1', session.id, 'q1', 0, { ...latest, version: 3 });
+      assert.equal(reusedId.error, 'ANSWER_VERSION_CONFLICT');
+      const resume = await startExam(prisma, 's1', 'EXAM');
+      assert.deepEqual(resume.existingAnswers[0], { questionId: 'q1', answerData: 1, version: 2, mutationId: latest.mutationId });
+      assert.equal(Number((await versionedFinish(prisma, 's1', session.id, [{ questionId: 'q1', ...latest }])).totalScore), 0);
+    });
+    await t.test('simultaneous out-of-order HTTP writes retain the highest version across clients', async () => {
+      const session = await open();
+      const results = await Promise.all(Array.from({ length: 20 }, (_, i) => request(`/sessions/${session.id}/answer`, 's1', 'POST', {
+        questionId: 'q1', answerData: i % 2, version: i + 1, mutationId: crypto.randomUUID(),
+      })));
+      assert.ok(results.every(result => [200, 409].includes(result.status)), JSON.stringify(results));
+      const stored = await prisma.answer.findUnique({ where: { sessionId_questionId: { sessionId: session.id, questionId: 'q1' } } });
+      assert.equal(stored.version, 20);
+      assert.equal(stored.answerData, 1);
+    });
+    await t.test('same version with different IDs admits one writer and returns an explicit conflict to the other', async () => {
+      const session = await open();
+      const results = await Promise.all([0, 1].map(answer => versionedSave(answer ? other : prisma, 's1', session.id, 'q1', answer, { version: 1, mutationId: crypto.randomUUID() })));
+      assert.equal(results.filter(result => result.acknowledged).length, 1);
+      assert.equal(results.filter(result => result.error === 'ANSWER_VERSION_CONFLICT').length, 1);
+      const saved = results.find(result => result.acknowledged);
+      assert.equal((await prisma.answer.findFirst({ where: { sessionId: session.id } })).answerData, saved.answerData);
+    });
+    await t.test('unversioned or invalid-version requests cannot downgrade an existing answer', async () => {
+      const session = await open();
+      const latest = { version: 4, mutationId: crypto.randomUUID() };
+      await versionedSave(prisma, 's1', session.id, 'q1', 0, latest);
+      for (const version of [undefined, 0, -1, 1.5, '5', 2147483648]) {
+        await assert.rejects(() => versionedSave(prisma, 's1', session.id, 'q1', 1, { version, mutationId: crypto.randomUUID() }), { code: 'INVALID_ANSWER_VERSION' });
+      }
+      const raw = await fetch(base + `/sessions/${session.id}/answer`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt.sign({ id: 's1', sid: 'sid-s1' }, secret)}` },
+        body: JSON.stringify({ questionId: 'q1', answerData: 1 }),
+      });
+      assert.equal(raw.status, 400);
+      assert.equal((await prisma.answer.findFirst({ where: { sessionId: session.id } })).version, 4);
+    });
+    await t.test('manual finalization requires exact confirmed versions and leaves the exam open when unsynced', async () => {
+      const session = await open();
+      const saved = { version: 1, mutationId: crypto.randomUUID() };
+      await versionedSave(prisma, 's1', session.id, 'q1', 0, saved);
+      await assert.rejects(() => versionedFinish(prisma, 's1', session.id, [{ questionId: 'q1', version: 2, mutationId: crypto.randomUUID() }]), { code: 'ANSWERS_NOT_SYNCED' });
+      await assert.rejects(() => versionedFinish(prisma, 's1', session.id, undefined), { code: 'INVALID_ANSWER_MANIFEST' });
+      assert.equal((await prisma.examSession.findUnique({ where: { id: session.id } })).status, 'sedang_mengerjakan');
+      assert.equal((await prisma.answer.findFirst({ where: { sessionId: session.id } })).isCorrect, null);
+      const final = await versionedFinish(prisma, 's1', session.id, [{ questionId: 'q1', ...saved }]);
+      assert.equal(final.status, 'selesai');
+      assert.equal(Number(final.totalScore), 33.33);
+    });
+    await t.test('expired finalization is not blocked by an unsynced manifest', async () => {
+      const session = await open();
+      await expire(session.id);
+      assert.equal((await versionedFinish(prisma, 's1', session.id, undefined)).status, 'selesai');
+    });
+    await t.test('answer version migration preserves legacy data and version zero can be confirmed', async () => {
+      const session = await open();
+      await prisma.answer.create({ data: { sessionId: session.id, questionId: 'q1', answerData: 0 } });
+      await prisma.$executeRawUnsafe('ALTER TABLE "Answer" DROP COLUMN "version", DROP COLUMN "mutationId"');
+      const migration = readFileSync(new URL('../prisma/migrations/20261024140000_answer_versions/migration.sql', import.meta.url), 'utf8');
+      await prisma.$executeRawUnsafe(migration);
+      const stored = await prisma.answer.findFirst({ where: { sessionId: session.id } });
+      assert.equal(stored.answerData, 0);
+      assert.equal(stored.version, 0);
+      assert.equal(stored.mutationId, null);
+      const final = await versionedFinish(prisma, 's1', session.id, [{ questionId: 'q1', version: 0, mutationId: null }]);
+      assert.equal(Number(final.totalScore), 33.33);
     });
     await t.test('login card migration adds a nullable column without replacing existing accounts or sessions', async () => {
       const session = await open();
