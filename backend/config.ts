@@ -1,4 +1,7 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { backendDir } from './runtime-paths.js';
+dotenv.config({ path: path.join(backendDir, '.env'), quiet: true });
 
 export function loadJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
   const secret = env.JWT_SECRET;

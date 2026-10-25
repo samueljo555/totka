@@ -3,7 +3,8 @@ import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { readinessProbe, checkDatabase } from './readiness.js';
+import { runtimePaths } from './runtime-paths.js';
 import fs from 'fs';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
@@ -17,14 +18,12 @@ import { authorizeApi, safeUserSelect, studentQuestionSelect, isAdmin, validRole
 const BCRYPT_ROUNDS = 10;
 const JWT_EXPIRES_IN = '8h';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 import { ExamError, startExam, saveExamAnswer, finishExam, examTransaction, lockExamContent, assertContentEditable } from './exam.js';
 
 import { Storage } from '@google-cloud/storage';
 
-export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret = process.env.LOGIN_CARD_SECRET || JWT_SECRET) {
+export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret = process.env.LOGIN_CARD_SECRET || JWT_SECRET, runtime = { isDraining: () => false }) {
   const loginCards = createLoginCardCipher(cardSecret);
   const app = express();
 
@@ -36,10 +35,12 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
 
   const STORAGE_PROVIDER = process.env.STORAGE_PROVIDER || 'LOCAL'; // 'LOCAL' or 'GCP'
 
-  const uploadDir = path.join(__dirname, 'uploads');
+  const paths = runtimePaths();
+  const uploadDir = paths.uploads;
   if (STORAGE_PROVIDER === 'LOCAL' && !fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
+  if (STORAGE_PROVIDER === 'LOCAL') fs.accessSync(uploadDir, fs.constants.R_OK | fs.constants.W_OK);
 
   // Storage for Local
   const diskStorage = multer.diskStorage({
@@ -69,7 +70,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
     gcpStorage = new Storage(gcpOptions);
   }
 
-  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  app.use('/uploads', express.static(uploadDir));
 
   app.post('/api/upload', upload.single('image'), (req, res) => {
     if (!req.file) {
@@ -108,6 +109,15 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   // Basic health check route
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'TKA Backend API is running' });
+  });
+
+  // Readiness checks the real database and a required application column.
+  // No dependency details or credentials are returned to public callers.
+  const ready = readinessProbe(() => checkDatabase(prisma));
+  app.get('/api/ready', async (_req, res) => {
+    if (runtime.isDraining()) return void res.status(503).json({ status: 'unavailable' });
+    const available = await ready();
+    res.status(available ? 200 : 503).json({ status: available ? 'ready' : 'unavailable' });
   });
 
   // Example route: Get all packages
@@ -838,7 +848,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   });
 
   // Serve static frontend files in production
-  const frontendDistPath = path.join(__dirname, '../dist');
+  const frontendDistPath = paths.frontend;
   app.use(express.static(frontendDistPath));
 
   app.use((req, res, next) => {

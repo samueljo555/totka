@@ -77,3 +77,13 @@ test('editable exam content bypasses Redis entirely even if an old value exists'
   assert.deepEqual(await cache.get('exam', 0, async () => ({ content: 'current' })), { content: 'current' });
   assert.equal(reads, 0);
 });
+test('a new recovery namespace cannot read old cached data or invalidate its revisions', async () => {
+  const redis = backend(), old = createCache(() => redis, 'tka-before'), restored = createCache(() => redis, 'tka-restored');
+  await old.get('exam', 300, async () => 'old', ['package']);
+  assert.equal(await restored.get('exam', 300, async () => 'restored', ['package']), 'restored');
+  await restored.invalidate('package');
+  assert.equal(redis.data.get('tka-restored:revision:package'), '1');
+  assert.equal(redis.data.has('tka-before:revision:package'), false);
+  assert.equal(await old.get('exam', 300, async () => 'unexpected', ['package']), 'old');
+  assert.throws(() => createCache(() => redis, 'bad namespace'));
+});

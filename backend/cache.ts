@@ -1,5 +1,5 @@
 import { createClient } from 'redis';
-import 'dotenv/config';
+import './config.js';
 
 export interface CacheBackend {
   get(key: string): Promise<string | null>;
@@ -11,7 +11,8 @@ export interface CacheBackend {
 
 /** Coalesce concurrent misses even without Redis. Revisions prevent a fetch begun
  * before invalidation from repopulating a key that new readers will consume. */
-export function createCache(backend: () => CacheBackend | null) {
+export function createCache(backend: () => CacheBackend | null, namespace = 'tka') {
+  if (!/^[A-Za-z0-9:_-]{1,100}$/.test(namespace)) throw new Error('CACHE_NAMESPACE tidak valid.');
   const pending = new Map<string, Promise<unknown>>();
   const generations = new Map<string, number>();
   return {
@@ -21,8 +22,8 @@ export function createCache(backend: () => CacheBackend | null) {
       let versionedKey: string | null = null;
       if (client) {
         try {
-          const revisions = await client.mGet(tags.map(tag => `tka:revision:${tag}`));
-          versionedKey = `tka:v4:${key}:${revisions.map(value => value || '0').join(':')}`;
+          const revisions = await client.mGet(tags.map(tag => `${namespace}:revision:${tag}`));
+          versionedKey = `${namespace}:v4:${key}:${revisions.map(value => value || '0').join(':')}`;
         } catch { /* Bypass Redis on failure; no offline command queue. */ }
       }
       const flightKey = `${key}:${tags.join('|')}:${local}:${versionedKey || 'db'}`;
@@ -49,7 +50,7 @@ export function createCache(backend: () => CacheBackend | null) {
       generations.set(tag, (generations.get(tag) || 0) + 1);
       const client = backend();
       if (!client) return;
-      try { await client.incr(`tka:revision:${tag}`); await client.del(tag); }
+      try { await client.incr(`${namespace}:revision:${tag}`); await client.del(tag); }
       catch { /* Short TTLs limit staleness while Redis is unavailable. */ }
     },
   };
@@ -66,7 +67,7 @@ if (client) {
   client.on('error', () => { /* Requests fall back to PostgreSQL without logging credentials. */ });
   void client.connect().catch(() => {});
 }
-const cache = createCache(() => client?.isReady ? client.withCommandOptions({ timeout: 150 }) as unknown as CacheBackend : null);
+const cache = createCache(() => client?.isReady ? client.withCommandOptions({ timeout: 150 }) as unknown as CacheBackend : null, process.env.CACHE_NAMESPACE || 'tka');
 export const getOrSetCache = cache.get;
 export const deleteCache = cache.invalidate;
 export async function closeCache() { if (client?.isOpen) client.destroy(); }

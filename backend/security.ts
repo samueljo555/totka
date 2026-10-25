@@ -69,7 +69,7 @@ const rules: [string, RegExp, Role[]][] = [
 export function authorizeApi(prisma: PrismaClient, secret: string): RequestHandler {
   return async (req, res, next) => {
     if ((req.method === 'POST' && /^\/login\/?$/.test(req.path)) ||
-        (req.method === 'GET' && /^\/health\/?$/.test(req.path))) return next();
+        (req.method === 'GET' && /^\/(?:health|ready)\/?$/.test(req.path))) return next();
     const match = /^Bearer ([^ ]+)$/.exec(req.headers.authorization || '');
     if (!match) return void res.status(401).json({ error: 'UNAUTHORIZED' });
 

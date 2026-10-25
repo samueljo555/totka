@@ -7,8 +7,13 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "npx tsx watch index.ts",
-    "create-admin": "npx tsx create-admin.ts",
-    "seed": "npx tsx prisma/seed.ts"
+    "create-admin": "node dist/create-admin.js",
+    "seed": "npx tsx prisma/seed.ts",
+    "db:adopt": "node scripts/adopt-database.mjs",
+    "db:deploy": "prisma migrate deploy && npm run db:check",
+    "db:check": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs"
   },
   "keywords": [],
   "author": "",

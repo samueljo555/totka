@@ -5,7 +5,7 @@ Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Ba
 
 ## Keamanan API dan konfigurasi JWT
 
-Backend membaca `backend/.env` ketika dijalankan dari direktori `backend` (konfigurasi PM2 sudah menggunakan direktori tersebut). Isi `JWT_SECRET` dengan secret acak minimal 32 karakter; gunakan `openssl rand -hex 32` untuk membuatnya. Aplikasi menolak startup jika secret kosong atau terlalu pendek. Jangan gunakan nilai contoh sebagai secret produksi.
+Backend membaca `backend/.env` dari lokasi backend, baik dijalankan melalui source maupun hasil build. Isi `JWT_SECRET` dengan secret acak minimal 32 karakter; gunakan `openssl rand -hex 32` untuk membuatnya. Aplikasi menolak startup jika secret kosong atau terlalu pendek. Jangan gunakan nilai contoh sebagai secret produksi.
 
 Setelah pembaruan keamanan ini diterapkan, semua pengguna perlu login kembali karena JWT sekarang menyertakan pengenal sesi aktif (`sid`). Login pada perangkat lain atau reset password membatalkan token sebelumnya. Backend membaca identitas, peran, sekolah, dan sesi aktif dari database pada setiap request terproteksi; pool koneksi dibatasi per proses dan kapasitas aktual tetap perlu dibuktikan melalui load test.
 
@@ -16,7 +16,7 @@ Setelah pembaruan keamanan ini diterapkan, semua pengguna perlu login kembali ka
 | Operator | Melihat dan mendaftarkan siswa di sekolahnya; melihat token paket aktif dan sesi sekolahnya; detail hasil hanya untuk sesi selesai di sekolahnya, tanpa kunci jawaban |
 | Siswa | Memulai, menjawab, dan menyelesaikan sesi miliknya; tidak mendapat akses bank soal atau API administrasi |
 
-Operator tanpa sekolah ditolak. ID siswa, pembuat paket, dan penulis soal/bacaan ditentukan oleh identitas terautentikasi. Endpoint yang belum masuk daftar izin ditolak secara default. Endpoint publik hanya login dan health check. Pemeriksaan sesi juga memerlukan Bearer JWT.
+Operator tanpa sekolah ditolak. ID siswa, pembuat paket, dan penulis soal/bacaan ditentukan oleh identitas terautentikasi. Endpoint yang belum masuk daftar izin ditolak secara default. Endpoint publik hanya login, liveness, dan readiness. Pemeriksaan sesi juga memerlukan Bearer JWT.
 
 Password/hash dan token aktif tidak dikirim melalui daftar pengguna maupun relasi siswa pada sesi/analitik. Respons login tetap mengirim token milik pengguna itu sendiri. Kunci jawaban tidak dikirim melalui respons ujian siswa atau hasil operator. Nilai siswa yang ditunda juga disembunyikan oleh API.
 
@@ -32,7 +32,7 @@ Token paket aktif tersedia kembali bagi operator melalui daftar paket untuk menu
 
 ### Migrasi kartu login
 
-Sebelum menjalankan versi ini pada database eksisting, tambahkan kolom nullable menggunakan migrasi `backend/prisma/migrations/20261024120000_student_login_cards/migration.sql`, lalu jalankan `prisma generate` sebelum build backend. Migrasi hanya menambahkan satu kolom; tidak mengganti password, akun, atau sesi lama. Database uji dibuat dari schema terbaru. Riwayat migrasi awal proyek masih perlu diselaraskan pada tahap deployment; jangan menginisialisasi ulang atau menjalankan seed untuk menerapkan perubahan ini.
+Sebelum menjalankan versi ini pada database eksisting, tambahkan kolom nullable menggunakan migrasi `backend/prisma/migrations/20261024120000_student_login_cards/migration.sql`, lalu jalankan `prisma generate` sebelum build backend. Migrasi hanya menambahkan satu kolom; tidak mengganti password, akun, atau sesi lama. Database uji dibuat dari schema terbaru. Untuk instalasi baru atau riwayat migrasi yang belum lengkap, gunakan prosedur adopsi/deployment pada [panduan operasional](docs/OPERATIONS.md); jangan reset atau seed untuk pembaruan.
 
 `LOGIN_CARD_SECRET` bersifat opsional dan harus minimal 32 karakter jika diisi. Bila kosong, enkripsi menggunakan key yang diturunkan dari `JWT_SECRET`. Pertahankan secret yang dipilih beserta backup database; menggantinya tanpa migrasi enkripsi membuat kartu lama tidak dapat dibaca meski login bcrypt tetap berfungsi. Untuk memisahkan rotasi JWT dari enkripsi kartu, tetapkan `LOGIN_CARD_SECRET` yang stabil sejak pertama menerapkan fitur ini. Secret tidak disimpan di repository.
 
@@ -63,7 +63,7 @@ cd backend
 INTEGRITY_TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/TEST_DB' npm test
 ```
 
-Suite membuat schema acak dari schema Prisma terbaru, menjalankan transaksi menggunakan dua client/pool PostgreSQL, lalu menghapus schema buatannya. Pengguna database uji harus boleh membuat schema. Pengujian mencakup mulai serentak, jawaban lintas paket, payload salah, deadline setelah menunggu lock, finalisasi bersamaan, rollback, sweep multi-worker, dan perubahan konten saat peserta pertama masuk. Pengujian ini tidak membuktikan kapasitas 10.000 peserta. Optimasi query/cache dijelaskan pada bagian P1 di bawah. Penyelarasan migrasi deployment dan load test kapasitas tetap masuk prioritas berikutnya.
+Suite membuat schema acak dari schema Prisma terbaru, menjalankan transaksi menggunakan dua client/pool PostgreSQL, lalu menghapus schema buatannya. Pengguna database uji harus boleh membuat schema. Pengujian mencakup mulai serentak, jawaban lintas paket, payload salah, deadline setelah menunggu lock, finalisasi bersamaan, rollback, sweep multi-worker, dan perubahan konten saat peserta pertama masuk. Pengujian ini tidak membuktikan kapasitas 10.000 peserta. Optimasi query/cache dijelaskan pada bagian P1 di bawah. Deployment dan pemulihan dijelaskan pada [panduan operasional](docs/OPERATIONS.md). Load test kapasitas tetap menjadi prioritas berikutnya.
 
 ## Keandalan penyimpanan jawaban (P1)
 
@@ -91,7 +91,7 @@ cd ..
 npm run build
 ```
 
-Jalankan SQL hanya jika kolom tersebut belum ada. Jika database sudah dibuat dari schema terbaru melalui `db push`, tidak perlu menambahkan kolom yang sama lagi. Riwayat migrasi awal proyek belum selaras, sehingga jangan menjalankan reset/seed untuk pembaruan ini. Database aplikasi aktif tidak diubah oleh pengujian.
+Jalankan SQL hanya jika kolom tersebut belum ada. Jika database sudah dibuat dari schema terbaru melalui `db push`, tidak perlu menambahkan kolom yang sama lagi. Jalur migrasi lengkap dan adopsi database eksisting tersedia pada [panduan operasional](docs/OPERATIONS.md); jangan menjalankan reset/seed untuk pembaruan. Database aplikasi aktif tidak diubah oleh pengujian.
 
 ### Pengujian antrean
 
@@ -133,9 +133,19 @@ cd ..
 npm run build
 ```
 
-Jika indeks sudah dibuat lewat `db push` memakai schema terbaru, jangan jalankan SQL yang sama lagi. Riwayat migrasi awal masih perlu diselaraskan pada prioritas deployment. Frontend/backend harus diperbarui bersama karena kontrak respons daftar berubah menjadi pagination. Pengujian tidak mengubah database aplikasi aktif.
+Jika indeks sudah dibuat lewat `db push` memakai schema terbaru, jangan jalankan SQL yang sama lagi. Untuk fresh install dan riwayat migrasi yang belum lengkap, gunakan jalur deployment/adopsi pada [panduan operasional](docs/OPERATIONS.md). Frontend/backend harus diperbarui bersama karena kontrak respons daftar berubah menjadi pagination. Pengujian tidak mengubah database aplikasi aktif.
 
-Suite PostgreSQL menggunakan schema terisolasi dengan 10.050 siswa dan 502.500 jawaban untuk memverifikasi paging, filter sekolah, agregasi, cetak/ekspor yang dapat ditelusuri cursor, migrasi indeks, dan query plan indeks. Unit test menguji batas paging, budget pool, cold miss bersamaan, invalidasi antar-worker, serta kegagalan cache. Jalankan `INTEGRITY_TEST_DATABASE_URL=... npm test --prefix backend`, `npm run test:sync`, dan `npm run build`. Volume fixture ini bukan simulasi 10.000 pengguna bersamaan; stress test, ukuran server, backup/restore, dan konfigurasi hosting tetap membutuhkan tahap berikutnya.
+Suite PostgreSQL menggunakan schema terisolasi dengan 10.050 siswa dan 502.500 jawaban untuk memverifikasi paging, filter sekolah, agregasi, cetak/ekspor yang dapat ditelusuri cursor, migrasi indeks, dan query plan indeks. Unit test menguji batas paging, budget pool, cold miss bersamaan, invalidasi antar-worker, serta kegagalan cache. Jalankan `INTEGRITY_TEST_DATABASE_URL=... npm test --prefix backend`, `npm run test:sync`, dan `npm run build`. Volume fixture ini bukan simulasi 10.000 pengguna bersamaan; stress test dan ukuran server target tetap membutuhkan tahap berikutnya; prosedur backup/restore tersedia pada panduan operasional.
+
+## Deployment dan pemulihan (P1)
+
+Lihat [panduan operasional lengkap](docs/OPERATIONS.md) untuk pemasangan baru, adopsi database eksisting, pembaruan release, backup, restore, dan rollback. `ops/prepare-release.sh` membangun frontend/backend dengan lockfile; `npm run db:deploy --prefix backend` menjalankan migrasi serta pemeriksaan drift. Database yang dibuat melalui `db push` perlu diaudit dengan `db:adopt` sebelum riwayatnya dicatat; perintah audit tanpa `--apply` tidak mengubah riwayat. Migrasi yang sudah diterbitkan tetap utuh dan dilengkapi bridge untuk fresh install. Schema legacy berisi identitas sekolah/login yang belum dipetakan ditolak untuk penanganan khusus.
+
+Lokasi frontend dan unggahan sekarang sama pada source dan backend hasil kompilasi: root `dist` dan `backend/uploads`, dapat diganti melalui `FRONTEND_DIST_DIR`/`UPLOAD_DIR`. Periksa dan pindahkan media versi compiled lama dari `backend/dist/uploads` saat maintenance; tidak ada pemindahan otomatis. Gunakan volume persisten di luar folder release.
+
+`GET /api/health` menunjukkan proses hidup. `GET /api/ready` memeriksa akses tabel/kolom database, merespons 503 ketika tidak siap, dan membatasi waktu respons. PM2 menunggu readiness startup; shutdown memberi waktu bagi HTTP dan sweep sebelum menutup koneksi. `CACHE_NAMESPACE` dapat diganti seragam pada semua worker setelah restore agar cache lama tidak terbaca.
+
+`npm run backup --prefix backend` memerlukan `BACKUP_DIR` absolut di luar repository dan PostgreSQL client. Bundle menyertakan database, media lokal, serta checksum; secret dicadangkan terpisah secara aman. `npm run restore --prefix backend -- /PATH/BUNDLE` memerlukan `RESTORE_DATABASE_URL` khusus dan direktori media kosong, serta menolak database target terisi. Restore diuji menggunakan `pg_dump`/`pg_restore` nyata dengan verifikasi akun, kartu terenkripsi, jawaban, nilai, dan gambar. Objek GCP memerlukan backup terpisah. Cron, penyimpanan di luar host, monitoring eksternal, dan migrasi produksi belum dipasang/dijalankan oleh perubahan kode ini.
 
 ## 🚀 Pembaruan Terkini (Changelog)
 

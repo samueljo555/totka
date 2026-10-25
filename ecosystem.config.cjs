@@ -5,7 +5,9 @@ module.exports = {
     {
       name: "tka-app-server",
       script: "dist/index.js",
-      cwd: "./backend",
+      cwd: require("node:path").join(__dirname, "backend"),
+      wait_ready: true,
+      listen_timeout: 20000,
       instances: workers,
       exec_mode: "cluster",
       kill_timeout: 20000,
