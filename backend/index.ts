@@ -65,6 +65,8 @@ const shutdown = async () => {
   await prisma.$disconnect();
   await pool.end();
   clearTimeout(deadline);
+  // Cluster managers keep an IPC channel open after HTTP and pools are closed.
+  if (process.connected) process.disconnect?.();
 };
 process.on('SIGTERM', () => { void shutdown().catch(() => { console.error('Shutdown failed'); process.exit(1); }); });
 process.on('SIGINT', () => { void shutdown().catch(() => { console.error('Shutdown failed'); process.exit(1); }); });

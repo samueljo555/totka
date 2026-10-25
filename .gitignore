@@ -36,3 +36,8 @@ GCP_DEPLOYMENT_GUIDE.md
 backups/
 *.dump
 *.partial/
+
+# Raw load-test artifacts and private fixture credentials
+load-tests/results/
+load-summary.json
+load-credentials*.json

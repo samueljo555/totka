@@ -63,7 +63,7 @@ cd backend
 INTEGRITY_TEST_DATABASE_URL='postgresql://USER:PASSWORD@127.0.0.1:5432/TEST_DB' npm test
 ```
 
-Suite membuat schema acak dari schema Prisma terbaru, menjalankan transaksi menggunakan dua client/pool PostgreSQL, lalu menghapus schema buatannya. Pengguna database uji harus boleh membuat schema. Pengujian mencakup mulai serentak, jawaban lintas paket, payload salah, deadline setelah menunggu lock, finalisasi bersamaan, rollback, sweep multi-worker, dan perubahan konten saat peserta pertama masuk. Pengujian ini tidak membuktikan kapasitas 10.000 peserta. Optimasi query/cache dijelaskan pada bagian P1 di bawah. Deployment dan pemulihan dijelaskan pada [panduan operasional](docs/OPERATIONS.md). Load test kapasitas tetap menjadi prioritas berikutnya.
+Suite membuat schema acak dari schema Prisma terbaru, menjalankan transaksi menggunakan dua client/pool PostgreSQL, lalu menghapus schema buatannya. Pengguna database uji harus boleh membuat schema. Pengujian mencakup mulai serentak, jawaban lintas paket, payload salah, deadline setelah menunggu lock, finalisasi bersamaan, rollback, sweep multi-worker, dan perubahan konten saat peserta pertama masuk. Pengujian ini tidak membuktikan kapasitas 10.000 peserta. Optimasi query/cache dijelaskan pada bagian P1 di bawah. Deployment dan pemulihan dijelaskan pada [panduan operasional](docs/OPERATIONS.md). Hasil uji beban awal tersedia pada [laporan P2](docs/LOAD_TEST_RESULTS.md); kapasitas 10.000 peserta bersamaan belum terbukti.
 
 ## Keandalan penyimpanan jawaban (P1)
 
@@ -135,7 +135,7 @@ npm run build
 
 Jika indeks sudah dibuat lewat `db push` memakai schema terbaru, jangan jalankan SQL yang sama lagi. Untuk fresh install dan riwayat migrasi yang belum lengkap, gunakan jalur deployment/adopsi pada [panduan operasional](docs/OPERATIONS.md). Frontend/backend harus diperbarui bersama karena kontrak respons daftar berubah menjadi pagination. Pengujian tidak mengubah database aplikasi aktif.
 
-Suite PostgreSQL menggunakan schema terisolasi dengan 10.050 siswa dan 502.500 jawaban untuk memverifikasi paging, filter sekolah, agregasi, cetak/ekspor yang dapat ditelusuri cursor, migrasi indeks, dan query plan indeks. Unit test menguji batas paging, budget pool, cold miss bersamaan, invalidasi antar-worker, serta kegagalan cache. Jalankan `INTEGRITY_TEST_DATABASE_URL=... npm test --prefix backend`, `npm run test:sync`, dan `npm run build`. Volume fixture ini bukan simulasi 10.000 pengguna bersamaan; stress test dan ukuran server target tetap membutuhkan tahap berikutnya; prosedur backup/restore tersedia pada panduan operasional.
+Suite PostgreSQL menggunakan schema terisolasi dengan 10.050 siswa dan 502.500 jawaban untuk memverifikasi paging, filter sekolah, agregasi, cetak/ekspor yang dapat ditelusuri cursor, migrasi indeks, dan query plan indeks. Unit test menguji batas paging, budget pool, cold miss bersamaan, invalidasi antar-worker, serta kegagalan cache. Jalankan `INTEGRITY_TEST_DATABASE_URL=... npm test --prefix backend`, `npm run test:sync`, dan `npm run build`. Volume fixture ini bukan simulasi 10.000 pengguna bersamaan; uji beban awal tersedia pada bagian P2 di bawah, sedangkan ukuran server target dan kapasitas produksi masih perlu diverifikasi; prosedur backup/restore tersedia pada panduan operasional.
 
 ## Deployment dan pemulihan (P1)
 
@@ -146,6 +146,12 @@ Lokasi frontend dan unggahan sekarang sama pada source dan backend hasil kompila
 `GET /api/health` menunjukkan proses hidup. `GET /api/ready` memeriksa akses tabel/kolom database, merespons 503 ketika tidak siap, dan membatasi waktu respons. PM2 menunggu readiness startup; shutdown memberi waktu bagi HTTP dan sweep sebelum menutup koneksi. `CACHE_NAMESPACE` dapat diganti seragam pada semua worker setelah restore agar cache lama tidak terbaca.
 
 `npm run backup --prefix backend` memerlukan `BACKUP_DIR` absolut di luar repository dan PostgreSQL client. Bundle menyertakan database, media lokal, serta checksum; secret dicadangkan terpisah secara aman. `npm run restore --prefix backend -- /PATH/BUNDLE` memerlukan `RESTORE_DATABASE_URL` khusus dan direktori media kosong, serta menolak database target terisi. Restore diuji menggunakan `pg_dump`/`pg_restore` nyata dengan verifikasi akun, kartu terenkripsi, jawaban, nilai, dan gambar. Objek GCP memerlukan backup terpisah. Cron, penyimpanan di luar host, monitoring eksternal, dan migrasi produksi belum dipasang/dijalankan oleh perubahan kode ini.
+
+## Uji beban awal (P2)
+
+[Metode dan cara menjalankan](docs/LOAD_TESTING.md) serta [hasil baseline](docs/LOAD_TEST_RESULTS.md) tersedia untuk pengujian HTTP nyata dengan k6 dan database terpisah. Harness `npm run test:load --prefix backend` memerlukan `LOAD_TEST_DATABASE_URL` eksplisit, membuat database acak berisi 10.050 siswa/502.500 jawaban historis, lalu membersihkannya. Generator lama yang menulis ke `DATABASE_URL` dinonaktifkan. Akun unik, satu alur per peserta, paket baru per tahap, receipt versi, replay idempoten, resume, manifest finalisasi, dan audit nilai mencegah hasil ringan palsu akibat sesi yang sudah selesai dipakai ulang.
+
+Pada baseline lokal 4 CPU logis/RAM 3,37 GiB, dua worker tanpa Redis, alur lengkap 50 peserta lolos batas sementara. Alur tanpa login 100 peserta lolos pada baseline, tetapi run kedua dengan worker baru gagal batas mulai. Login 100 peserta dan mulai ujian 250 peserta juga melewati batas respons walaupun tidak ada error HTTP atau kerusakan jawaban/nilai. Pengujian pembaruan berulang dan finalisasi pada detik ke-120 tetap menjaga isi/versi jawaban dan nilai. **Ini belum membuktikan kapasitas 10.000 peserta bersamaan.** Pengujian produksi memerlukan spesifikasi target, generator terpisah, profiling, dan pengujian durasi representatif. Proses shutdown cluster juga diperbaiki agar kanal IPC ditutup setelah HTTP/pool selesai.
 
 ## 🚀 Pembaruan Terkini (Changelog)
 

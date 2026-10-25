@@ -1,0 +1,806 @@
+{
+  "runId": "7d7f37a6842b49a2",
+  "generatedAt": "2026-10-25T05:24:32.591Z",
+  "stages": [
+    {
+      "profile": "login",
+      "vus": 25,
+      "elapsedSeconds": 1.147,
+      "exitCode": 0,
+      "passed": true,
+      "completed": 25,
+      "thresholdFailures": [],
+      "audit": {
+        "sessions": 0,
+        "finished": 0,
+        "active": 0,
+        "answers": 0,
+        "invalidFinishedSessions": 0,
+        "passed": true,
+        "allParticipantsFinished": true
+      },
+      "resources": {
+        "samples": 3,
+        "app": {
+          "peakRssMb": 346.203125,
+          "averageCpuPercent": 199.64664310954058,
+          "peakCpuPercent": 222.77227722772278
+        },
+        "generator": {
+          "peakRssMb": 70.7265625,
+          "averageCpuPercent": 26.50176678445229,
+          "peakCpuPercent": 29.7029702970297
+        },
+        "postgresBackends": {
+          "peakRssMb": 193.15234375,
+          "averageCpuPercent": 0,
+          "peakCpuPercent": 0
+        },
+        "peakConnections": 10,
+        "peakActiveConnections": 0,
+        "peakLockWaiters": 0,
+        "minimumAvailableMemoryMb": 1534.00390625,
+        "note": "CPU 100% equals one logical core. PostgreSQL RSS is the sum of app connection backends and can double-count shared pages; excludes postmaster/background processes. Generator/app/DB share the host."
+      },
+      "samplerError": null,
+      "httpRequests": 25,
+      "httpErrorRate": 0,
+      "endpointLatency": {
+        "http_req_duration{expected_response:true}": {
+          "avg": 447.62422804,
+          "min": 218.013762,
+          "med": 427.869098,
+          "max": 634.479115,
+          "p(90)": 616.1113128000001,
+          "p(95)": 621.5189712,
+          "p(99)": 631.6336949199999
+        },
+        "http_req_duration{endpoint:login}": {
+          "avg": 447.62422804,
+          "min": 218.013762,
+          "med": 427.869098,
+          "max": 634.479115,
+          "p(90)": 616.1113128000001,
+          "p(95)": 621.5189712,
+          "p(99)": 631.6336949199999
+        }
+      },
+      "retries": 0
+    },
+    {
+      "profile": "login",
+      "vus": 100,
+      "elapsedSeconds": 2.726,
+      "exitCode": 99,
+      "passed": false,
+      "completed": 100,
+      "thresholdFailures": [
+        "http_req_duration{endpoint:login}: p(95)<2000"
+      ],
+      "audit": {
+        "sessions": 0,
+        "finished": 0,
+        "active": 0,
+        "answers": 0,
+        "invalidFinishedSessions": 0,
+        "passed": true,
+        "allParticipantsFinished": true
+      },
+      "resources": {
+        "samples": 4,
+        "app": {
+          "peakRssMb": 326.34375,
+          "averageCpuPercent": 306.67158127534094,
+          "peakCpuPercent": 402.0942408376963
+        },
+        "generator": {
+          "peakRssMb": 72.7734375,
+          "averageCpuPercent": 15.112421673424253,
+          "peakCpuPercent": 37.70028275212064
+        },
+        "postgresBackends": {
+          "peakRssMb": 212.6953125,
+          "averageCpuPercent": 2.580169553999262,
+          "peakCpuPercent": 4.71253534401508
+        },
+        "peakConnections": 10,
+        "peakActiveConnections": 0,
+        "peakLockWaiters": 0,
+        "minimumAvailableMemoryMb": 1524.171875,
+        "note": "CPU 100% equals one logical core. PostgreSQL RSS is the sum of app connection backends and can double-count shared pages; excludes postmaster/background processes. Generator/app/DB share the host."
+      },
+      "samplerError": null,
+      "httpRequests": 100,
+      "httpErrorRate": 0,
+      "endpointLatency": {
+        "http_req_duration{expected_response:true}": {
+          "avg": 1208.47703713,
+          "min": 201.800728,
+          "med": 1213.9302975,
+          "max": 2171.939412,
+          "p(90)": 1970.5163728000002,
+          "p(95)": 2059.8422484000002,
+          "p(99)": 2142.1285428900005
+        },
+        "http_req_duration{endpoint:login}": {
+          "avg": 1208.47703713,
+          "min": 201.800728,
+          "med": 1213.9302975,
+          "max": 2171.939412,
+          "p(90)": 1970.5163728000002,
+          "p(95)": 2059.8422484000002,
+          "p(99)": 2142.1285428900005
+        }
+      },
+      "retries": 0
+    },
+    {
+      "profile": "login",
+      "vus": 250,
+      "skipped": "Higher load skipped after a lower stage failed."
+    },
+    {
+      "profile": "journey",
+      "vus": 10,
+      "elapsedSeconds": 27.529,
+      "exitCode": 0,
+      "passed": true,
+      "completed": 10,
+      "thresholdFailures": [],
+      "audit": {
+        "sessions": 10,
+        "finished": 10,
+        "active": 0,
+        "answers": 500,
+        "invalidFinishedSessions": 0,
+        "passed": true,
+        "allParticipantsFinished": true
+      },
+      "resources": {
+        "samples": 29,
+        "app": {
+          "peakRssMb": 446.26171875,
+          "averageCpuPercent": 46.30369993457875,
+          "peakCpuPercent": 199.40476190476207
+        },
+        "generator": {
+          "peakRssMb": 67.33203125,
+          "averageCpuPercent": 4.070654939303627,
+          "peakCpuPercent": 29.761904761904763
+        },
+        "postgresBackends": {
+          "peakRssMb": 255.5703125,
+          "averageCpuPercent": 8.25034527876717,
+          "peakCpuPercent": 10.989010989010989
+        },
+        "peakConnections": 10,
+        "peakActiveConnections": 1,
+        "peakLockWaiters": 0,
+        "minimumAvailableMemoryMb": 1443.546875,
+        "note": "CPU 100% equals one logical core. PostgreSQL RSS is the sum of app connection backends and can double-count shared pages; excludes postmaster/background processes. Generator/app/DB share the host."
+      },
+      "samplerError": null,
+      "httpRequests": 590,
+      "httpErrorRate": 0,
+      "endpointLatency": {
+        "http_req_duration{expected_response:true}": {
+          "p(90)": 29.186435799999998,
+          "p(95)": 36.53472769999999,
+          "p(99)": 250.91650616,
+          "avg": 26.039675086440667,
+          "min": 8.274159,
+          "med": 17.806821,
+          "max": 396.965643
+        },
+        "http_req_duration{endpoint:answer}": {
+          "avg": 19.171088694000016,
+          "min": 9.295929,
+          "med": 17.6508255,
+          "max": 84.691048,
+          "p(90)": 25.618204100000003,
+          "p(95)": 30.633405349999997,
+          "p(99)": 36.68952360999999
+        },
+        "http_req_duration{endpoint:finish}": {
+          "p(99)": 50.142476290000005,
+          "avg": 27.4531165,
+          "min": 18.353333,
+          "med": 24.299881499999998,
+          "max": 51.551689,
+          "p(90)": 37.4595619,
+          "p(95)": 44.50562544999998
+        },
+        "http_req_duration{endpoint:start}": {
+          "max": 251.98153,
+          "p(90)": 250.9045396,
+          "p(95)": 251.4430348,
+          "p(99)": 251.87383096,
+          "avg": 185.25205780000002,
+          "min": 91.730886,
+          "med": 183.3731795
+        },
+        "http_req_duration{endpoint:login}": {
+          "avg": 254.64867519999999,
+          "min": 98.297802,
+          "med": 259.7446875,
+          "max": 396.965643,
+          "p(90)": 322.68821099999997,
+          "p(95)": 359.8269269999999,
+          "p(99)": 389.5378998
+        }
+      },
+      "retries": 0
+    },
+    {
+      "profile": "journey",
+      "vus": 25,
+      "elapsedSeconds": 27.737,
+      "exitCode": 0,
+      "passed": true,
+      "completed": 25,
+      "thresholdFailures": [],
+      "audit": {
+        "sessions": 25,
+        "finished": 25,
+        "active": 0,
+        "answers": 1250,
+        "invalidFinishedSessions": 0,
+        "passed": true,
+        "allParticipantsFinished": true
+      },
+      "resources": {
+        "samples": 29,
+        "app": {
+          "peakRssMb": 450.89453125,
+          "averageCpuPercent": 70.28684827710626,
+          "peakCpuPercent": 264.6766169154229
+        },
+        "generator": {
+          "peakRssMb": 72.5859375,
+          "averageCpuPercent": 6.963738047988453,
+          "peakCpuPercent": 32.835820895522396
+        },
+        "postgresBackends": {
+          "peakRssMb": 292.98046875,
+          "averageCpuPercent": 18.54591376510914,
+          "peakCpuPercent": 26.973026973026933
+        },
+        "peakConnections": 10,
+        "peakActiveConnections": 2,
+        "peakLockWaiters": 0,
+        "minimumAvailableMemoryMb": 1395.62890625,
+        "note": "CPU 100% equals one logical core. PostgreSQL RSS is the sum of app connection backends and can double-count shared pages; excludes postmaster/background processes. Generator/app/DB share the host."
+      },
+      "samplerError": null,
+      "httpRequests": 1475,
+      "httpErrorRate": 0,
+      "endpointLatency": {
+        "http_req_duration{endpoint:answer}": {
+          "p(90)": 21.721898700000004,
+          "p(95)": 24.011178049999998,
+          "p(99)": 33.34074874999999,
+          "avg": 15.965022237599996,
+          "min": 8.507927,
+          "med": 15.111473,
+          "max": 43.664207
+        },
+        "http_req_duration{expected_response:true}": {
+          "min": 7.848393,
+          "med": 15.11338,
+          "max": 728.161349,
+          "p(90)": 23.1367804,
+          "p(95)": 28.411700899999985,
+          "p(99)": 355.45920717999974,
+          "avg": 24.07054878576275
+        },
+        "http_req_duration{endpoint:start}": {
+          "med": 73.239421,
+          "max": 213.686605,
+          "p(90)": 152.653116,
+          "p(95)": 169.89866159999994,
+          "p(99)": 203.84488635999992,
+          "avg": 84.07710684000001,
+          "min": 15.952935
+        },
+        "http_req_duration{endpoint:finish}": {
+          "med": 24.128013,
+          "max": 34.302657,
+          "p(90)": 32.2673778,
+          "p(95)": 32.6794022,
+          "p(99)": 33.93147228,
+          "avg": 24.405447400000003,
+          "min": 16.272591
+        },
+        "http_req_duration{endpoint:login}": {
+          "avg": 432.07971531999993,
+          "min": 132.899305,
+          "med": 467.692344,
+          "max": 728.161349,
+          "p(90)": 651.5284408,
+          "p(95)": 684.2040671999999,
+          "p(99)": 719.43832412
+        }
+      },
+      "retries": 0
+    },
+    {
+      "profile": "journey",
+      "vus": 50,
+      "elapsedSeconds": 28.746,
+      "exitCode": 0,
+      "passed": true,
+      "completed": 50,
+      "thresholdFailures": [],
+      "audit": {
+        "sessions": 50,
+        "finished": 50,
+        "active": 0,
+        "answers": 2500,
+        "invalidFinishedSessions": 0,
+        "passed": true,
+        "allParticipantsFinished": true
+      },
+      "resources": {
+        "samples": 30,
+        "app": {
+          "peakRssMb": 470.625,
+          "averageCpuPercent": 97.84463247327551,
+          "peakCpuPercent": 287.7906976744185
+        },
+        "generator": {
+          "peakRssMb": 102.40234375,
+          "averageCpuPercent": 10.376405863713916,
+          "peakCpuPercent": 33.91472868217054
+        },
+        "postgresBackends": {
+          "peakRssMb": 345.796875,
+          "averageCpuPercent": 30.04979282008426,
+          "peakCpuPercent": 42.16867469879517
+        },
+        "peakConnections": 10,
+        "peakActiveConnections": 1,
+        "peakLockWaiters": 0,
+        "minimumAvailableMemoryMb": 1327.63671875,
+        "note": "CPU 100% equals one logical core. PostgreSQL RSS is the sum of app connection backends and can double-count shared pages; excludes postmaster/background processes. Generator/app/DB share the host."
+      },
+      "samplerError": null,
+      "httpRequests": 2950,
+      "httpErrorRate": 0,
+      "endpointLatency": {
+        "http_req_duration{endpoint:answer}": {
+          "min": 8.21237,
+          "med": 13.229632,
+          "max": 196.925655,
+          "p(90)": 22.448323300000002,
+          "p(95)": 26.72034269999996,
+          "p(99)": 49.48649947999999,
+          "avg": 15.624543494799969
+        },
+        "http_req_duration{endpoint:login}": {
+          "max": 1423.183288,
+          "p(90)": 1316.5793169,
+          "p(95)": 1333.4103886999999,
+          "p(99)": 1407.1680064799998,
+          "avg": 764.0316584400002,
+          "min": 132.475251,
+          "med": 732.0572950000001
+        },
+        "http_req_duration{endpoint:start}": {
+          "med": 101.15924849999999,
+          "max": 210.79845,
+          "p(90)": 164.54899250000003,
+          "p(95)": 181.74494449999997,
+          "p(99)": 202.06732178999997,
+          "avg": 103.50620606000001,
+          "min": 24.456299
+        },
+        "http_req_duration{expected_response:true}": {
+          "med": 13.3986475,
+          "max": 1423.183288,
+          "p(90)": 26.065192099999997,
+          "p(95)": 44.59646609999998,
+          "p(99)": 642.5016268099985,
+          "avg": 30.328108042372975,
+          "min": 7.336118
+        },
+        "http_req_duration{endpoint:finish}": {
+          "p(99)": 40.833735049999994,
+          "avg": 22.627150360000005,
+          "min": 15.344552,
+          "med": 21.4352345,
+          "max": 41.607031,
+          "p(90)": 28.4495947,
+          "p(95)": 33.76425334999998
+        }
+      },
+      "retries": 0
+    },
+    {
+      "profile": "journey",
+      "vus": 100,
+      "elapsedSeconds": 30.248,
+      "exitCode": 99,
+      "passed": false,
+      "completed": 100,
+      "thresholdFailures": [
+        "http_req_duration{endpoint:login}: p(95)<2000"
+      ],
+      "audit": {
+        "sessions": 100,
+        "finished": 100,
+        "active": 0,
+        "answers": 5000,
+        "invalidFinishedSessions": 0,
+        "passed": true,
+        "allParticipantsFinished": true
+      },
+      "resources": {
+        "samples": 32,
+        "app": {
+          "peakRssMb": 488.82421875,
+          "averageCpuPercent": 149.9519915240208,
+          "peakCpuPercent": 358.9999999999989
+        },
+        "generator": {
+          "peakRssMb": 154.125,
+          "averageCpuPercent": 15.991788895142866,
+          "peakCpuPercent": 40.23552502453386
+        },
+        "postgresBackends": {
+          "peakRssMb": 436.4921875,
+          "averageCpuPercent": 48.50511538588883,
+          "peakCpuPercent": 60.99999999999994
+        },
+        "peakConnections": 10,
+        "peakActiveConnections": 2,
+        "peakLockWaiters": 0,
+        "minimumAvailableMemoryMb": 1265.8125,
+        "note": "CPU 100% equals one logical core. PostgreSQL RSS is the sum of app connection backends and can double-count shared pages; excludes postmaster/background processes. Generator/app/DB share the host."
+      },
+      "samplerError": null,
+      "httpRequests": 5900,
+      "httpErrorRate": 0,
+      "endpointLatency": {
+        "http_req_duration{endpoint:login}": {
+          "p(90)": 2547.4739763000002,
+          "p(95)": 2706.8762719,
+          "p(99)": 2819.05102928,
+          "avg": 1464.6547511999995,
+          "min": 132.301745,
+          "med": 1454.480239,
+          "max": 2827.424279
+        },
+        "http_req_duration{endpoint:finish}": {
+          "p(99)": 45.4794938500001,
+          "avg": 23.6593404,
+          "min": 15.428022,
+          "med": 22.011875,
+          "max": 64.367095,
+          "p(90)": 34.3725943,
+          "p(95)": 36.5060503
+        },
+        "http_req_duration{endpoint:start}": {
+          "min": 39.427897,
+          "med": 177.1403295,
+          "max": 450.574084,
+          "p(90)": 311.02303,
+          "p(95)": 377.99214814999993,
+          "p(99)": 447.58526509,
+          "avg": 184.44785875000002
+        },
+        "http_req_duration{endpoint:answer}": {
+          "med": 14.244637,
+          "max": 552.169654,
+          "p(90)": 34.961799000000006,
+          "p(95)": 52.05277525000003,
+          "p(99)": 257.71635675000147,
+          "avg": 24.425554056799935,
+          "min": 7.765666
+        },
+        "http_req_duration{expected_response:true}": {
+          "p(95)": 151.74476455,
+          "p(99)": 1221.8607529200021,
+          "avg": 53.34496380305065,
+          "min": 7.229148,
+          "med": 15.0831615,
+          "max": 2827.424279,
+          "p(90)": 46.7230925
+        }
+      },
+      "retries": 0
+    },
+    {
+      "profile": "journey",
+      "vus": 250,
+      "skipped": "Higher load skipped after a lower stage failed."
+    },
+    {
+      "profile": "steady",
+      "vus": 50,
+      "elapsedSeconds": 27.564,
+      "exitCode": 0,
+      "passed": true,
+      "completed": 50,
+      "thresholdFailures": [],
+      "audit": {
+        "sessions": 50,
+        "finished": 50,
+        "active": 0,
+        "answers": 2500,
+        "invalidFinishedSessions": 0,
+        "passed": true,
+        "allParticipantsFinished": true
+      },
+      "resources": {
+        "samples": 29,
+        "app": {
+          "peakRssMb": 486.24609375,
+          "averageCpuPercent": 82.18033918001227,
+          "peakCpuPercent": 104.74308300395279
+        },
+        "generator": {
+          "peakRssMb": 101.3359375,
+          "averageCpuPercent": 10.712859062352472,
+          "peakCpuPercent": 44.466403162055336
+        },
+        "postgresBackends": {
+          "peakRssMb": 474.921875,
+          "averageCpuPercent": 31.01281911609832,
+          "peakCpuPercent": 50.1002004008016
+        },
+        "peakConnections": 10,
+        "peakActiveConnections": 2,
+        "peakLockWaiters": 0,
+        "minimumAvailableMemoryMb": 1316.1171875,
+        "note": "CPU 100% equals one logical core. PostgreSQL RSS is the sum of app connection backends and can double-count shared pages; excludes postmaster/background processes. Generator/app/DB share the host."
+      },
+      "samplerError": null,
+      "httpRequests": 2900,
+      "httpErrorRate": 0,
+      "endpointLatency": {
+        "http_req_duration{endpoint:start}": {
+          "med": 174.579989,
+          "max": 259.522171,
+          "p(90)": 250.2106402,
+          "p(95)": 253.1528259,
+          "p(99)": 258.80046764,
+          "avg": 172.07779302000003,
+          "min": 77.134997
+        },
+        "http_req_duration{endpoint:finish}": {
+          "min": 14.66251,
+          "med": 27.141954499999997,
+          "max": 53.115348,
+          "p(90)": 48.700919500000005,
+          "p(95)": 51.1462309,
+          "p(99)": 52.736975879999996,
+          "avg": 30.595379580000003
+        },
+        "http_req_duration{expected_response:true}": {
+          "p(90)": 25.447484999999997,
+          "p(95)": 31.584512449999988,
+          "p(99)": 149.27320241999914,
+          "avg": 17.818624964482773,
+          "min": 7.227876,
+          "med": 12.994767,
+          "max": 259.522171
+        },
+        "http_req_duration{endpoint:answer}": {
+          "med": 12.900883499999999,
+          "max": 73.319831,
+          "p(90)": 22.618067699999994,
+          "p(95)": 26.723425250000002,
+          "p(99)": 36.87307156999998,
+          "avg": 14.635308617600021,
+          "min": 8.153943
+        }
+      },
+      "retries": 0
+    },
+    {
+      "profile": "steady",
+      "vus": 100,
+      "elapsedSeconds": 28.607,
+      "exitCode": 0,
+      "passed": true,
+      "completed": 100,
+      "thresholdFailures": [],
+      "audit": {
+        "sessions": 100,
+        "finished": 100,
+        "active": 0,
+        "answers": 5000,
+        "invalidFinishedSessions": 0,
+        "passed": true,
+        "allParticipantsFinished": true
+      },
+      "resources": {
+        "samples": 30,
+        "app": {
+          "peakRssMb": 485.75390625,
+          "averageCpuPercent": 130.54894272510862,
+          "peakCpuPercent": 181.72690763052233
+        },
+        "generator": {
+          "peakRssMb": 148.70703125,
+          "averageCpuPercent": 16.874387340708587,
+          "peakCpuPercent": 58.99705014749262
+        },
+        "postgresBackends": {
+          "peakRssMb": 520.81640625,
+          "averageCpuPercent": 51.91849880969052,
+          "peakCpuPercent": 80.11869436201803
+        },
+        "peakConnections": 10,
+        "peakActiveConnections": 1,
+        "peakLockWaiters": 0,
+        "minimumAvailableMemoryMb": 1244.55078125,
+        "note": "CPU 100% equals one logical core. PostgreSQL RSS is the sum of app connection backends and can double-count shared pages; excludes postmaster/background processes. Generator/app/DB share the host."
+      },
+      "samplerError": null,
+      "httpRequests": 5800,
+      "httpErrorRate": 0,
+      "endpointLatency": {
+        "http_req_duration{endpoint:finish}": {
+          "avg": 34.72771136999999,
+          "min": 15.969518,
+          "med": 26.638172,
+          "max": 106.389495,
+          "p(90)": 56.48392470000004,
+          "p(95)": 81.07531064999998,
+          "p(99)": 93.84741369000007
+        },
+        "http_req_duration{expected_response:true}": {
+          "p(99)": 286.61403363000215,
+          "avg": 27.494932816896533,
+          "min": 7.37741,
+          "med": 15.829975000000001,
+          "max": 498.987068,
+          "p(90)": 48.25233970000001,
+          "p(95)": 73.59682175
+        },
+        "http_req_duration{endpoint:start}": {
+          "avg": 312.8827885200001,
+          "min": 69.582671,
+          "med": 316.2937455,
+          "max": 498.987068,
+          "p(90)": 466.0822249,
+          "p(95)": 480.92933734999997,
+          "p(99)": 496.77054116
+        },
+        "http_req_duration{endpoint:answer}": {
+          "avg": 20.70943158039998,
+          "min": 7.792828,
+          "med": 14.86091,
+          "max": 123.848321,
+          "p(90)": 39.48747500000002,
+          "p(95)": 52.081556400000004,
+          "p(99)": 93.86793956000008
+        }
+      },
+      "retries": 0
+    },
+    {
+      "profile": "steady",
+      "vus": 250,
+      "elapsedSeconds": 44.555,
+      "exitCode": 99,
+      "passed": false,
+      "completed": 250,
+      "thresholdFailures": [
+        "http_req_duration{endpoint:start}: p(95)<1000"
+      ],
+      "audit": {
+        "sessions": 250,
+        "finished": 250,
+        "active": 0,
+        "answers": 12500,
+        "invalidFinishedSessions": 0,
+        "passed": true,
+        "allParticipantsFinished": true
+      },
+      "resources": {
+        "samples": 46,
+        "app": {
+          "peakRssMb": 498.50390625,
+          "averageCpuPercent": 199.93254637436772,
+          "peakCpuPercent": 216.9525731584264
+        },
+        "generator": {
+          "peakRssMb": 302.28125,
+          "averageCpuPercent": 24.260820685778533,
+          "peakCpuPercent": 76.92307692307693
+        },
+        "postgresBackends": {
+          "peakRssMb": 637.2578125,
+          "averageCpuPercent": 79.88757729061274,
+          "peakCpuPercent": 94.24603174603344
+        },
+        "peakConnections": 10,
+        "peakActiveConnections": 2,
+        "peakLockWaiters": 0,
+        "minimumAvailableMemoryMb": 1093.6875,
+        "note": "CPU 100% equals one logical core. PostgreSQL RSS is the sum of app connection backends and can double-count shared pages; excludes postmaster/background processes. Generator/app/DB share the host."
+      },
+      "samplerError": null,
+      "httpRequests": 14500,
+      "httpErrorRate": 0,
+      "endpointLatency": {
+        "http_req_duration{endpoint:answer}": {
+          "avg": 273.3043654039189,
+          "min": 19.882819,
+          "med": 244.105995,
+          "max": 912.553638,
+          "p(90)": 416.3892038,
+          "p(95)": 496.4904311499997,
+          "p(99)": 653.67080852
+        },
+        "http_req_duration{expected_response:true}": {
+          "p(99)": 735.4281503700008,
+          "avg": 296.45297062448196,
+          "min": 18.326089,
+          "med": 254.769476,
+          "max": 1337.533216,
+          "p(90)": 462.4553553,
+          "p(95)": 550.81268415
+        },
+        "http_req_duration{endpoint:finish}": {
+          "avg": 346.726933716,
+          "min": 18.326089,
+          "med": 359.7599775,
+          "max": 561.490326,
+          "p(90)": 458.15070929999996,
+          "p(95)": 506.32525124999995,
+          "p(99)": 545.7674634799998
+        },
+        "http_req_duration{endpoint:start}": {
+          "p(99)": 1328.50598201,
+          "avg": 719.5943835440003,
+          "min": 81.729641,
+          "med": 721.6941429999999,
+          "max": 1337.533216,
+          "p(90)": 1181.1389738999999,
+          "p(95)": 1249.7581593999998
+        }
+      },
+      "retries": 0
+    }
+  ],
+  "host": {
+    "logicalCpus": 4,
+    "cpuModel": "Intel(R) Core(TM) i5-6400T CPU @ 2.20GHz",
+    "memoryMb": 3451.7734375,
+    "node": "v20.20.2",
+    "platform": "linux 7.0.0-31-generic",
+    "sharedHost": true
+  },
+  "config": {
+    "workers": 2,
+    "maxPoolPerWorker": 5,
+    "connectionBudget": 40,
+    "redis": false,
+    "thinkSeconds": 0.5,
+    "answerRounds": 1,
+    "replayEvery": 10,
+    "finishAtSeconds": 0,
+    "stageTimeout": "5m"
+  },
+  "k6": "k6 v2.3.0 (commit/e088784614, go1.26.8, linux/amd64)",
+  "commit": "729ac7222fedb0c2ed8adebbbd2cacf6ad545ac8",
+  "workingTreeModified": true,
+  "fixture": {
+    "students": 10050,
+    "questions": 50,
+    "historicalAnswers": 502500,
+    "bcryptCost": 10
+  },
+  "postgres": "PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit",
+  "completed": true,
+  "allStagesPassed": false,
+  "serverShutdown": {
+    "exitCode": 0,
+    "signal": null,
+    "elapsedSeconds": 0.042
+  },
+  "databaseRemoved": true
+}
