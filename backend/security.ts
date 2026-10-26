@@ -39,6 +39,7 @@ const rules: [string, RegExp, Role[]][] = [
   ['POST', /^\/packages\/?$/, admins],
   ['PUT', /^\/packages\/[^/]+\/?$/, admins],
   ['GET', /^\/overview\/?$/, admins],
+  ['GET', /^\/monitoring\/history\/?$/, operators],
   ['GET', /^\/monitoring\/packages(?:\/[^/]+\/students)?\/?$/, operators],
   ['GET', /^\/users\/classes\/?$/, operators],
   ['GET', /^\/users\/?$/, operators],
@@ -61,6 +62,7 @@ const rules: [string, RegExp, Role[]][] = [
   ['GET', /^\/sessions\/?$/, operators],
   ['POST', /^\/sessions\/start\/?$/, ['siswa']],
   ['POST', /^\/sessions\/[^/]+\/(?:answer|finish)\/?$/, ['siswa']],
+  ['GET', /^\/analytics\/reports\/(?:students|schools|items)\/?$/, admins],
   ['GET', /^\/analytics\/packages(?:\/[^/]+(?:\/(?:all-students|items|schools\/[^/]+))?)?\/?$/, admins],
   ['GET', /^\/analytics\/(?!packages(?:\/|$))[^/]+\/?$/, operators],
 ];

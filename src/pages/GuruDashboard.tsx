@@ -1,3 +1,4 @@
+import { TableFrame, SortableHeading, TableState } from '../components/TableFrame';
 import { Pagination } from '../components/Pagination';
 import { RemoteSelect } from '../components/RemoteSelect';
 import { usePagedList, useDebounced } from '../lib/paging';
@@ -31,14 +32,18 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   const [readingTitle, setReadingTitle] = useState('');
   const [readingContent, setReadingContent] = useState('');
 
+  const [questionSort, setQuestionSort] = useState('name_asc');
+  const [readingSort, setReadingSort] = useState('name_asc');
+  const [questionPageSize, setQuestionPageSize] = useState(10);
+  const [readingPageSize, setReadingPageSize] = useState(10);
   const [questionPage, setQuestionPage] = useState(1);
   const [readingPage, setReadingPage] = useState(1);
   const [search, setSearch] = useState('');
   const [filterSubject, setFilterSubject] = useState('');
   const [filterType, setFilterType] = useState('');
   const query = useDebounced(search);
-  const questionList = usePagedList<any>('/api/questions', questionPage, 20, { search: query, mapel: filterSubject, type: filterType }, activeTab === 'bank');
-  const readingList = usePagedList<any>('/api/readings', readingPage, 20, { search: query }, activeTab === 'bacaan');
+  const questionList = usePagedList<any>('/api/questions', questionPage, questionPageSize, { search: query, mapel: filterSubject, type: filterType, sort: questionSort }, activeTab === 'bank');
+  const readingList = usePagedList<any>('/api/readings', readingPage, readingPageSize, { search: query, sort: readingSort }, activeTab === 'bacaan');
   const questions = questionList.items, readings = readingList.items;
 
   const handleSaveReading = async () => {
@@ -212,7 +217,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   ];
 
   return (
-    <div className="flex" style={{ minHeight: '100vh' }}>
+    <div className="flex dashboard-app" style={{ minHeight: '100vh' }}>
       {/* Sidebar */}
       <aside className="glass-panel" style={{ width: '280px', margin: '1rem', display: 'flex', flexDirection: 'column' }}>
         <div className="p-6">
@@ -322,20 +327,21 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
               </select>
             </div>
 
+            <TableFrame exportOptions={{ url: '/api/questions', params: { search: query, mapel: filterSubject, type: filterType, sort: questionSort }, filename: 'bank_soal.csv', disabled: questionList.loading || !!questionList.error || search !== query, columns: [{ title: 'Mata Pelajaran', value: r => r.mapel }, { title: 'Elemen', value: r => r.element }, { title: 'Tipe Soal', value: r => r.type }, { title: 'Soal', value: r => r.content }] }} sortLabel="Soal" sort={questionSort} onSort={value => { setQuestionSort(value); setQuestionPage(1); }} total={questionList.total} pageSize={questionPageSize} onPageSize={value => { setQuestionPageSize(value); setQuestionPage(1); }} label="Bank soal">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
-                  <th className="p-4">Mapel / Elemen</th>
-                  <th className="p-4">Tipe Soal</th>
-                  <th className="p-4">Cuplikan Soal</th>
-                  <th className="p-4">Aksi</th>
+                  <th scope="col" className="p-4">Mapel / Elemen</th>
+                  <th scope="col" className="p-4">Tipe Soal</th>
+                  <SortableHeading title="Cuplikan Soal" sort={questionSort} onSort={value => { setQuestionSort(value); setQuestionPage(1); }} />
+                  <th scope="col" className="p-4">Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {questions.length > 0 ? questions.map((soal) => (
+                {questionList.error || questionList.loading ? <TableState loading={questionList.loading} error={questionList.error} columns={4} retry={() => void questionList.reload()} /> : questions.length > 0 ? questions.map((soal) => (
                   <tr key={soal.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                     <td className="p-4">
-                      <span className="tag">{soal.mapel || 'Mapel'}</span>
+                      <span className="tag">{soal.mapel || 'Mapel'}</span><small className="table-secondary">{soal.element || '—'}</small>
                     </td>
                     <td className="p-4 font-semibold text-main">{soal.type || 'Pilihan Ganda'}</td>
                     <td className="p-4" style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -387,12 +393,13 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={4} className="p-4 text-center text-muted">Belum ada soal (Atau sedang memuat dari API).</td>
+                    <td colSpan={4} className="p-4 text-center text-muted">Belum ada soal sesuai filter.</td>
                   </tr>
                 )}
               </tbody>
             </table>
-            <Pagination page={questionPage} total={questionList.total} pageSize={20} onChange={setQuestionPage} loading={questionList.loading} />
+            </TableFrame>
+            <Pagination page={questionPage} total={questionList.total} pageSize={questionPageSize} onChange={setQuestionPage} loading={questionList.loading} />
           </div>
         )}
 
@@ -569,21 +576,22 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
               </button>
             </div>
             
+            <TableFrame exportOptions={{ url: '/api/readings', params: { search: query, sort: readingSort }, filename: 'teks_bacaan.csv', disabled: readingList.loading || !!readingList.error || search !== query, columns: [{ title: 'Judul', value: r => r.title }, { title: 'Teks Bacaan', value: r => r.content }, { title: 'Soal Ditautkan', value: r => r._count?.questions || 0 }] }} sortLabel="Judul" sort={readingSort} onSort={value => { setReadingSort(value); setReadingPage(1); }} total={readingList.total} pageSize={readingPageSize} onPageSize={value => { setReadingPageSize(value); setReadingPage(1); }} label="Teks bacaan">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
-                  <th className="p-4">Judul Bacaan</th>
-                  <th className="p-4">Potongan Teks</th>
-                  <th className="p-4">Jml Soal Ditautkan</th>
-                  <th className="p-4">Aksi</th>
+                  <SortableHeading title="Judul Bacaan" sort={readingSort} onSort={value => { setReadingSort(value); setReadingPage(1); }} />
+                  <th scope="col" className="p-4">Potongan Teks</th>
+                  <th scope="col" className="numeric">Soal Ditautkan</th>
+                  <th scope="col" className="p-4">Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {readings.length > 0 ? readings.map(r => (
+                {readingList.error || readingList.loading ? <TableState loading={readingList.loading} error={readingList.error} columns={4} retry={() => void readingList.reload()} /> : readings.length > 0 ? readings.map(r => (
                   <tr key={r.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                     <td className="p-4 font-semibold text-main">{r.title}</td>
                     <td className="p-4 text-muted">{r.content.substring(0, 50)}...</td>
-                    <td className="p-4">{r._count?.questions || 0} Soal</td>
+                    <td className="numeric">{r._count?.questions || 0}</td>
                     <td className="p-4">
                       <div className="flex gap-2">
                         <button className="btn-secondary" style={{ padding: '4px 8px' }} onClick={() => {
@@ -611,7 +619,8 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 )}
               </tbody>
             </table>
-            <Pagination page={readingPage} total={readingList.total} pageSize={20} onChange={setReadingPage} loading={readingList.loading} />
+            </TableFrame>
+            <Pagination page={readingPage} total={readingList.total} pageSize={readingPageSize} onChange={setReadingPage} loading={readingList.loading} />
           </div>
         )}
 

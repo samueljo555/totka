@@ -16,3 +16,8 @@ test('analytics preserves zero and distinguishes unavailable scores in both expo
 test('invalid timestamps do not leak NaN into exports', () => {
   assert.ok(!analyticsCsv([{ studentName: 'A', status: 'Selesai', startTime: 'invalid', endTime: 'invalid' }], false).includes('NaN'));
 });
+test('cross-package CSV identifies each independent result and escapes package names', () => {
+ const csv=analyticsCsv([{packageName:'Paket "A", 1',mapel:'Matematika',nisn:'00001',studentName:'Siswa',score:0,status:'Selesai'}],true,true);
+ assert.ok(csv.startsWith('Paket Try Out,Mata Pelajaran,NISN,'));
+ assert.ok(csv.includes('"Paket ""A"", 1",Matematika,00001,Siswa,,,0,'));
+});

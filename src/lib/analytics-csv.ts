@@ -7,16 +7,17 @@ export function serializeCsv(rows: unknown[][]): string {
 }
 
 interface AnalyticsStudent {
+  packageName?: string; mapel?: string;
   nisn?: string | null; studentName: string; npsn?: string | null; school?: string | null;
   score?: number | null; startTime?: string | null; endTime?: string | null; status: string;
   elementBreakdown?: Record<string, { correct: number; total: number }>;
 }
-export function analyticsCsv(students: AnalyticsStudent[], includeSchool: boolean): string {
-  const header = ['NISN', 'Nama Siswa', 'NPSN', ...(includeSchool ? ['Sekolah'] : []), 'Skor Total', 'Lama Mengerjakan (Menit)', 'Status', 'Catatan'];
+export function analyticsCsv(students: AnalyticsStudent[], includeSchool: boolean, includePackage = false): string {
+  const header = [...(includePackage ? ['Paket Try Out', 'Mata Pelajaran'] : []), 'NISN', 'Nama Siswa', 'NPSN', ...(includeSchool ? ['Sekolah'] : []), 'Skor Total', 'Lama Mengerjakan (Menit)', 'Status', 'Catatan'];
   return serializeCsv([header, ...students.map(student => {
     const elapsed = student.startTime && student.endTime ? Math.round((Date.parse(student.endTime) - Date.parse(student.startTime)) / 60000) : null;
     const notes = Object.entries(student.elementBreakdown || {}).map(([name, value]) => `${name}: ${value.correct}/${value.total}`).join(', ');
-    return [student.nisn, student.studentName, student.npsn, ...(includeSchool ? [student.school] : []), student.score ?? 'Belum tersedia', elapsed !== null && Number.isFinite(elapsed) ? elapsed : '', student.status, notes];
+    return [...(includePackage ? [student.packageName, student.mapel] : []), student.nisn, student.studentName, student.npsn, ...(includeSchool ? [student.school] : []), student.score ?? 'Belum tersedia', elapsed !== null && Number.isFinite(elapsed) ? elapsed : '', student.status, notes];
   })]);
 }
 

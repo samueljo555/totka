@@ -224,3 +224,22 @@ Ringkasan paket dan analisis butir menampilkan kegagalan dengan tombol **Coba La
 Ekspor CSV menampilkan jumlah siswa yang telah dimuat dan mengunci tombol unduh selama proses. File dibuat setelah seluruh halaman berhasil; kegagalan satu halaman membatalkan unduhan. Ekspor menggunakan filter/urutan saat tombol ditekan. Koma, tanda kutip, dan baris baru di setiap kolom di-escape; nilai nol dan nilai belum tersedia tetap dibedakan. CSV menyimpan NISN berawalan nol secara utuh, tetapi aplikasi spreadsheet dapat menebak kolom sebagai angka: pilih tipe **Text** saat impor untuk mempertahankannya.
 
 Verifikasi: `npm run test:analytics` untuk serializer. Setelah `npm run build`, jalankan `node tests/analytics-browser.mjs` dengan Playwright/Chromium tersedia; jika dipasang di luar proyek, set `PLAYWRIGHT_MODULE` ke path absolut modul Playwright. Uji browser menggunakan API tiruan dan tidak mengubah database.
+
+### Desain tabel dan laporan lintas paket
+
+Tabel admin, operator, dan guru memakai gaya yang sama: header melekat saat digulir, label status, angka rata kanan, mode ringkas, pilihan 5–100 baris, pencarian, pengurutan nama/judul, pagination bernomor, serta scroll horizontal di layar kecil. Aksi pengelolaan dan cetak kartu login tetap tersedia. Ekspor tabel mengambil seluruh halaman sesuai pencarian/filter/urutan; CSV identitas siswa tidak memuat password.
+
+Analitik memiliki tab **Hasil siswa**, **Analisis butir soal**, dan **Hasil per sekolah**. Filter **Semua Paket** atau paket tertentu tersedia di ketiganya dan pada **Riwayat Ujian** operator. Nama paket dicantumkan pada setiap baris dan CSV. Hasil siswa/sekolah dihitung per pasangan dengan paket, bukan digabung lintas paket; jumlah entri bukan jumlah siswa unik. Akun yang belum mempunyai sesi tetap muncul sebagai *Belum Mulai*, termasuk pada paket draft, karena sistem belum memiliki daftar penugasan peserta. Ringkasan kartu pada paket terpilih mencakup seluruh sekolah; filter sekolah, kelas, dan pencarian berlaku untuk tabel/CSV. Indeks soal menggunakan peserta selesai pada paket yang sama.
+
+Riwayat operator menampilkan sesi **selesai** milik sekolahnya, termasuk ketika paket masih aktif. Paket aktif dan tokennya tetap tersedia pada **Pantau Ujian**, yang diperbarui setiap 15 detik ketika halaman terlihat. Operator tanpa sekolah ditolak saat meminta data siswa/monitoring.
+
+API baru (pagination maksimal 100 baris):
+
+- `GET /api/analytics/reports/students`: admin; `packageId`, `schoolNpsn` (termasuk `UNKNOWN`), `search`, `className`, `status`, `sort`.
+- `GET /api/analytics/reports/schools`: admin; `packageId`, `schoolNpsn`, `search`, `sort`.
+- `GET /api/analytics/reports/items`: admin; `packageId`, `search`, `category`, `sort`.
+- `GET /api/monitoring/history`: operator/admin; filter hasil siswa yang sama, hanya sesi selesai; operator selalu dibatasi sekolah akun.
+
+Kosongkan `packageId` untuk seluruh paket. Urutan laporan: `name_asc`, `name_desc`, `score_asc`, `score_desc`; nilai belum tersedia selalu di akhir. Endpoint daftar akun, sekolah, paket, soal, bacaan, kartu login, dan pantau ujian juga menerima `sort=name_asc|name_desc`; default API lama tetap urutan ID. Cursor ekspor terkait filter/urutan dan ditolak jika konteks berubah. Ekspor lintas permintaan bukan snapshot historis: perubahan data selama proses dapat menggeser urutan; penanda yang hilang menghasilkan 409 dan ekspor harus diulang.
+
+Tidak ada perubahan skema atau migrasi database. Perbarui frontend dan backend bersama. Untuk uji browser dengan PostgreSQL terisolasi: build frontend/backend, lalu jalankan `node tests/tables-real-browser.mjs` dengan `INTEGRITY_TEST_DATABASE_URL` mengarah ke instance uji dan `PLAYWRIGHT_MODULE` jika Playwright dipasang di luar proyek. Uji ini membuat dan menghapus schema sendiri. `tests/analytics-browser.mjs` menguji kegagalan jaringan, respons terlambat, dan kegagalan di tengah ekspor menggunakan API tiruan.

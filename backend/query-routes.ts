@@ -1,6 +1,8 @@
 import type { Express, Request } from 'express';
 import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
+import { listOrder } from './list-order.js';
+import { schoolReport, itemReport } from './report-pages.js';
 import { analyticsStudents } from './analytics-students.js';
 import { getOrSetCache } from './cache.js';
 import { isAdmin, safeUserSelect } from './security.js';
@@ -23,16 +25,17 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
     return data;
   });
   get('/api/users', async req => {
-    const p = pagination(req.query), search = text(req.query, 'search'), role = text(req.query, 'role');
+    const search = text(req.query, 'search'), role = text(req.query, 'role');
     const scoped = studentWhere(req);
     const where: Prisma.UserWhereInput = req.user!.role === 'operator' ? scoped : {
       ...(role ? { role } : {}), ...(text(req.query, 'className') ? { className: text(req.query, 'className') } : {}), ...(text(req.query, 'schoolNpsn') ? { schoolNpsn: text(req.query, 'schoolNpsn') } : {}),
       ...(search ? { OR: ['fullName', 'username', 'nisn'].map(field => ({ [field]: { contains: search, mode: 'insensitive' } })) } : {}),
     };
+    const { p, following, orderBy, cursor } = await listOrder(req, prisma.user, where, 'fullName', 'id');
     const [rows, total] = await Promise.all([
-      prisma.user.findMany({ where: { AND: [where, afterId(p.after)] }, select: safeUserSelect, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }), prisma.user.count({ where }),
+      prisma.user.findMany({ where: { AND: [where, following] }, select: safeUserSelect, orderBy: orderBy as Prisma.UserOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.user.count({ where }),
     ]);
-    return pageResult(rows, total, p, row => row.id);
+    return pageResult(rows, total, p, cursor);
   });
   get('/api/users/classes', async req => {
     const where = studentWhere(req);
@@ -42,43 +45,47 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
     return rows.map(row => row.className).filter((value): value is string => !!value);
   });
   get('/api/schools', async req => {
-    const p = pagination(req.query), search = text(req.query, 'search');
+    const search = text(req.query, 'search');
     const where: Prisma.SchoolWhereInput = search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { npsn: { contains: search } }] } : {};
-    return getOrSetCache(`schools:${JSON.stringify({ p, search })}`, 30, async () => {
+    const { p, sort, following, orderBy, cursor } = await listOrder(req, prisma.school, where, 'name', 'npsn');
+    return getOrSetCache(`schools:${JSON.stringify({ p, search, sort })}`, 30, async () => {
       const [rows, total] = await Promise.all([
-        prisma.school.findMany({ where: { AND: [where, afterId(p.after, 'npsn')] }, include: { _count: { select: { users: true } } }, orderBy: { npsn: 'asc' }, skip: p.skip, take: p.take }), prisma.school.count({ where }),
+        prisma.school.findMany({ where: { AND: [where, following] }, include: { _count: { select: { users: true } } }, orderBy: orderBy as Prisma.SchoolOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.school.count({ where }),
       ]);
-      return pageResult(rows, total, p, row => row.npsn);
+      return pageResult(rows, total, p, cursor);
     }, ['api:schools', 'api:users']);
   });
   get('/api/packages', async req => {
-    const p = pagination(req.query), search = text(req.query, 'search'), status = text(req.query, 'status');
-    const where: Prisma.PackageWhereInput = { ...(status ? { status } : {}), ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}) };
-    return getOrSetCache(`packages:${JSON.stringify({ p, search, status, admin: isAdmin(req.user!.role) })}`, 15, async () => {
+    const search = text(req.query, 'search'), status = text(req.query, 'status'), mapel = text(req.query, 'mapel');
+    const where: Prisma.PackageWhereInput = { ...(mapel ? { mapel } : {}), ...(status ? { status } : {}), ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}) };
+    const { p, sort, following, orderBy, cursor } = await listOrder(req, prisma.package, where, 'name', 'id');
+    return getOrSetCache(`packages:${JSON.stringify({ p, search, status, mapel, sort, admin: isAdmin(req.user!.role) })}`, 15, async () => {
       const [rows, total] = await Promise.all([
-        prisma.package.findMany({ where: { AND: [where, afterId(p.after)] }, include: { _count: { select: { questions: true } }, ...(isAdmin(req.user!.role) ? { questions: true } : {}) }, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }), prisma.package.count({ where }),
+        prisma.package.findMany({ where: { AND: [where, following] }, include: { _count: { select: { questions: true } }, ...(isAdmin(req.user!.role) ? { questions: true } : {}) }, orderBy: orderBy as Prisma.PackageOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.package.count({ where }),
       ]);
-      return pageResult(rows.map(pkg => ({ ...pkg, token: isAdmin(req.user!.role) || pkg.status === 'aktif' ? pkg.token : null })), total, p, row => row.id);
+      return pageResult(rows.map(pkg => ({ ...pkg, token: isAdmin(req.user!.role) || pkg.status === 'aktif' ? pkg.token : null })), total, p, cursor);
     }, ['v2:api:packages']);
   });
   get('/api/questions', async req => {
-    const p = pagination(req.query), search = text(req.query, 'search'), mapel = text(req.query, 'mapel'), type = text(req.query, 'type');
+    const search = text(req.query, 'search'), mapel = text(req.query, 'mapel'), type = text(req.query, 'type');
     const where: Prisma.QuestionWhereInput = { ...(isAdmin(req.user!.role) ? {} : { authorId: req.user!.id }), ...(mapel ? { mapel } : {}), ...(type ? { type } : {}), ...(search ? { content: { contains: search, mode: 'insensitive' } } : {}) };
-    return getOrSetCache(`questions:${JSON.stringify({ p, where })}`, 30, async () => {
+    const { p, sort, following, orderBy, cursor } = await listOrder(req, prisma.question, where, 'content', 'id');
+    return getOrSetCache(`questions:${JSON.stringify({ p, where, sort })}`, 30, async () => {
       const [rows, total] = await Promise.all([
-        prisma.question.findMany({ where: { AND: [where, afterId(p.after)] }, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }), prisma.question.count({ where }),
+        prisma.question.findMany({ where: { AND: [where, following] }, orderBy: orderBy as Prisma.QuestionOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.question.count({ where }),
       ]);
-      return pageResult(rows, total, p, row => row.id);
+      return pageResult(rows, total, p, cursor);
     }, ['v2:api:questions:all', `v2:api:questions:${req.user!.id}`]);
   });
   get('/api/readings', async req => {
-    const p = pagination(req.query), search = text(req.query, 'search');
+    const search = text(req.query, 'search');
     const where: Prisma.ReadingTextWhereInput = { ...(isAdmin(req.user!.role) ? {} : { authorId: req.user!.id }), ...(search ? { title: { contains: search, mode: 'insensitive' } } : {}) };
-    return getOrSetCache(`readings:${JSON.stringify({ p, where })}`, 30, async () => {
+    const { p, sort, following, orderBy, cursor } = await listOrder(req, prisma.readingText, where, 'title', 'id');
+    return getOrSetCache(`readings:${JSON.stringify({ p, where, sort })}`, 30, async () => {
       const [rows, total] = await Promise.all([
-        prisma.readingText.findMany({ where: { AND: [where, afterId(p.after)] }, include: { _count: { select: { questions: true } } }, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }), prisma.readingText.count({ where }),
+        prisma.readingText.findMany({ where: { AND: [where, following] }, include: { _count: { select: { questions: true } } }, orderBy: orderBy as Prisma.ReadingTextOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.readingText.count({ where }),
       ]);
-      return pageResult(rows, total, p, row => row.id);
+      return pageResult(rows, total, p, cursor);
     }, ['v2:api:readings:all', `v2:api:readings:${req.user!.id}`]);
   });
   get('/api/sessions', async req => {
@@ -90,6 +97,10 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
     ]);
     return pageResult(rows.map(row => { const { token: _token, ...pkg } = row.package; return { ...row, package: isAdmin(req.user!.role) ? row.package : pkg }; }), total, p, row => row.id);
   });
+  get('/api/analytics/reports/students', req => analyticsStudents(prisma, req, undefined, 'analytics'));
+  get('/api/analytics/reports/schools', req => schoolReport(prisma, req));
+  get('/api/analytics/reports/items', req => itemReport(prisma, req));
+  get('/api/monitoring/history', req => analyticsStudents(prisma, req, undefined, 'history'));
   get('/api/analytics/packages', async req => {
     const p = pagination(req.query), search = text(req.query, 'search');
     const where = { examSessions: { some: { status: 'selesai' } }, ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}) };
@@ -181,11 +192,13 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
   });
 
   get('/api/monitoring/packages', async req => {
-    const p = pagination(req.query), status = text(req.query, 'status');
+    const status = text(req.query, 'status'), search = text(req.query, 'search');
     const scope = studentWhere(req); delete scope.OR; delete scope.className;
     const where: Prisma.PackageWhereInput = status === 'history' ? { status: { not: 'aktif' } } : status ? { status } : {};
+    if (search) where.name = { contains: search, mode: 'insensitive' };
+    const { p, following, orderBy, cursor } = await listOrder(req, prisma.package, where, 'name');
     const [packages, total, registered] = await Promise.all([
-      prisma.package.findMany({ where: { AND: [where, afterId(p.after)] }, select: { id: true, name: true, mapel: true, token: true, status: true }, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }), prisma.package.count({ where }), prisma.user.count({ where: scope }),
+      prisma.package.findMany({ where: { AND: [where, following] }, select: { id: true, name: true, mapel: true, token: true, status: true }, orderBy: orderBy as Prisma.PackageOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.package.count({ where }), prisma.user.count({ where: scope }),
     ]);
     const ids = packages.map(pkg => pkg.id);
     const groups = ids.length ? await prisma.examSession.groupBy({ by: ['packageId', 'status'], where: { packageId: { in: ids }, student: scope }, _count: { _all: true }, _avg: { totalScore: true }, _min: { totalScore: true }, _max: { totalScore: true } }) : [];
@@ -194,15 +207,16 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
       const started = groups.filter(g => g.packageId === pkg.id).reduce((n, group) => n + group._count._all, 0);
       const ongoing = groups.find(g => g.packageId === pkg.id && g.status === 'sedang_mengerjakan')?._count._all || 0;
       return { ...pkg, token: pkg.status === 'aktif' ? pkg.token : null, registeredStudents: registered, finished: finished?._count._all || 0, ongoing, notStarted: Math.max(0, registered - started), averageScore: Number(finished?._avg.totalScore || 0), highestScore: Number(finished?._max.totalScore || 0), lowestScore: Number(finished?._min.totalScore || 0) };
-    }), total, p, row => row.id);
+    }), total, p, cursor);
   });
   get('/api/monitoring/packages/:packageId/students', async req => {
-    const p = pagination(req.query), packageId = String(req.params.packageId);
+    const packageId = String(req.params.packageId);
     const status = text(req.query, 'status');
     const where: Prisma.UserWhereInput = { ...studentWhere(req), ...(status === 'selesai' || status === 'sedang_mengerjakan' ? { examSessions: { some: { packageId, status } } } : status === 'belum' ? { examSessions: { none: { packageId } } } : {}) };
+    const { p, following, orderBy, cursor } = await listOrder(req, prisma.user, where, 'fullName');
     const [rows, total] = await Promise.all([
-      prisma.user.findMany({ where: { AND: [where, afterId(p.after)] }, select: { id: true, fullName: true, username: true, nisn: true, className: true, schoolNpsn: true, examSessions: { where: { packageId }, select: { id: true, status: true, totalScore: true, startTime: true, endTime: true } } }, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }), prisma.user.count({ where }),
+      prisma.user.findMany({ where: { AND: [where, following] }, select: { id: true, fullName: true, username: true, nisn: true, className: true, schoolNpsn: true, examSessions: { where: { packageId }, select: { id: true, status: true, totalScore: true, startTime: true, endTime: true } } }, orderBy: orderBy as Prisma.UserOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.user.count({ where }),
     ]);
-    return pageResult(rows.map(row => ({ ...row, session: row.examSessions[0] || null, examSessions: undefined })), total, p, row => row.id);
+    return pageResult(rows.map(row => ({ ...row, session: row.examSessions[0] || null, examSessions: undefined })), total, p, cursor);
   });
 }

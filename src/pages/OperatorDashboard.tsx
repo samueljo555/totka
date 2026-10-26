@@ -1,3 +1,4 @@
+import { TableFrame, SortableHeading, TableState } from '../components/TableFrame';
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
@@ -39,10 +40,12 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const [studentSort, setStudentSort] = useState('name_asc');
+  const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [uniqueClasses, setUniqueClasses] = useState<string[]>([]);
   const query = useDebounced(searchQuery);
-  const studentList = usePagedList<any>('/api/users/login-cards', page, 50, { search: query, className: filterClass }, activeTab === 'students');
+  const studentList = usePagedList<any>('/api/users/login-cards', page, pageSize, { search: query, className: filterClass, sort: studentSort }, activeTab === 'students');
   const students = studentList.items;
   const filteredStudents = students;
   const isLoadingStudents = studentList.loading;
@@ -208,7 +211,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   ];
 
   return (
-    <div className="flex" style={{ minHeight: '100vh' }}>
+    <div className="flex dashboard-app" style={{ minHeight: '100vh' }}>
       {/* Sidebar */}
       <aside className="glass-panel" style={{ width: '280px', margin: '1rem', display: 'flex', flexDirection: 'column' }}>
         <div className="p-6">
@@ -317,17 +320,18 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
               }}
             />
 
+            <TableFrame exportOptions={{ url: '/api/users', params: { search: query, className: filterClass, sort: studentSort }, filename: 'data_siswa.csv', disabled: studentList.loading || !!studentList.error || searchQuery !== query, columns: [{ title: 'NISN', value: r => r.nisn || '' }, { title: 'Nama', value: r => r.fullName }, { title: 'Kelas', value: r => r.className || '' }] }} sort={studentSort} onSort={value => { setStudentSort(value); setPage(1); }} total={studentList.total} pageSize={pageSize} onPageSize={value => { setPageSize(value); setPage(1); }} label="Data siswa">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
-                  <th className="p-4">NISN</th>
-                  <th className="p-4">Nama Lengkap</th>
-                  <th className="p-4">Kelas</th>
-                  <th className="p-4">Password Sementara</th>
+                  <th scope="col" className="p-4">NISN</th>
+                  <SortableHeading title="Nama Lengkap" sort={studentSort} onSort={value => { setStudentSort(value); setPage(1); }} />
+                  <th scope="col" className="p-4">Kelas</th>
+                  <th scope="col" className="p-4">Password Sementara</th>
                 </tr>
               </thead>
               <tbody>
-                {isLoadingStudents ? (
+                {studentList.error ? <TableState error={studentList.error} loading={false} columns={4} retry={() => void studentList.reload()} /> : isLoadingStudents ? (
                   /* Loading Shimmer Skeletons (Tahap 5) */
                   Array.from({ length: 5 }).map((_, idx) => (
                     <tr key={`skeleton-${idx}`} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
@@ -381,7 +385,8 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
                 )}
               </tbody>
             </table>
-            <Pagination page={page} total={studentList.total} pageSize={50} onChange={setPage} loading={studentList.loading} />
+            </TableFrame>
+            <Pagination page={page} total={studentList.total} pageSize={pageSize} onChange={setPage} loading={studentList.loading} />
           </div>
         )}
 

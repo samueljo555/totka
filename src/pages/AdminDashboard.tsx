@@ -1,6 +1,6 @@
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -14,25 +14,16 @@ import {
   Plus,
   Search,
   LineChart,
-  Download,
   Upload,
   Image as ImageIcon,
-  FileText,
-  List,
-  BarChart2,
-  ChevronLeft,
-  ChevronRight
 } from 'lucide-react';
-import { AnalyticsStudentFilters } from '../components/AnalyticsStudentFilters';
+import { AnalyticsReports } from '../components/ReportTable';
+import { TableFrame, StatusBadge, SortableHeading, TableState } from '../components/TableFrame';
 import { Pagination } from '../components/Pagination';
 import { RemoteSelect } from '../components/RemoteSelect';
-import { usePagedList, useDebounced, readJson, readAllPages, queryUrl } from '../lib/paging';
+import { usePagedList, useDebounced, readJson } from '../lib/paging';
 
-import { useRemoteData } from '../lib/useRemoteData';
-import { analyticsCsv, downloadCsv } from '../lib/analytics-csv';
 
-const validSummary = (data: any) => !!data?.summary && Array.isArray(data.schools);
-const validItems = (data: any) => Array.isArray(data?.items) && typeof data.totalParticipants === 'number';
 
 const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const confirmModal = useConfirm();
@@ -41,8 +32,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
 
+  const [userSort, setUserSort] = useState('name_asc');
+  const [schoolSort, setSchoolSort] = useState('name_asc');
+  const [packageSort, setPackageSort] = useState('name_asc');
+  const [userRole, setUserRole] = useState('');
+  const [packageSubject, setPackageSubject] = useState('');
   const [userPage, setUserPage] = useState(1);
-  const usersPerPage = 10;
+  const [usersPerPage, setUsersPerPage] = useState(10);
   
 
   
@@ -59,51 +55,12 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   
 
   const [schoolPage, setSchoolPage] = useState(1);
-  const schoolsPerPage = 10;
+  const [schoolsPerPage, setSchoolsPerPage] = useState(10);
 
 
   const [questionPage, setQuestionPage] = useState(1);
   const questionsPerPage = 5;
   
-  // Analytics State
-
-  const [selectedAnalyticsPackage, setSelectedAnalyticsPackage] = useState<any>(null);
-  const [selectedAnalyticsSchool, setSelectedAnalyticsSchool] = useState<any>(null);
-
-  const [analyticsStudentPage, setAnalyticsStudentPage] = useState(1);
-  const analyticsStudentsPerPage = 15;
-  const [analyticsSearch, setAnalyticsSearch] = useState('');
-  const analyticsQuery = useDebounced(analyticsSearch);
-  const [analyticsClass, setAnalyticsClass] = useState('');
-  const [analyticsStatus, setAnalyticsStatus] = useState('');
-  const [analyticsSort, setAnalyticsSort] = useState('name_asc');
-  const [analyticsClasses, setAnalyticsClasses] = useState<string[]>([]);
-  const [analyticsSchoolSearch, setAnalyticsSchoolSearch] = useState('');
-  const [selectedItemAnalysisPackage, setSelectedItemAnalysisPackage] = useState<any>(null);
-  const summary = useRemoteData<any>(activeTab === 'results' && selectedAnalyticsPackage ? `/api/analytics/packages/${selectedAnalyticsPackage.id}` : null, validSummary);
-  const itemAnalysis = useRemoteData<any>(activeTab === 'results' && selectedItemAnalysisPackage ? `/api/analytics/packages/${selectedItemAnalysisPackage.id}/items` : null, validItems);
-  const packageAnalyticsData = summary.data, itemAnalysisData = itemAnalysis.data;
-  const exportController = useRef<AbortController | null>(null);
-  const [exportProgress, setExportProgress] = useState<{ loaded: number; total: number } | null>(null);
-  useEffect(() => () => { exportController.current?.abort(); }, []);
-  const exportAnalytics = async (url: string, params: Record<string, string | number | undefined>, filename: string, includeSchool: boolean) => {
-    if (exportController.current) return;
-    const controller = new AbortController();
-    exportController.current = controller;
-    setExportProgress({ loaded: 0, total: 0 });
-    try {
-      const rows = await readAllPages<any>(url, params, { signal: controller.signal, onProgress: (loaded, total) => { if (!controller.signal.aborted) setExportProgress({ loaded, total }); } });
-      controller.signal.throwIfAborted();
-      downloadCsv(analyticsCsv(rows, includeSchool), filename);
-      toast.success('CSV berhasil diunduh.');
-    } catch (error) {
-      if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : 'Gagal mengunduh CSV. Coba kembali.');
-    } finally {
-      if (!controller.signal.aborted) setExportProgress(null);
-      exportController.current = null;
-    }
-  };
-
   // School State
   const [isAddingSchool, setIsAddingSchool] = useState(false);
   const [editingSchool, setEditingSchool] = useState<any>(null);
@@ -124,25 +81,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [search, setSearch] = useState('');
   const query = useDebounced(search);
   const [packagePage, setPackagePage] = useState(1);
-  const [resultPage, setResultPage] = useState(1);
+  const [packagesPerPage, setPackagesPerPage] = useState(10);
   const [overview, setOverview] = useState({ totalUsers: 0, students: 0, teachers: 0, packages: 0 });
-  const userList = usePagedList<any>('/api/users', userPage, usersPerPage, { search: query }, activeTab === 'accounts');
-  const schoolList = usePagedList<any>('/api/schools', schoolPage, schoolsPerPage, { search: query }, activeTab === 'schools');
-  const packageList = usePagedList<any>('/api/packages', packagePage, 20, { search: query }, activeTab === 'packages');
+  const userList = usePagedList<any>('/api/users', userPage, usersPerPage, { search: query, sort: userSort, role: userRole }, activeTab === 'accounts');
+  const schoolList = usePagedList<any>('/api/schools', schoolPage, schoolsPerPage, { search: query, sort: schoolSort }, activeTab === 'schools');
+  const packageList = usePagedList<any>('/api/packages', packagePage, packagesPerPage, { search: query, sort: packageSort, mapel: packageSubject }, activeTab === 'packages');
   const questionList = usePagedList<any>('/api/questions', questionPage, questionsPerPage, { search: query, mapel: newPackageMapel }, activeTab === 'packages' && isAddingPackage);
-  const resultList = usePagedList<any>('/api/analytics/packages', resultPage, 20, { search: query }, activeTab === 'results');
-  const analyticsStudentUrl = `/api/analytics/packages/${selectedAnalyticsPackage?.id}` + (selectedAnalyticsSchool?.npsn ? `/schools/${selectedAnalyticsSchool.npsn}` : '/all-students');
-  const analyticsParams = { search: analyticsQuery, className: analyticsClass, status: analyticsStatus, sort: analyticsSort };
-  const studentList = usePagedList<any>(analyticsStudentUrl, analyticsStudentPage, analyticsStudentsPerPage, analyticsParams, activeTab === 'results' && !!selectedAnalyticsSchool);
-  useEffect(() => {
-    if (activeTab !== 'results' || !selectedAnalyticsSchool) return;
-    const controller = new AbortController();
-    setAnalyticsClasses([]);
-    readJson<string[]>(queryUrl('/api/users/classes', { schoolNpsn: selectedAnalyticsSchool.npsn }), controller.signal)
-      .then(setAnalyticsClasses).catch(() => {});
-    return () => controller.abort();
-  }, [activeTab, selectedAnalyticsSchool]);
-  const users = userList.items, schools = schoolList.items, packages = packageList.items, questions = questionList.items.filter(q => q.mapel === newPackageMapel), analyticsPackages = resultList.items, schoolStudentsData = studentList.items;
+  const users = userList.items, schools = schoolList.items, packages = packageList.items, questions = questionList.items.filter(q => q.mapel === newPackageMapel);
   const fetchUsers = () => { void userList.reload(); };
   const fetchSchools = () => { void schoolList.reload(); };
   useEffect(() => {
@@ -152,24 +97,6 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       return () => controller.abort();
     }
   }, [activeTab]);
-
-  const handleSelectAnalyticsPackage = (pkg: any) => {
-    setSelectedAnalyticsPackage(pkg);
-    setAnalyticsSearch(''); setAnalyticsClass(''); setAnalyticsStatus(''); setAnalyticsSort('name_asc'); setAnalyticsSchoolSearch('');
-    setSelectedAnalyticsSchool(null);
-
-  };
-
-  const handleSelectAnalyticsSchool = (school: any) => {
-    setSelectedAnalyticsSchool(school);
-    setAnalyticsClass('');
-    setAnalyticsStudentPage(1);
-  };
-
-  const handleViewItemAnalysis = (pkg: any) => {
-    setSelectedItemAnalysisPackage(pkg);
-
-  };
 
   const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -272,7 +199,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   ];
 
   return (
-    <div className="flex" style={{ minHeight: '100vh' }}>
+    <div className="flex dashboard-app" style={{ minHeight: '100vh' }}>
       {/* Sidebar */}
       <aside className="glass-panel" style={{ width: '280px', margin: '1rem', display: 'flex', flexDirection: 'column' }}>
         <div className="p-6">
@@ -284,7 +211,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           {tabs.map(tab => (
             <button 
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setSearch(''); setUserPage(1); setSchoolPage(1); setPackagePage(1); setResultPage(1); }}
+              onClick={() => { setActiveTab(tab.id); setSearch(''); setUserPage(1); setSchoolPage(1); setPackagePage(1); }}
               className="flex items-center gap-4"
               style={{
                 width: '100%',
@@ -332,17 +259,17 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <h1>{tabs.find(t => t.id === activeTab)?.name}</h1>
           <div className="flex items-center gap-4">
-            {!(activeTab === 'results' && (selectedAnalyticsPackage || selectedItemAnalysisPackage)) && <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
+            {activeTab !== 'results' && <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input type="text" className="input-field" placeholder="Cari..." value={search} onChange={event => { setSearch(event.target.value); setUserPage(1); setSchoolPage(1); setQuestionPage(1); setPackagePage(1); setResultPage(1); setAnalyticsStudentPage(1); }} style={{ paddingLeft: '40px', width: '250px' }} />
+              <input type="text" className="input-field" placeholder="Cari..." value={search} onChange={event => { setSearch(event.target.value); setUserPage(1); setSchoolPage(1); setQuestionPage(1); setPackagePage(1); }} style={{ paddingLeft: '40px', width: '250px' }} />
             </div>}
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-light)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
               SA
             </div>
           </div>
         </header>
-        {[userList, schoolList, packageList, questionList, resultList, studentList].some(list => list.loading) && <p role="status">Memuat data...</p>}
-        {[userList, schoolList, packageList, questionList, resultList, studentList].filter(list => list.error).map((list, index) => <p role="alert" key={index}>{list.error}</p>)}
+        {[userList, schoolList, packageList, questionList].some(list => list.loading) && <p role="status">Memuat data...</p>}
+        {[userList, schoolList, packageList, questionList].filter(list => list.error).map((list, index) => <p role="alert" key={index}>{list.error}</p>)}
 
         {activeTab === 'overview' && (
           <div className="animate-fade-in">
@@ -379,20 +306,22 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 <Plus size={18} /> Tambah Akun
               </button>
             </div>
+            <select className="input-field table-filter-inline" aria-label="Peran pengguna" value={userRole} onChange={event => { setUserRole(event.target.value); setUserPage(1); }}><option value="">Semua Peran</option><option value="super_admin">Super Admin</option><option value="admin">Admin</option><option value="operator">Operator</option><option value="guru">Guru</option><option value="siswa">Siswa</option></select>
+            <TableFrame exportOptions={{ url: '/api/users', params: { search: query, role: userRole, sort: userSort }, filename: 'daftar_akun.csv', disabled: userList.loading || !!userList.error || search !== query, columns: [{ title: 'Nama', value: r => r.fullName }, { title: 'Username', value: r => r.username }, { title: 'Peran', value: r => r.role }, { title: 'Sekolah', value: r => r.school?.name || '' }] }} sort={userSort} onSort={value => { setUserSort(value); setUserPage(1); }} total={userList.total} pageSize={usersPerPage} onPageSize={value => { setUsersPerPage(value); setUserPage(1); }} label="Daftar akun">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
-                  <th className="p-5" style={{ fontWeight: 600 }}>Nama</th>
-                  <th className="p-5" style={{ fontWeight: 600 }}>Peran</th>
-                  <th className="p-5" style={{ fontWeight: 600 }}>Status</th>
-                  <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
+                  <SortableHeading title="Nama" sort={userSort} onSort={value => { setUserSort(value); setUserPage(1); }} />
+                  <th scope="col" className="p-5" style={{ fontWeight: 600 }}>Peran</th>
+                  <th scope="col" className="p-5" style={{ fontWeight: 600 }}>Status</th>
+                  <th scope="col" className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {users.length > 0 ? users.map((u) => (
+                {userList.error || userList.loading ? <TableState error={userList.error} loading={userList.loading} columns={4} retry={() => void userList.reload()} /> : users.length > 0 ? users.map((u) => (
                   <tr key={u.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td className="p-5 font-semibold text-main">
-                      {u.fullName}
+                      <strong className="table-primary">{u.fullName}</strong><small className="table-secondary">{u.username}</small>
                     </td>
                     <td className="p-5">
                       <span className="tag" style={{ padding: '6px 12px', fontSize: '0.85rem' }}>
@@ -457,6 +386,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 )}
               </tbody>
             </table>
+            </TableFrame>
             
             {/* Pagination for Users */}
             <Pagination page={userPage} total={userList.total} pageSize={usersPerPage} onChange={setUserPage} loading={userList.loading} />
@@ -655,17 +585,18 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </button>
               </div>
             </div>
+            <TableFrame exportOptions={{ url: '/api/schools', params: { search: query, sort: schoolSort }, filename: 'daftar_sekolah.csv', disabled: schoolList.loading || !!schoolList.error || search !== query, columns: [{ title: 'NPSN', value: r => r.npsn }, { title: 'Nama Sekolah', value: r => r.name }, { title: 'Wilayah', value: r => r.region || '' }] }} sort={schoolSort} onSort={value => { setSchoolSort(value); setSchoolPage(1); }} total={schoolList.total} pageSize={schoolsPerPage} onPageSize={value => { setSchoolsPerPage(value); setSchoolPage(1); }} label="Daftar sekolah">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
-                  <th className="p-5" style={{ fontWeight: 600 }}>NPSN</th>
-                  <th className="p-5" style={{ fontWeight: 600 }}>Nama Sekolah</th>
-                  <th className="p-5" style={{ fontWeight: 600 }}>Wilayah</th>
-                  <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
+                  <th scope="col" className="p-5" style={{ fontWeight: 600 }}>NPSN</th>
+                  <SortableHeading title="Nama Sekolah" sort={schoolSort} onSort={value => { setSchoolSort(value); setSchoolPage(1); }} />
+                  <th scope="col" className="p-5" style={{ fontWeight: 600 }}>Wilayah</th>
+                  <th scope="col" className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {schools.length > 0 ? schools.map((s) => (
+                {schoolList.error || schoolList.loading ? <TableState error={schoolList.error} loading={schoolList.loading} columns={4} retry={() => void schoolList.reload()} /> : schools.length > 0 ? schools.map((s) => (
                   <tr key={s.npsn} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td className="p-5 font-semibold text-muted">{s.npsn}</td>
                     <td className="p-5 font-semibold text-main">{s.name}</td>
@@ -706,6 +637,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 )}
               </tbody>
             </table>
+            </TableFrame>
             
             {/* Pagination for Schools */}
             <Pagination page={schoolPage} total={schoolList.total} pageSize={schoolsPerPage} onChange={setSchoolPage} loading={schoolList.loading} />
@@ -781,23 +713,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               </button>
             </div>
             
-            <Pagination page={packagePage} total={packageList.total} pageSize={20} onChange={setPackagePage} loading={packageList.loading} />
-            <div className="dashboard-grid" style={{ marginTop: 0 }}>
-              {packages.length > 0 ? packages.map((pkg) => (
-                <div key={pkg.id} className="glass-panel card flex flex-col">
-                  <div className="flex justify-between mb-4">
-                    <span className="tag">{pkg.mapel}</span>
-                    <span style={{ 
-                      color: pkg.status === 'aktif' ? 'green' : 'orange',
-                      background: pkg.status === 'aktif' ? 'rgba(0,128,0,0.1)' : 'rgba(255,165,0,0.1)',
-                      padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600
-                    }}>
-                      {pkg.status.toUpperCase()}
-                    </span>
-                  </div>
-                  <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{pkg.name}</h3>
-                  <p style={{ fontSize: '0.9rem', marginBottom: '1.5rem', flexGrow: 1 }}>Terdiri dari {pkg._count?.questions || 0} soal terpilih.</p>
-                  <div className="flex gap-2">
+            <select className="input-field table-filter-inline" aria-label="Mata pelajaran paket" value={packageSubject} onChange={event => { setPackageSubject(event.target.value); setPackagePage(1); }}><option value="">Semua Mata Pelajaran</option><option>Matematika</option><option>Bahasa Indonesia</option></select>
+            <TableFrame exportOptions={{ url: '/api/packages', params: { search: query, sort: packageSort, mapel: packageSubject }, filename: 'paket_ujian.csv', disabled: packageList.loading || !!packageList.error || search !== query, columns: [{ title: 'Nama Paket', value: r => r.name }, { title: 'Mata Pelajaran', value: r => r.mapel }, { title: 'Jumlah Soal', value: r => r._count?.questions || 0 }, { title: 'Durasi (Menit)', value: r => r.durationMinutes }, { title: 'Status', value: r => r.status }] }} sort={packageSort} onSort={value => { setPackageSort(value); setPackagePage(1); }} total={packageList.total} pageSize={packagesPerPage} onPageSize={value => { setPackagesPerPage(value); setPackagePage(1); }} label="Paket ujian">
+              <table><thead><tr><SortableHeading title="Nama Paket" sort={packageSort} onSort={value => { setPackageSort(value); setPackagePage(1); }} /><th scope="col">Mata Pelajaran</th><th scope="col" className="numeric">Jumlah Soal</th><th scope="col" className="numeric">Durasi</th><th scope="col">Status</th><th scope="col">Aksi</th></tr></thead><tbody>
+                {packageList.error ? <tr><td colSpan={6}><div className="table-empty" role="alert">{packageList.error}<button className="btn-secondary" onClick={() => void packageList.reload()}>Coba Lagi</button></div></td></tr> : packageList.loading ? <tr><td colSpan={6}><div className="table-empty" role="status">Memuat paket...</div></td></tr> : packages.length ? packages.map(pkg => <tr key={pkg.id}>
+                  <td><strong className="table-primary">{pkg.name}</strong><small className="table-secondary">{pkg.navigationMode === 'bebas' ? 'Navigasi bebas' : 'Navigasi berurutan'}</small></td>
+                  <td><span className="tag">{pkg.mapel}</span></td><td className="numeric">{pkg._count?.questions || 0}</td><td className="numeric">{pkg.durationMinutes} menit</td><td><StatusBadge value={pkg.status === 'aktif' ? 'Aktif' : pkg.status} /></td>
+                  <td><div className="table-row-actions">
                     <button className="btn-secondary" style={{ flex: 1, padding: '8px', fontSize: '0.9rem' }} onClick={() => {
                       setEditingPackageId(pkg.id);
                       setNewPackageName(pkg.name);
@@ -834,14 +756,10 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         }
                       }}>Tutup Ujian</button>
                     )}
-                  </div>
-                </div>
-              )) : (
-                <div className="glass-panel card p-8 text-center" style={{ gridColumn: '1 / -1' }}>
-                  <p className="text-muted">Belum ada paket soal (atau sedang memuat API).</p>
-                </div>
-              )}
-            </div>
+                  </div></td></tr>) : <tr><td colSpan={6}><div className="table-empty">Belum ada paket sesuai pencarian.</div></td></tr>}
+              </tbody></table>
+            </TableFrame>
+            <Pagination page={packagePage} total={packageList.total} pageSize={packagesPerPage} onChange={setPackagePage} loading={packageList.loading} />
           </div>
         )}
 
@@ -955,369 +873,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           </div>
         )}
 
-        {activeTab === 'results' && (
-          <div className="animate-fade-in" style={{ paddingBottom: '2rem' }}>
+        {activeTab === 'results' && <AnalyticsReports />}
 
-            {exportProgress && <p role="status">Mengunduh CSV: {exportProgress.loaded} siswa dimuat{exportProgress.total > 0 ? ` dari ${exportProgress.total}` : ''}. Tunggu hingga seluruh halaman selesai.</p>}
-            {selectedItemAnalysisPackage ? (
-              <div className="animate-fade-in">
-                <div className="flex items-center gap-4 mb-8">
-                  <button className="btn-secondary" style={{ padding: '8px 12px' }} onClick={() => setSelectedItemAnalysisPackage(null)}>
-                    <ChevronLeft size={18} />
-                  </button>
-                  <div>
-                    <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Analisis Butir Soal</div>
-                    <h3 className="text-2xl font-bold text-slate-800 m-0">{selectedItemAnalysisPackage.name}</h3>
-                  </div>
-                </div>
-
-                {itemAnalysis.error ? <div role="alert" className="glass-panel p-12"><p>{itemAnalysis.error}</p><button className="btn-secondary" onClick={itemAnalysis.retry}>Coba Lagi</button></div> : !itemAnalysisData ? (
-                  <div className="glass-panel p-12 text-center flex flex-col items-center justify-center">
-                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p className="text-slate-500">Memuat analisis butir soal...</p>
-                  </div>
-                ) : (
-                  <div className="glass-panel" style={{ padding: '2rem' }}>
-                    <div className="mb-6">
-                      <h3 className="m-0">Distribusi Tingkat Kesulitan</h3>
-                      <p className="text-muted" style={{ marginTop: '0.5rem' }}>Dasar perhitungan: {itemAnalysisData.totalParticipants} peserta selesai. Persentase benar = jumlah benar dibagi seluruh peserta selesai, termasuk yang tidak menjawab.</p>
-                    </div>
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
-                            <th className="p-5" style={{ fontWeight: 600 }}>No</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Soal</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Menjawab Benar</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Salah</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Kosong</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Indeks Kesulitan</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Kategori</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {itemAnalysisData.items.length === 0 && <tr><td colSpan={7} className="p-5">Belum ada soal pada paket ini.</td></tr>}
-                          {itemAnalysisData.items.map((item: any) => (
-                            <tr key={item.questionId} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                              <td className="p-5 font-semibold text-main">{item.questionNumber}</td>
-                              <td className="p-5">
-                                <div className="katex-container" style={{ maxHeight: '60px', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', fontSize: '0.9rem' }}>
-                                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                    {item.content || ''}
-                                  </ReactMarkdown>
-                                </div>
-                              </td>
-                              <td className="p-5">
-                                {item.correctCount} / {item.totalAttempts} {item.difficultyIndex == null ? '(Belum ada data)' : `(${(item.difficultyIndex * 100).toFixed(0)}%)`}
-                              </td>
-                              <td className="p-5">{item.wrongCount}</td>
-                              <td className="p-5">{item.emptyCount}</td>
-                              <td className="p-5 font-semibold text-main">
-                                {item.difficultyIndex == null ? '—' : item.difficultyIndex.toFixed(2)}
-                              </td>
-                              <td className="p-5">
-                                <span className="tag" style={{ 
-                                  background: item.category === 'Mudah' ? '#388e3c' : item.category === 'Sulit' ? '#d32f2f' : 'var(--primary-color)',
-                                  color: 'white'
-                                }}>
-                                  {item.category}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : !selectedAnalyticsPackage ? (
-              // Step 1: List Packages
-              <div className="glass-panel" style={{ padding: '2rem' }}>
-                <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
-                  <FileText className="text-blue-500" size={20} />
-                  <h3 className="text-lg font-semibold text-slate-800 m-0">Pilih Paket Ujian</h3>
-                </div>
-                
-                <Pagination page={resultPage} total={resultList.total} pageSize={20} onChange={setResultPage} loading={resultList.loading} />
-                {resultList.error ? <div role="alert"><p>{resultList.error}</p><button className="btn-secondary" onClick={() => void resultList.reload()}>Coba Lagi</button></div> : resultList.loading ? <p role="status">Memuat paket analitik...</p> : analyticsPackages.length === 0 ? (
-                  <div className="p-12 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                    <BarChart2 size={48} className="mb-4 opacity-50" />
-                    <p className="text-lg">Belum ada data analitik.</p>
-                    <p className="text-sm">Siswa harus menyelesaikan ujian terlebih dahulu.</p>
-                  </div>
-                ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
-                          <th className="p-5" style={{ fontWeight: 600 }}>Nama Paket Try Out</th>
-                          <th className="p-5" style={{ fontWeight: 600 }}>Mata Pelajaran</th>
-                          <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analyticsPackages.map(pkg => (
-                          <tr 
-                            key={pkg.id} 
-                            style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'pointer' }} 
-                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} 
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            onClick={() => handleSelectAnalyticsPackage(pkg)}
-                          >
-                            <td className="p-5 font-semibold text-main">
-                              <div className="flex items-center gap-3">
-                                <div style={{ background: 'rgba(0, 82, 204, 0.1)', padding: '8px', borderRadius: '4px', color: 'var(--primary-color)' }}>
-                                  <BookOpen size={18} />
-                                </div>
-                                {pkg.name}
-                              </div>
-                            </td>
-                            <td className="p-5 font-semibold text-muted">{pkg.mapel}</td>
-                            <td className="p-5">
-                              <div className="flex gap-2">
-                                <button 
-                                  className="btn-secondary" 
-                                  style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSelectAnalyticsPackage(pkg);
-                                  }}
-                                >
-                                  Lihat Analitik <ChevronRight size={14} />
-                                </button>
-                                <button 
-                                  className="btn-secondary" 
-                                  style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleViewItemAnalysis(pkg);
-                                  }}
-                                >
-                                  <List size={14} /> Butir Soal
-                                </button>
-                                <button 
-                                  className="btn-secondary" 
-                                  style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                  disabled={!!exportProgress}
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    void exportAnalytics(`/api/analytics/packages/${pkg.id}/all-students`, {}, `analitik_semua_siswa_${pkg.id}.csv`, true);
-                                  }}
-                                >
-                                  <Download size={14} /> Unduh CSV
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ) : !selectedAnalyticsSchool ? (
-              // Step 2: List Schools for the selected package
-              <div className="animate-fade-in">
-                <div className="flex items-center gap-4 mb-8">
-                  <button className="btn-secondary" style={{ padding: '8px 12px' }} onClick={() => setSelectedAnalyticsPackage(null)}>
-                    <ChevronLeft size={18} />
-                  </button>
-                  <div>
-                    <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Daftar Sekolah</div>
-                    <h3 className="text-2xl font-bold text-slate-800 m-0">{selectedAnalyticsPackage.name}</h3>
-                  </div>
-                  <button className="btn-secondary" onClick={() => handleSelectAnalyticsSchool({ npsn: '', name: 'Semua Sekolah' })}>Lihat Semua Siswa</button>
-                </div>
-
-                {summary.error ? <div role="alert" className="glass-panel p-12"><p>{summary.error}</p><button className="btn-secondary" onClick={summary.retry}>Coba Lagi</button></div> : !packageAnalyticsData ? (
-                  <div className="glass-panel p-12 text-center flex flex-col items-center justify-center">
-                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p className="text-slate-500">Memuat data sekolah...</p>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-muted" style={{ marginBottom: '1rem' }}>Total akun siswa mencakup seluruh akun siswa dalam sistem, bukan daftar peserta khusus paket. Sudah mulai adalah jumlah siswa yang memiliki sesi pada paket ini.</p>
-                    <div className="dashboard-grid" style={{ marginTop: 0, marginBottom: '2rem' }}>
-                      {[
-                        ['Total Akun Siswa', 'totalStudents'],
-                        ['Sudah Mulai', 'startedCount'],
-                        ['Sedang Mengerjakan', 'ongoingCount'],
-                        ['Selesai', 'finishedCount'],
-                        ['Belum Mulai', 'notStartedCount'],
-                        ...(packageAnalyticsData.summary?.otherCount > 0 ? [['Status Lain', 'otherCount']] : []),
-                      ].map(([label, field]) => (
-                        <div key={field} className="glass-panel card flex flex-col justify-center">
-                          <p>{label}</p>
-                          <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.[field] ?? 0}</h2>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-muted" style={{ marginBottom: '1rem' }}>Statistik nilai dihitung dari peserta yang sudah selesai.</p>
-                    <div className="dashboard-grid" style={{ marginTop: 0, marginBottom: '2rem' }}>
-                      <div className="glass-panel card flex flex-col justify-center">
-                        <p>Rata-rata Nilai</p>
-                        <h2 style={{ fontSize: packageAnalyticsData.summary?.finishedCount > 0 ? '3rem' : '1.2rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.finishedCount > 0 ? packageAnalyticsData.summary.average.toFixed(1) : 'Belum tersedia'}</h2>
-                      </div>
-                      <div className="glass-panel card flex flex-col justify-center">
-                        <p>Nilai Tertinggi</p>
-                        <h2 style={{ fontSize: packageAnalyticsData.summary?.finishedCount > 0 ? '3rem' : '1.2rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.finishedCount > 0 ? packageAnalyticsData.summary.highest.toFixed(1) : 'Belum tersedia'}</h2>
-                      </div>
-                      <div className="glass-panel card flex flex-col justify-center">
-                        <p>Nilai Terendah</p>
-                        <h2 style={{ fontSize: packageAnalyticsData.summary?.finishedCount > 0 ? '3rem' : '1.2rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.finishedCount > 0 ? packageAnalyticsData.summary.lowest.toFixed(1) : 'Belum tersedia'}</h2>
-                      </div>
-                    </div>
-
-                    <div className="glass-panel" style={{ padding: '2rem', marginTop: '2rem' }}>
-                      <div className="mb-6">
-                        <h3 className="m-0">Distribusi per Sekolah</h3>
-                        <input className="input-field" placeholder="Cari nama sekolah atau NPSN" value={analyticsSchoolSearch} onChange={e => setAnalyticsSchoolSearch(e.target.value)} style={{ marginTop: '1rem', maxWidth: '360px' }} />
-                      </div>
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                          <thead>
-                            <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
-                              <th className="p-5" style={{ fontWeight: 600 }}>NPSN</th>
-                              <th className="p-5" style={{ fontWeight: 600 }}>Nama Sekolah</th>
-                              <th className="p-5" style={{ fontWeight: 600 }}>Total Akun Siswa</th>
-                              <th className="p-5" style={{ fontWeight: 600 }}>Sudah Mulai</th>
-                              <th className="p-5" style={{ fontWeight: 600 }}>Sedang Mengerjakan</th>
-                              <th className="p-5" style={{ fontWeight: 600 }}>Selesai</th>
-                              <th className="p-5" style={{ fontWeight: 600 }}>Belum Mulai</th>
-                              {packageAnalyticsData.summary?.otherCount > 0 && <th className="p-5" style={{ fontWeight: 600 }}>Status Lain</th>}
-                              <th className="p-5" style={{ fontWeight: 600 }}>Rata-rata Sekolah</th>
-                              <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {packageAnalyticsData.schools.filter((sch: any) => `${sch.name} ${sch.npsn}`.toLowerCase().includes(analyticsSchoolSearch.trim().toLowerCase())).length === 0 && <tr><td colSpan={11} className="p-5">{analyticsSchoolSearch.trim() ? 'Tidak ada sekolah sesuai pencarian.' : 'Belum ada data sekolah.'}</td></tr>}
-                            {packageAnalyticsData.schools.filter((sch: any) => `${sch.name} ${sch.npsn}`.toLowerCase().includes(analyticsSchoolSearch.trim().toLowerCase())).map((sch: any) => (
-                              <tr 
-                                key={sch.npsn} 
-                                style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'pointer' }} 
-                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} 
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                onClick={() => handleSelectAnalyticsSchool(sch)}
-                              >
-                                <td className="p-5 font-semibold text-muted">{sch.npsn}</td>
-                                <td className="p-5 font-semibold text-main">{sch.name}</td>
-                                <td className="p-5">{sch.totalStudents}</td>
-                                <td className="p-5">{sch.startedCount}</td>
-                                <td className="p-5">{sch.ongoingCount}</td>
-                                <td className="p-5">{sch.finishedCount}</td>
-                                <td className="p-5">{sch.notStartedCount}</td>
-                                {packageAnalyticsData.summary?.otherCount > 0 && <td className="p-5">{sch.otherCount}</td>}
-                                <td className="p-5">
-                                  <span className="tag" style={{ background: 'var(--primary-color)', color: 'white' }}>
-                                    {sch.finishedCount > 0 ? sch.averageScore.toFixed(1) : 'Belum tersedia'}
-                                  </span>
-                                </td>
-                                <td className="p-5">
-                                  <button 
-                                    className="btn-secondary" 
-                                    style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleSelectAnalyticsSchool(sch);
-                                    }}
-                                  >
-                                    Lihat Siswa <ChevronRight size={14} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              // Step 3: List Students for the selected school
-              <div className="animate-fade-in">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-                  <div className="flex items-start gap-4">
-                    <button className="btn-secondary" style={{ padding: '8px 12px', marginTop: '4px' }} onClick={() => setSelectedAnalyticsSchool(null)}>
-                      <ChevronLeft size={18} />
-                    </button>
-                    <div>
-                      <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">{selectedAnalyticsPackage.name}</div>
-                      <h3 className="text-2xl font-bold text-slate-800 m-0">{selectedAnalyticsSchool.name}</h3>
-                      {selectedAnalyticsSchool.npsn && <div className="text-sm text-slate-500 mt-1">NPSN: {selectedAnalyticsSchool.npsn === 'UNKNOWN' ? 'Belum tersedia' : selectedAnalyticsSchool.npsn}</div>}
-                    </div>
-                  </div>
-                  <button className="btn-secondary" disabled={!!exportProgress || studentList.loading || !!studentList.error || analyticsSearch !== analyticsQuery} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => void exportAnalytics(analyticsStudentUrl, analyticsParams, `analitik_${selectedAnalyticsSchool.npsn || 'semua_sekolah'}_terfilter.csv`, false)}>
-                    <Download size={18} /> {exportProgress ? 'Mengunduh CSV...' : selectedAnalyticsSchool.npsn ? 'Unduh CSV Sekolah' : 'Unduh CSV Hasil'}
-                  </button>
-                </div>
-
-                <div className="glass-panel" style={{ padding: '2rem', marginTop: '2rem' }}>
-                  <div className="mb-6">
-                    <h3 className="m-0">Daftar Nilai Siswa</h3>
-                  </div>
-                  <AnalyticsStudentFilters search={analyticsSearch} onSearch={value => { setAnalyticsSearch(value); setAnalyticsStudentPage(1); }}
-                    school={selectedAnalyticsSchool.npsn || ''} schools={packageAnalyticsData?.schools || []}
-                    onSchool={value => handleSelectAnalyticsSchool({ npsn: value, name: packageAnalyticsData?.schools.find((school: any) => school.npsn === value)?.name || 'Semua Sekolah' })}
-                    className={analyticsClass} classes={analyticsClasses} onClass={value => { setAnalyticsClass(value); setAnalyticsStudentPage(1); }}
-                    status={analyticsStatus} onStatus={value => { setAnalyticsStatus(value); setAnalyticsStudentPage(1); }}
-                    sort={analyticsSort} onSort={value => { setAnalyticsSort(value); setAnalyticsStudentPage(1); }}
-                    onReset={() => { setAnalyticsSearch(''); setAnalyticsClass(''); setAnalyticsStatus(''); setAnalyticsSort('name_asc'); handleSelectAnalyticsSchool({ npsn: '', name: 'Semua Sekolah' }); }} />
-                  <p className="text-muted">{studentList.total} siswa sesuai filter. Nilai yang belum tersedia selalu ditempatkan setelah nilai akhir; CSV mencakup seluruh halaman sesuai filter dan urutan.</p>
-                  {studentList.error ? <div role="alert"><p>{studentList.error}</p><button className="btn-secondary" onClick={() => void studentList.reload()}>Coba Lagi</button></div> : studentList.loading ? (
-                    <p className="text-muted">Memuat hasil siswa...</p>
-                  ) : schoolStudentsData.length === 0 ? (
-                    <div className="p-12 flex flex-col items-center justify-center">
-                      <p className="text-slate-500">Tidak ada siswa yang sesuai filter.</p>
-                    </div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Peserta Didik</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Status</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Skor Akhir</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {schoolStudentsData.map((item: any, idx: number) => (
-                            <tr 
-                              key={idx} 
-                              style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} 
-                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} 
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            >
-                              <td className="p-5">
-                                <div className="font-semibold text-main">{item.studentName}</div>
-                                <div className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>{item.nisn || '-'}</div>
-                                <div className="text-muted" style={{ fontSize: '0.85rem' }}>{item.school} · Kelas {item.className || '-'}</div>
-                              </td>
-                              <td className="p-5">
-                                <span className={`tag ${item.status === 'Selesai' ? 'bg-green-100 text-green-700' : item.status === 'Sedang Mengerjakan' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
-                                  {item.status}
-                                </span>
-                              </td>
-                              <td className="p-5">
-                                <span className="tag" style={{ background: 'var(--primary-color)', color: 'white' }}>
-                                  {item.score == null ? 'Belum tersedia' : Math.round(Number(item.score))}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  <Pagination page={analyticsStudentPage} total={studentList.total} pageSize={analyticsStudentsPerPage} onChange={setAnalyticsStudentPage} loading={studentList.loading} />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Placeholder for other tabs */}
         {activeTab === 'settings' && (
           <div className="animate-fade-in glass-panel p-8 flex flex-col items-center justify-center text-center" style={{ minHeight: '400px' }}>
             <Settings size={48} style={{ color: 'var(--primary-light)', marginBottom: '1rem' }} />

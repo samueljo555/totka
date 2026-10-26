@@ -43,6 +43,7 @@ export function useDebounced<T>(value: T, delay = 300): T {
 export function usePagedList<T>(url: string, page: number, pageSize: number, params: Record<string, string | number | undefined> = {}, enabled = true) {
   const fullUrl = queryUrl(url, { ...params, page, pageSize });
   const [data, setData] = useState<Page<T>>({ items: [], total: 0, page: 1, pageSize, totalPages: 1, hasMore: false, nextCursor: null });
+  const [resolvedUrl, setResolvedUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const sequence = useRef(0);
@@ -53,11 +54,12 @@ export function usePagedList<T>(url: string, page: number, pageSize: number, par
     setLoading(true); setError('');
     try {
       const result = await readJson<Page<T>>(fullUrl, signal);
-      if (lifecycle.current.active && attempt === sequence.current && !signal?.aborted) setData(result);
+      if (!result || !Array.isArray(result.items) || typeof result.total !== 'number') throw new Error('Format data tidak sesuai. Muat ulang aplikasi.');
+      if (lifecycle.current.active && attempt === sequence.current && !signal?.aborted) { setData(result); setResolvedUrl(fullUrl); }
     } catch (failure) {
-      if (lifecycle.current.active && attempt === sequence.current && !signal?.aborted) setError(failure instanceof Error ? failure.message : 'Gagal memuat data.');
+      if (lifecycle.current.active && attempt === sequence.current && !signal?.aborted) { setData({ items: [], total: 0, page, pageSize, totalPages: 1, hasMore: false, nextCursor: null }); setError(failure instanceof Error ? failure.message : 'Gagal memuat data.'); setResolvedUrl(fullUrl); }
     } finally { if (lifecycle.current.active && attempt === sequence.current) setLoading(false); }
-  }, [enabled, fullUrl]);
+  }, [enabled, fullUrl, page, pageSize]);
   useEffect(() => {
     const controller = new AbortController();
     const life = lifecycle.current;
@@ -66,5 +68,7 @@ export function usePagedList<T>(url: string, page: number, pageSize: number, par
     else { setLoading(false); setError(''); }
     return () => { life.active = false; controller.abort(); };
   }, [reload, enabled]);
-  return { ...data, loading, error, reload };
+  const current = resolvedUrl === fullUrl;
+  const visible = current ? data : { items: [] as T[], total: 0, page, pageSize, totalPages: 1, hasMore: false, nextCursor: null };
+  return { ...visible, loading: enabled && (loading || !current), error: current ? error : '', reload };
 }

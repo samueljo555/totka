@@ -30,6 +30,7 @@ export function pageResult<T>(rows: T[], total: number, p: ReturnType<typeof pag
 }
 export const afterId = (after: string, field = 'id') => after ? { [field]: { gt: after } } : {};
 export function studentWhere(req: Request): Prisma.UserWhereInput {
+  if (req.user!.role === 'operator' && !req.user!.schoolNpsn) throw new QueryError(403, 'Akun operator belum memiliki sekolah.');
   const requested = text(req.query, 'schoolNpsn');
   const schoolNpsn = req.user!.role === 'operator' ? req.user!.schoolNpsn : requested;
   if (req.user!.role === 'operator' && requested && requested !== schoolNpsn) throw new QueryError(403, 'Sekolah tidak sesuai dengan akun operator.');

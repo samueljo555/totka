@@ -1,6 +1,7 @@
+import { listOrder } from './list-order.js';
 import express from 'express';
 import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import multer from 'multer';
 import path from 'path';
 import { readinessProbe, checkDatabase } from './readiness.js';
@@ -10,7 +11,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { registerQueryRoutes } from './query-routes.js';
-import { pagination, pageResult, afterId, studentWhere, QueryError } from './pagination.js';
+import { pageResult, studentWhere, QueryError } from './pagination.js';
 import { deleteCache } from './cache.js';
 import { createLoginCardCipher, studentPassword } from './login-cards.js';
 import { authorizeApi, safeUserSelect, studentQuestionSelect, isAdmin, validRoles } from './security.js';
@@ -247,12 +248,13 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   registerQueryRoutes(app, prisma);
   app.get('/api/users/login-cards', async (req, res) => {
     try {
-      const p = pagination(req.query), where = studentWhere(req);
+      const where = studentWhere(req);
+      const { p, following, orderBy, cursor } = await listOrder(req, prisma.user, where, 'fullName');
       const [users, total] = await Promise.all([
-        prisma.user.findMany({ where: { AND: [where, afterId(p.after)] }, select: cardSelect, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }),
+        prisma.user.findMany({ where: { AND: [where, following] }, select: cardSelect, orderBy: orderBy as Prisma.UserOrderByWithRelationInput[], skip: p.skip, take: p.take }),
         prisma.user.count({ where }),
       ]);
-      const result = pageResult(users, total, p, row => row.id);
+      const result = pageResult(users, total, p, cursor);
       res.json({ ...result, items: result.items.map(cardDto) });
     } catch (error) {
       if (error instanceof QueryError) return res.status(error.status).json({ error: 'INVALID_QUERY', message: error.message });

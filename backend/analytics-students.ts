@@ -7,6 +7,7 @@ import { pagination, text, QueryError } from './pagination.js';
 type StudentRow = {
   id: string | null; studentName: string; nisn: string | null; npsn: string | null; school: string | null; className: string | null;
   sessionId: string | null; sessionStatus: string | null; score: Prisma.Decimal | null; startTime: Date | null; endTime: Date | null;
+  packageId: string; packageName: string; mapel: string; studentId: string;
   total: number; cursorExists: boolean;
 };
 const orders = {
@@ -17,8 +18,8 @@ const orders = {
   score_asc: { inner: Prisma.sql`f.score ASC NULLS LAST, f.id ASC`, outer: Prisma.sql`p.score ASC NULLS LAST, p.id ASC` },
 };
 
-export async function analyticsStudents(prisma: PrismaClient, req: Request, schoolPath?: string) {
-  const p = pagination(req.query, 2048), packageId = String(req.params.packageId);
+export async function analyticsStudents(prisma: PrismaClient, req: Request, schoolPath?: string, report: 'analytics' | 'history' | null = null) {
+  const p = pagination(req.query, 2048), packageId = report ? text(req.query, 'packageId') : String(req.params.packageId);
   const requestedSchool = text(req.query, 'schoolNpsn');
   let school = schoolPath || requestedSchool;
   if (schoolPath && requestedSchool && schoolPath !== requestedSchool) throw new QueryError(400, 'Filter sekolah tidak sesuai dengan alamat laporan.');
@@ -31,22 +32,24 @@ export async function analyticsStudents(prisma: PrismaClient, req: Request, scho
   if (!Object.hasOwn(orders, sort)) throw new QueryError(400, 'Urutan hasil tidak valid.');
   if (!['', 'selesai', 'sedang_mengerjakan', 'belum_mulai', 'lainnya'].includes(status)) throw new QueryError(400, 'Status hasil tidak valid.');
   const order = orders[sort as keyof typeof orders];
-  const scope = createHash('sha256').update(JSON.stringify({ packageId, school, search, className, status, sort })).digest('hex').slice(0, 24);
+  const scope = createHash('sha256').update(JSON.stringify({ report, packageId, school, search, className, status, sort })).digest('hex').slice(0, 24);
   let after = '';
   if (p.after) {
     try {
       const cursor = JSON.parse(Buffer.from(p.after, 'base64url').toString('utf8'));
-      if (cursor.v !== 1 || cursor.scope !== scope || typeof cursor.id !== 'string' || !cursor.id || cursor.id.length > 100) throw new Error();
+      if (cursor.v !== 1 || cursor.scope !== scope || typeof cursor.id !== 'string' || !cursor.id || cursor.id.length > 500) throw new Error();
       after = cursor.id;
     } catch { throw new QueryError(400, 'Cursor tidak sesuai filter atau urutan laporan.'); }
   }
   const clauses: Prisma.Sql[] = [Prisma.sql`u.role = 'siswa'`];
+  if (packageId) clauses.push(Prisma.sql`pk.id = ${packageId}`);
+  if (report === 'history') clauses.push(Prisma.sql`es.status = 'selesai'`);
   if (school === 'UNKNOWN') clauses.push(Prisma.sql`u."schoolNpsn" IS NULL`);
   else if (school) clauses.push(Prisma.sql`u."schoolNpsn" = ${school}`);
   if (className) clauses.push(Prisma.sql`u."className" = ${className}`);
   if (search) {
     const pattern = '%' + search.replace(/[\\%_]/g, '\\$&') + '%';
-    clauses.push(Prisma.sql`(u."fullName" ILIKE ${pattern} OR u.username ILIKE ${pattern} OR u.nisn ILIKE ${pattern} OR u."className" ILIKE ${pattern})`);
+    clauses.push(Prisma.sql`(u."fullName" ILIKE ${pattern} OR u.username ILIKE ${pattern} OR u.nisn ILIKE ${pattern} OR u."className" ILIKE ${pattern} OR pk.name ILIKE ${pattern})`);
   }
   if (status === 'belum_mulai') clauses.push(Prisma.sql`es.id IS NULL`);
   else if (status === 'lainnya') clauses.push(Prisma.sql`es.id IS NOT NULL AND es.status NOT IN ('selesai', 'sedang_mengerjakan')`);
@@ -71,12 +74,13 @@ export async function analyticsStudents(prisma: PrismaClient, req: Request, scho
   }
   const rows = await prisma.$queryRaw<StudentRow[]>`
     WITH filtered AS (
-      SELECT u.id, u."fullName" AS "studentName", u.nisn, u."schoolNpsn" AS npsn, s.name AS school, u."className",
+      SELECT ${report ? Prisma.sql`json_build_array(pk.id, u.id)::text` : Prisma.sql`u.id`} AS id,
+        u.id AS "studentId", pk.id AS "packageId", pk.name AS "packageName", pk.mapel, u."fullName" AS "studentName", u.nisn, u."schoolNpsn" AS npsn, s.name AS school, u."className",
         es.id AS "sessionId", es.status AS "sessionStatus", es."startTime",
         CASE WHEN es.status = 'selesai' THEN es."endTime" ELSE NULL END AS "endTime",
         CASE WHEN es.status = 'selesai' THEN es."totalScore" ELSE NULL END AS score
-      FROM "User" u LEFT JOIN "School" s ON s.npsn = u."schoolNpsn"
-      LEFT JOIN "ExamSession" es ON es."studentId" = u.id AND es."packageId" = ${packageId}
+      FROM "User" u CROSS JOIN "Package" pk LEFT JOIN "School" s ON s.npsn = u."schoolNpsn"
+      LEFT JOIN "ExamSession" es ON es."studentId" = u.id AND es."packageId" = pk.id
       WHERE ${Prisma.join(clauses, ' AND ')}
     ), anchor AS (SELECT * FROM filtered WHERE id = ${after}), paged AS (
       SELECT * FROM filtered f WHERE ${following} ORDER BY ${order.inner} LIMIT ${p.take} OFFSET ${p.skip}
@@ -99,7 +103,7 @@ export async function analyticsStudents(prisma: PrismaClient, req: Request, scho
     const value = bySession.get(item.sessionId) || {};
     value[item.element] = { total: item.total, correct: item.correct }; bySession.set(item.sessionId, value);
   }
-  const items = shown.map(row => ({ id: row.id, sessionId: row.sessionId, studentName: row.studentName, nisn: row.nisn,
+  const items = shown.map(row => ({ id: row.id, ...(report ? { studentId: row.studentId, packageId: row.packageId, packageName: row.packageName, mapel: row.mapel } : {}), sessionId: row.sessionId, studentName: row.studentName, nisn: row.nisn,
     npsn: row.npsn || '-', school: row.school || '-', className: row.className, score: row.score, startTime: row.startTime, endTime: row.endTime,
     status: row.sessionStatus === 'selesai' ? 'Selesai' : !row.sessionId ? 'Belum Mulai' : row.sessionStatus === 'sedang_mengerjakan' ? 'Sedang Mengerjakan' : 'Status Lain',
     elementBreakdown: row.sessionStatus === 'selesai' ? bySession.get(row.sessionId!) || {} : {} }));
