@@ -4,13 +4,13 @@ import type { Prisma } from '@prisma/client';
 export class QueryError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
-export function text(query: Request['query'], name: string): string {
+export function text(query: Request['query'], name: string, maxLength = 200): string {
   const value = query[name];
   if (value === undefined || value === '') return '';
-  if (typeof value !== 'string' || value.length > 200) throw new QueryError(400, `Parameter ${name} tidak valid.`);
+  if (typeof value !== 'string' || value.length > maxLength) throw new QueryError(400, `Parameter ${name} tidak valid.`);
   return value.trim();
 }
-export function pagination(query: Request['query']) {
+export function pagination(query: Request['query'], maxCursorLength = 200) {
   const number = (name: string, fallback: number, max: number) => {
     const value = query[name];
     if (value === undefined) return fallback;
@@ -19,7 +19,7 @@ export function pagination(query: Request['query']) {
   };
   const page = number('page', 1, 100000);
   const pageSize = number('pageSize', 50, 100);
-  const after = text(query, 'after');
+  const after = text(query, 'after', maxCursorLength);
   if (after && page !== 1) throw new QueryError(400, 'Cursor tidak dapat digabung dengan nomor halaman.');
   return { page, pageSize, after, skip: after ? 0 : (page - 1) * pageSize, take: pageSize + 1 };
 }

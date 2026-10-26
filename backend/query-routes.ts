@@ -1,6 +1,7 @@
 import type { Express, Request } from 'express';
 import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
+import { analyticsStudents } from './analytics-students.js';
 import { getOrSetCache } from './cache.js';
 import { isAdmin, safeUserSelect } from './security.js';
 import { pagination, pageResult, afterId, text, studentWhere, QueryError } from './pagination.js';
@@ -36,6 +37,7 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
   get('/api/users/classes', async req => {
     const where = studentWhere(req);
     delete where.className; delete where.OR;
+    if (where.schoolNpsn === 'UNKNOWN') where.schoolNpsn = null;
     const rows = await prisma.user.groupBy({ by: ['className'], where, orderBy: { className: 'asc' } });
     return rows.map(row => row.className).filter((value): value is string => !!value);
   });
@@ -134,30 +136,8 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
     }, [`analytics:pkg:${packageId}`, 'api:users', 'api:schools']);
   });
 
-  const students = async (req: Request, schoolNpsn?: string) => {
-    const p = pagination(req.query), packageId = String(req.params.packageId);
-    const where: Prisma.UserWhereInput = { ...studentWhere(req), ...(schoolNpsn ? { schoolNpsn: schoolNpsn === 'UNKNOWN' ? null : schoolNpsn } : {}) };
-    const [rows, total] = await Promise.all([
-      prisma.user.findMany({ where: { AND: [where, afterId(p.after)] }, select: { id: true, fullName: true, nisn: true, schoolNpsn: true, className: true, school: { select: { name: true } }, examSessions: { where: { packageId }, select: { id: true, status: true, startTime: true, endTime: true, totalScore: true } } }, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }), prisma.user.count({ where }),
-    ]);
-    const shown = rows.slice(0, p.pageSize);
-    const sessionIds = shown.flatMap(row => row.examSessions.filter(s => s.status === 'selesai').map(s => s.id));
-    const breakdown = sessionIds.length ? await prisma.$queryRaw<{ sessionId: string; element: string; total: number; correct: number }[]>`
-      SELECT es.id AS "sessionId", q.element, COUNT(*)::int AS total, COUNT(a.id) FILTER (WHERE a."isCorrect" = true)::int AS correct
-      FROM "ExamSession" es JOIN "PackageQuestion" pq ON pq."packageId" = es."packageId"
-      JOIN "Question" q ON q.id = pq."questionId"
-      LEFT JOIN "Answer" a ON a."sessionId" = es.id AND a."questionId" = q.id
-      WHERE es.id IN (${Prisma.join(sessionIds)}) AND es.status = 'selesai' GROUP BY es.id, q.element` : [];
-    const bySession = new Map<string, Record<string, { total: number; correct: number }>>();
-    for (const item of breakdown) { const value = bySession.get(item.sessionId) || {}; value[item.element] = { total: item.total, correct: item.correct }; bySession.set(item.sessionId, value); }
-    const mapped = rows.map(row => {
-      const session = row.examSessions[0], finished = session?.status === 'selesai';
-      return { id: row.id, sessionId: session?.id || null, studentName: row.fullName, nisn: row.nisn, npsn: row.schoolNpsn || '-', school: row.school?.name || '-', className: row.className, score: finished ? session.totalScore : null, startTime: session?.startTime || null, endTime: finished ? session.endTime : null, status: finished ? 'Selesai' : !session ? 'Belum Mulai' : session.status === 'sedang_mengerjakan' ? 'Sedang Mengerjakan' : 'Status Lain', elementBreakdown: finished ? bySession.get(session.id) || {} : {} };
-    });
-    return pageResult(mapped, total, p, row => row.id);
-  };
-  get('/api/analytics/packages/:packageId/all-students', req => students(req));
-  get('/api/analytics/packages/:packageId/schools/:schoolNpsn', req => students(req, String(req.params.schoolNpsn)));
+  get('/api/analytics/packages/:packageId/all-students', req => analyticsStudents(prisma, req));
+  get('/api/analytics/packages/:packageId/schools/:schoolNpsn', req => analyticsStudents(prisma, req, String(req.params.schoolNpsn)));
   get('/api/analytics/packages/:packageId/items', async req => {
     const packageId = String(req.params.packageId);
     return getOrSetCache(`analytics:items:v3:${packageId}`, 15, async () => {

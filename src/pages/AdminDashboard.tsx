@@ -23,9 +23,10 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import { AnalyticsStudentFilters } from '../components/AnalyticsStudentFilters';
 import { Pagination } from '../components/Pagination';
 import { RemoteSelect } from '../components/RemoteSelect';
-import { usePagedList, useDebounced, readJson, readAllPages } from '../lib/paging';
+import { usePagedList, useDebounced, readJson, readAllPages, queryUrl } from '../lib/paging';
 
 const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const confirmModal = useConfirm();
@@ -66,6 +67,13 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   const [analyticsStudentPage, setAnalyticsStudentPage] = useState(1);
   const analyticsStudentsPerPage = 15;
+  const [analyticsSearch, setAnalyticsSearch] = useState('');
+  const analyticsQuery = useDebounced(analyticsSearch);
+  const [analyticsClass, setAnalyticsClass] = useState('');
+  const [analyticsStatus, setAnalyticsStatus] = useState('');
+  const [analyticsSort, setAnalyticsSort] = useState('name_asc');
+  const [analyticsClasses, setAnalyticsClasses] = useState<string[]>([]);
+  const [analyticsSchoolSearch, setAnalyticsSchoolSearch] = useState('');
   const [selectedItemAnalysisPackage, setSelectedItemAnalysisPackage] = useState<any>(null);
   const [itemAnalysisData, setItemAnalysisData] = useState<any>(null);
 
@@ -96,7 +104,17 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const packageList = usePagedList<any>('/api/packages', packagePage, 20, { search: query }, activeTab === 'packages');
   const questionList = usePagedList<any>('/api/questions', questionPage, questionsPerPage, { search: query, mapel: newPackageMapel }, activeTab === 'packages' && isAddingPackage);
   const resultList = usePagedList<any>('/api/analytics/packages', resultPage, 20, { search: query }, activeTab === 'results');
-  const studentList = usePagedList<any>(`/api/analytics/packages/${selectedAnalyticsPackage?.id}/schools/${selectedAnalyticsSchool?.npsn}`, analyticsStudentPage, analyticsStudentsPerPage, { search: query }, activeTab === 'results' && !!selectedAnalyticsSchool);
+  const analyticsStudentUrl = `/api/analytics/packages/${selectedAnalyticsPackage?.id}` + (selectedAnalyticsSchool?.npsn ? `/schools/${selectedAnalyticsSchool.npsn}` : '/all-students');
+  const analyticsParams = { search: analyticsQuery, className: analyticsClass, status: analyticsStatus, sort: analyticsSort };
+  const studentList = usePagedList<any>(analyticsStudentUrl, analyticsStudentPage, analyticsStudentsPerPage, analyticsParams, activeTab === 'results' && !!selectedAnalyticsSchool);
+  useEffect(() => {
+    if (activeTab !== 'results' || !selectedAnalyticsSchool) return;
+    const controller = new AbortController();
+    setAnalyticsClasses([]);
+    readJson<string[]>(queryUrl('/api/users/classes', { schoolNpsn: selectedAnalyticsSchool.npsn }), controller.signal)
+      .then(setAnalyticsClasses).catch(() => {});
+    return () => controller.abort();
+  }, [activeTab, selectedAnalyticsSchool]);
   const users = userList.items, schools = schoolList.items, packages = packageList.items, questions = questionList.items.filter(q => q.mapel === newPackageMapel), analyticsPackages = resultList.items, schoolStudentsData = studentList.items;
   const fetchUsers = () => { void userList.reload(); };
   const fetchSchools = () => { void schoolList.reload(); };
@@ -110,6 +128,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   const handleSelectAnalyticsPackage = (pkg: any) => {
     setSelectedAnalyticsPackage(pkg);
+    setAnalyticsSearch(''); setAnalyticsClass(''); setAnalyticsStatus(''); setAnalyticsSort('name_asc'); setAnalyticsSchoolSearch('');
     setSelectedAnalyticsSchool(null);
     setPackageAnalyticsData(null);
     fetch(`/api/analytics/packages/${pkg.id}`)
@@ -120,6 +139,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   const handleSelectAnalyticsSchool = (school: any) => {
     setSelectedAnalyticsSchool(school);
+    setAnalyticsClass('');
     setAnalyticsStudentPage(1);
   };
 
@@ -293,10 +313,10 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
           <h1>{tabs.find(t => t.id === activeTab)?.name}</h1>
           <div className="flex items-center gap-4">
-            <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
+            {!(activeTab === 'results' && (selectedAnalyticsPackage || selectedItemAnalysisPackage)) && <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input type="text" className="input-field" placeholder="Cari..." value={search} onChange={event => { setSearch(event.target.value); setUserPage(1); setSchoolPage(1); setQuestionPage(1); setPackagePage(1); setResultPage(1); setAnalyticsStudentPage(1); }} style={{ paddingLeft: '40px', width: '250px' }} />
-            </div>
+            </div>}
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-light)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
               SA
             </div>
@@ -1104,6 +1124,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Daftar Sekolah</div>
                     <h3 className="text-2xl font-bold text-slate-800 m-0">{selectedAnalyticsPackage.name}</h3>
                   </div>
+                  <button className="btn-secondary" onClick={() => handleSelectAnalyticsSchool({ npsn: '', name: 'Semua Sekolah' })}>Lihat Semua Siswa</button>
                 </div>
 
                 {!packageAnalyticsData ? (
@@ -1148,6 +1169,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     <div className="glass-panel" style={{ padding: '2rem', marginTop: '2rem' }}>
                       <div className="mb-6">
                         <h3 className="m-0">Distribusi per Sekolah</h3>
+                        <input className="input-field" placeholder="Cari nama sekolah atau NPSN" value={analyticsSchoolSearch} onChange={e => setAnalyticsSchoolSearch(e.target.value)} style={{ marginTop: '1rem', maxWidth: '360px' }} />
                       </div>
                       <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -1166,7 +1188,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             </tr>
                           </thead>
                           <tbody>
-                            {packageAnalyticsData.schools.map((sch: any) => (
+                            {packageAnalyticsData.schools.filter((sch: any) => `${sch.name} ${sch.npsn}`.toLowerCase().includes(analyticsSchoolSearch.trim().toLowerCase())).map((sch: any) => (
                               <tr 
                                 key={sch.npsn} 
                                 style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s', cursor: 'pointer' }} 
@@ -1219,12 +1241,12 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     <div>
                       <div className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">{selectedAnalyticsPackage.name}</div>
                       <h3 className="text-2xl font-bold text-slate-800 m-0">{selectedAnalyticsSchool.name}</h3>
-                      <div className="text-sm text-slate-500 mt-1">NPSN: {selectedAnalyticsSchool.npsn}</div>
+                      {selectedAnalyticsSchool.npsn && <div className="text-sm text-slate-500 mt-1">NPSN: {selectedAnalyticsSchool.npsn === 'UNKNOWN' ? 'Belum tersedia' : selectedAnalyticsSchool.npsn}</div>}
                     </div>
                   </div>
-                  <button className="btn-secondary" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={async () => {
+                  <button className="btn-secondary" disabled={studentList.loading || analyticsSearch !== analyticsQuery} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={async () => {
                     try {
-                    const exportRows = await readAllPages<any>(`/api/analytics/packages/${selectedAnalyticsPackage.id}/schools/${selectedAnalyticsSchool.npsn}`);
+                    const exportRows = await readAllPages<any>(analyticsStudentUrl, analyticsParams);
                     const header = "NISN,Nama Siswa,NPSN,Skor Total,Lama Mengerjakan (Menit),Status,Catatan\n";
                     const csv = exportRows.map((a: any) => {
                       let timeStr = '';
@@ -1238,11 +1260,11 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `analitik_${selectedAnalyticsSchool.npsn}.csv`;
+                    a.download = `analitik_${selectedAnalyticsSchool.npsn || 'semua_sekolah'}_terfilter.csv`;
                     a.click();
-                    } catch { toast.error('Gagal mengunduh data sekolah'); }
+                    } catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal mengunduh data sekolah'); }
                   }}>
-                    <Download size={18} /> Unduh CSV Sekolah
+                    <Download size={18} /> {selectedAnalyticsSchool.npsn ? 'Unduh CSV Sekolah' : 'Unduh CSV Hasil'}
                   </button>
                 </div>
 
@@ -1250,10 +1272,19 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   <div className="mb-6">
                     <h3 className="m-0">Daftar Nilai Siswa</h3>
                   </div>
-                  {schoolStudentsData.length === 0 ? (
+                  <AnalyticsStudentFilters search={analyticsSearch} onSearch={value => { setAnalyticsSearch(value); setAnalyticsStudentPage(1); }}
+                    school={selectedAnalyticsSchool.npsn || ''} schools={packageAnalyticsData?.schools || []}
+                    onSchool={value => handleSelectAnalyticsSchool({ npsn: value, name: packageAnalyticsData?.schools.find((school: any) => school.npsn === value)?.name || 'Semua Sekolah' })}
+                    className={analyticsClass} classes={analyticsClasses} onClass={value => { setAnalyticsClass(value); setAnalyticsStudentPage(1); }}
+                    status={analyticsStatus} onStatus={value => { setAnalyticsStatus(value); setAnalyticsStudentPage(1); }}
+                    sort={analyticsSort} onSort={value => { setAnalyticsSort(value); setAnalyticsStudentPage(1); }}
+                    onReset={() => { setAnalyticsSearch(''); setAnalyticsClass(''); setAnalyticsStatus(''); setAnalyticsSort('name_asc'); handleSelectAnalyticsSchool({ npsn: '', name: 'Semua Sekolah' }); }} />
+                  <p className="text-muted">{studentList.total} siswa sesuai filter. Nilai yang belum tersedia selalu ditempatkan setelah nilai akhir; CSV mencakup seluruh halaman sesuai filter dan urutan.</p>
+                  {studentList.error ? <p role="alert">{studentList.error}</p> : studentList.loading ? (
+                    <p className="text-muted">Memuat hasil siswa...</p>
+                  ) : schoolStudentsData.length === 0 ? (
                     <div className="p-12 flex flex-col items-center justify-center">
-                      <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                      <p className="text-slate-500">Memuat data siswa...</p>
+                      <p className="text-slate-500">Tidak ada siswa yang sesuai filter.</p>
                     </div>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
@@ -1276,6 +1307,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                               <td className="p-5">
                                 <div className="font-semibold text-main">{item.studentName}</div>
                                 <div className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>{item.nisn || '-'}</div>
+                                <div className="text-muted" style={{ fontSize: '0.85rem' }}>{item.school} · Kelas {item.className || '-'}</div>
                               </td>
                               <td className="p-5">
                                 <span className={`tag ${item.status === 'Selesai' ? 'bg-green-100 text-green-700' : item.status === 'Sedang Mengerjakan' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>

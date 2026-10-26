@@ -97,7 +97,7 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       assert.equal(result.body.items[0].score, '80');
       assert.deepEqual(result.body.items[0].elementBreakdown.Bilangan, { total: 50, correct: 40 });
       assert.ok(!queries.some(query => /SELECT[\s\S]*"answerData"/.test(query)));
-      const next = await get(`/analytics/packages/p1/all-students?pageSize=5&after=${result.body.nextCursor}`);
+      const next = await get(`/analytics/packages/p1/schools/11111111?pageSize=5&after=${result.body.nextCursor}`);
       assert.equal(next.body.items[0].nisn, '0000000006');
     });
     await t.test('item statistics group 502500 answers inside PostgreSQL', async () => {
@@ -274,6 +274,77 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       assert.equal(statuses.get('count-active-a'), 'Sedang Mengerjakan');
       assert.equal(statuses.get('count-finished-a'), 'Selesai');
       assert.deepEqual(await prisma.examSession.findMany({ where: { packageId }, orderBy: { id: 'asc' } }), before);
+    });
+
+    await t.test('analytics filters and ordered cursor exports cover ties, null scores and every matching page', async () => {
+      const packageId = 'filtered-analytics';
+      await prisma.package.create({ data: { id: packageId, name: 'Filtered analytics', mapel: 'Matematika' } });
+      const fixture = Array.from({ length: 125 }, (_, i) => ({
+        id: 'filter-' + String(i).padStart(3, '0'), fullName: 'FilterCase ' + String(Math.floor(i / 3)).padStart(3, '0'),
+        username: i === 123 ? 'filter_special' : i === 124 ? 'filter%special' : 'filter-login-' + i,
+        nisn: String(7700000000 + i), className: i >= 120 ? '6D' : i >= 110 ? '6C' : i % 2 ? '6B' : '6A',
+        schoolNpsn: i >= 120 ? null : i >= 110 ? '22222222' : '11111111', password: 'unused', role: 'siswa',
+        sessionStatus: i < 100 || i >= 120 ? 'selesai' : i < 110 ? 'sedang_mengerjakan' : i >= 115 ? 'dibatalkan' : null,
+        finalScore: i === 99 ? null : i < 100 ? [0, 12.5, 50, 100][i % 4] : i >= 120 ? 50 : null,
+      }));
+      await prisma.user.createMany({ data: fixture.map(({ sessionStatus, finalScore, ...user }) => user) });
+      await prisma.examSession.createMany({ data: fixture.filter(row => row.sessionStatus).map(row => ({ id: 'session-' + row.id, studentId: row.id, packageId, status: row.sessionStatus, totalScore: row.sessionStatus === 'sedang_mengerjakan' ? 80 : row.finalScore })) });
+      const base = '/analytics/packages/' + packageId;
+      const collect = async (filters, pageSize = 7) => {
+        const all = []; let after;
+        do {
+          const query = new URLSearchParams({ search: 'FilterCase', ...filters, pageSize: String(pageSize), ...(after ? { after } : {}) });
+          const result = await get(base + '/all-students?' + query);
+          assert.equal(result.status, 200); assert.ok(result.body.items.length <= pageSize);
+          all.push(...result.body.items); assert.notEqual(result.body.nextCursor, after);
+          after = result.body.nextCursor;
+        } while (after);
+        assert.equal(new Set(all.map(row => row.id)).size, all.length);
+        return all;
+      };
+      const compareText = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+      for (const sort of ['id', 'name_asc', 'name_desc', 'score_asc', 'score_desc']) {
+        const expected = [...fixture].sort((a, b) => {
+          let primary = 0;
+          if (sort.startsWith('name_')) primary = compareText(a.fullName, b.fullName) * (sort === 'name_desc' ? -1 : 1);
+          if (sort.startsWith('score_')) primary = a.finalScore === null && b.finalScore === null ? 0 : a.finalScore === null ? 1 : b.finalScore === null ? -1 : (a.finalScore - b.finalScore) * (sort === 'score_desc' ? -1 : 1);
+          return primary || compareText(a.id, b.id);
+        });
+        const all = await collect({ sort });
+        assert.deepEqual(all.map(row => row.id), expected.map(row => row.id));
+        assert.equal(all.find(row => row.id === 'filter-100').score, null);
+        assert.equal(all.find(row => row.id === 'filter-000').score, '0');
+      }
+      const filtered = await collect({ schoolNpsn: '11111111', className: '6A', status: 'selesai', sort: 'score_desc' }, 100);
+      assert.equal(filtered.length, 50);
+      assert.ok(filtered.every(row => row.npsn === '11111111' && row.className === '6A' && row.status === 'Selesai'));
+      const exported = await collect({ sort: 'score_desc' }, 100);
+      assert.equal(exported.length, 125);
+      const offset = await get(base + '/all-students?search=FilterCase&sort=score_desc&page=2&pageSize=5');
+      assert.deepEqual(offset.body.items.map(row => row.id), exported.slice(5, 10).map(row => row.id));
+      for (const [status, count] of [['selesai',105], ['sedang_mengerjakan',10], ['belum_mulai',5], ['lainnya',5]]) {
+        assert.equal((await collect({ status, sort: 'name_asc' })).length, count);
+      }
+      assert.equal((await collect({ schoolNpsn: 'UNKNOWN' })).length, 5);
+      assert.equal((await get(base + '/all-students?search=7700000012')).body.items[0].id, 'filter-012');
+      assert.equal((await get(base + '/all-students?search=%25')).body.items[0].id, 'filter-124');
+      const underscore = await get(base + '/all-students?search=_');
+      assert.equal(underscore.body.total, 1); assert.equal(underscore.body.items[0].id, 'filter-123');
+      const noRows = await get(base + '/all-students?search=DOES_NOT_EXIST');
+      assert.equal(noRows.body.total, 0); assert.deepEqual(noRows.body.items, []);
+      assert.equal((await get(base + '/all-students?sort=INVALID')).status, 400);
+      assert.equal((await get(base + '/all-students?status=INVALID')).status, 400);
+      assert.equal((await get(base + '/schools/11111111?schoolNpsn=22222222')).status, 400);
+      const first = await get(base + '/all-students?search=FilterCase&sort=score_desc&pageSize=5');
+      assert.equal((await get(base + '/all-students?search=FilterCase&sort=name_asc&after=' + first.body.nextCursor)).status, 400);
+      assert.equal((await get(base + '/schools/11111111?search=FilterCase&sort=score_desc&after=' + first.body.nextCursor)).status, 400);
+      const anchorId = first.body.items.at(-1).id;
+      await prisma.user.update({ where: { id: anchorId }, data: { fullName: 'Moved outside filter' } });
+      assert.equal((await get(base + '/all-students?search=FilterCase&sort=score_desc&after=' + first.body.nextCursor)).status, 409);
+      assert.ok((await get('/users/classes?schoolNpsn=UNKNOWN')).body.includes('6D'));
+      assert.ok((await get('/users/classes?schoolNpsn=22222222')).body.includes('6C'));
+      const unchanged = await prisma.examSession.findUnique({ where: { id: 'session-filter-100' } });
+      assert.equal(unchanged.totalScore.toString(), '80'); assert.equal(unchanged.status, 'sedang_mengerjakan');
     });
 
   } finally {
