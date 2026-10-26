@@ -98,6 +98,7 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       queries.length = 0;
       const result = await get('/analytics/packages/p1/items');
       assert.equal(result.body.items.length, 50);
+      assert.ok(result.body.items.every(item => !('cognitiveLevel' in item)));
       assert.equal(result.body.totalParticipants, 5000);
       assert.equal(result.body.items[0].totalAttempts, 5000);
       assert.equal(result.body.items[0].emptyCount, 0);

@@ -145,7 +145,7 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
   get('/api/analytics/packages/:packageId/schools/:schoolNpsn', req => students(req, String(req.params.schoolNpsn)));
   get('/api/analytics/packages/:packageId/items', async req => {
     const packageId = String(req.params.packageId);
-    return getOrSetCache(`analytics:items:v2:${packageId}`, 15, async () => {
+    return getOrSetCache(`analytics:items:v3:${packageId}`, 15, async () => {
       const pkg = await prisma.package.findUnique({ where: { id: packageId }, select: { name: true, questions: { orderBy: { questionId: 'asc' }, select: { questionId: true, question: { select: { content: true } } } } } });
       if (!pkg) throw new QueryError(404, 'Paket tidak ditemukan.');
       // One statement keeps the completed cohort and per-question counts on the
@@ -177,7 +177,7 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
       return { package: pkg.name, totalParticipants, items: pkg.questions.map((q, index) => {
         const counts = totals.get(q.questionId) || { answered: 0, correct: 0 };
         const difficultyIndex = totalParticipants ? counts.correct / totalParticipants : null;
-        return { questionId: q.questionId, questionNumber: index + 1, content: q.question.content, cognitiveLevel: 'C3',
+        return { questionId: q.questionId, questionNumber: index + 1, content: q.question.content,
           totalAttempts: totalParticipants, answeredCount: counts.answered, correctCount: counts.correct,
           wrongCount: counts.answered - counts.correct, emptyCount: totalParticipants - counts.answered,
           difficultyIndex, category: difficultyIndex === null ? 'Belum ada data' : difficultyIndex > 0.7 ? 'Mudah' : difficultyIndex < 0.3 ? 'Sulit' : 'Sedang' };

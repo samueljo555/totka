@@ -111,6 +111,8 @@ Cache Redis memakai revisi tag: hasil fetch lama tidak bisa mengisi generasi cac
 
 Konten lengkap ujian di-cache hanya setelah ada sesi committed yang mengunci konten. Sebelum sesi pertama, Redis dilewati sehingga invalidasi yang terlewat saat bank masih diedit tidak dapat menghidupkan materi lama. Respons siswa tetap diproyeksikan tanpa kunci jawaban. Redis menggunakan status ready, antrean offline dinonaktifkan, antrean command dibatasi, dan timeout command 150 ms; kegagalan cache beralih ke PostgreSQL.
 
+Kolom level kognitif dan nilai C3 statis dihapus dari analisis butir karena metadata level belum tersedia pada bank soal. Laporan detail individual di menu Analitik Hasil juga dihapus; daftar nilai, CSV, dan analisis butir tetap tersedia.
+
 Analisis butir memakai seluruh sesi selesai pada paket sebagai pembagi persentase benar. Tabel menampilkan benar, salah, dan kosong; ketiganya berjumlah sama dengan peserta selesai. Jawaban yang tidak pernah disimpan, JSON null, array kosong, dan kategori yang seluruh isiannya kosong dihitung sebagai kosong. Kategori yang terisi sebagian tetap termasuk jawaban terisi dan mengikuti flag benar/salah final dari server. Contoh: 2 benar dan 8 kosong dari 10 peserta selesai menghasilkan indeks 0,20 (20%). Bila belum ada peserta selesai, indeks bernilai null dan UI menampilkan “Belum ada data”. Agregasi populasi dan jawaban menggunakan satu statement PostgreSQL agar konsisten saat ada finalisasi bersamaan; jawaban/nilai tersimpan tidak dihitung ulang. Frontend dan backend perlu diperbarui bersama, tanpa migrasi database.
 
 ### Koneksi database dan worker

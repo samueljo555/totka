@@ -948,7 +948,6 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                           <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
                             <th className="p-5" style={{ fontWeight: 600 }}>No</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Soal</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Level Kognitif</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Menjawab Benar</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Salah</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Kosong</th>
@@ -967,7 +966,6 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                                   </ReactMarkdown>
                                 </div>
                               </td>
-                              <td className="p-5 text-muted">{item.cognitiveLevel}</td>
                               <td className="p-5">
                                 {item.correctCount} / {item.totalAttempts} {item.difficultyIndex == null ? '(Belum ada data)' : `(${(item.difficultyIndex * 100).toFixed(0)}%)`}
                               </td>
