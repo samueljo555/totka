@@ -20,14 +20,12 @@ import {
   FileText,
   List,
   BarChart2,
-  Eye,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
 import { Pagination } from '../components/Pagination';
 import { RemoteSelect } from '../components/RemoteSelect';
 import { usePagedList, useDebounced, readJson, readAllPages } from '../lib/paging';
-import AnalysisDetailModal from '../components/AnalysisDetailModal';
 
 const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const confirmModal = useConfirm();
@@ -79,9 +77,6 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [schoolNpsnInput, setSchoolNpsnInput] = useState('');
   const [isSavingSchool, setIsSavingSchool] = useState(false);
   
-  // Analysis Detail State
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-
   // Add User State
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -1252,7 +1247,6 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             <th className="p-5" style={{ fontWeight: 600 }}>Peserta Didik</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Status</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Skor Akhir</th>
-                            <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1277,16 +1271,6 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                                   {item.score == null ? 'Belum tersedia' : Math.round(Number(item.score))}
                                 </span>
                               </td>
-                              <td className="p-5">
-                                <button 
-                                  className="btn-secondary" 
-                                  style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                  disabled={item.status !== 'Selesai' || item.score == null || !item.sessionId}
-                                  onClick={() => setSelectedSessionId(item.sessionId)}
-                                >
-                                  <Eye size={14} /> Laporan Detail
-                                </button>
-                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -1296,14 +1280,6 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   <Pagination page={analyticsStudentPage} total={studentList.total} pageSize={analyticsStudentsPerPage} onChange={setAnalyticsStudentPage} loading={studentList.loading} />
                 </div>
               </div>
-            )}
-            
-            {/* Modal Detail Analisis */}
-            {selectedSessionId && (
-              <AnalysisDetailModal 
-                sessionId={selectedSessionId} 
-                onClose={() => setSelectedSessionId(null)} 
-              />
             )}
           </div>
         )}
