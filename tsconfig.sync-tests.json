@@ -3,12 +3,18 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2023", "DOM"],
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
     "types": [],
     "strict": true,
     "skipLibCheck": true,
     "rootDir": "src/lib",
     "outDir": ".test-build"
   },
-  "include": ["src/lib/answer-sync.ts"]
+  "include": [
+    "src/lib/answer-sync.ts",
+    "src/lib/analytics-csv.ts"
+  ]
 }

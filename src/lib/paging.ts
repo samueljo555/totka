@@ -12,18 +12,25 @@ export function queryUrl(url: string, params: Record<string, string | number | u
 }
 export async function readJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await apiFetch(url, { signal });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || 'Gagal memuat data.');
+  let data;
+  try { data = await response.json(); }
+  catch { throw new Error('Respons server tidak dapat dibaca. Coba lagi.'); }
+  if (!response.ok) throw new Error(data?.message || 'Gagal memuat data.');
   return data;
 }
-export async function readAllPages<T>(url: string, params: Record<string, string | number | undefined> = {}): Promise<T[]> {
+export async function readAllPages<T>(url: string, params: Record<string, string | number | undefined> = {}, options: { signal?: AbortSignal; onProgress?: (loaded: number, total: number) => void } = {}): Promise<T[]> {
   const items: T[] = [];
   let after: string | undefined;
+  const seen = new Set<string>();
   do {
-    const data = await readJson<Page<T>>(queryUrl(url, { ...params, page: 1, pageSize: 100, after }));
-    if (!Array.isArray(data.items)) throw new Error('Format data tidak sesuai. Muat ulang aplikasi.');
+    options.signal?.throwIfAborted();
+    const data = await readJson<Page<T>>(queryUrl(url, { ...params, page: 1, pageSize: 100, after }), options.signal);
+    if (!data || !Array.isArray(data.items)) throw new Error('Format data tidak sesuai. Muat ulang aplikasi.');
+    if (data.hasMore && !data.nextCursor) throw new Error('Halaman ekspor belum lengkap. Coba kembali.');
     items.push(...data.items);
-    if (data.nextCursor === after) throw new Error('Cursor tidak bergerak. Coba kembali.');
+    options.onProgress?.(items.length, data.total);
+    if (data.nextCursor && seen.has(data.nextCursor)) throw new Error('Cursor tidak bergerak. Coba kembali.');
+    if (data.nextCursor) seen.add(data.nextCursor);
     after = data.nextCursor || undefined;
   } while (after);
   return items;

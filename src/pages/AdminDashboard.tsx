@@ -1,6 +1,6 @@
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -27,6 +27,12 @@ import { AnalyticsStudentFilters } from '../components/AnalyticsStudentFilters';
 import { Pagination } from '../components/Pagination';
 import { RemoteSelect } from '../components/RemoteSelect';
 import { usePagedList, useDebounced, readJson, readAllPages, queryUrl } from '../lib/paging';
+
+import { useRemoteData } from '../lib/useRemoteData';
+import { analyticsCsv, downloadCsv } from '../lib/analytics-csv';
+
+const validSummary = (data: any) => !!data?.summary && Array.isArray(data.schools);
+const validItems = (data: any) => Array.isArray(data?.items) && typeof data.totalParticipants === 'number';
 
 const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
   const confirmModal = useConfirm();
@@ -62,7 +68,6 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   // Analytics State
 
   const [selectedAnalyticsPackage, setSelectedAnalyticsPackage] = useState<any>(null);
-  const [packageAnalyticsData, setPackageAnalyticsData] = useState<any>(null);
   const [selectedAnalyticsSchool, setSelectedAnalyticsSchool] = useState<any>(null);
 
   const [analyticsStudentPage, setAnalyticsStudentPage] = useState(1);
@@ -75,7 +80,29 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [analyticsClasses, setAnalyticsClasses] = useState<string[]>([]);
   const [analyticsSchoolSearch, setAnalyticsSchoolSearch] = useState('');
   const [selectedItemAnalysisPackage, setSelectedItemAnalysisPackage] = useState<any>(null);
-  const [itemAnalysisData, setItemAnalysisData] = useState<any>(null);
+  const summary = useRemoteData<any>(activeTab === 'results' && selectedAnalyticsPackage ? `/api/analytics/packages/${selectedAnalyticsPackage.id}` : null, validSummary);
+  const itemAnalysis = useRemoteData<any>(activeTab === 'results' && selectedItemAnalysisPackage ? `/api/analytics/packages/${selectedItemAnalysisPackage.id}/items` : null, validItems);
+  const packageAnalyticsData = summary.data, itemAnalysisData = itemAnalysis.data;
+  const exportController = useRef<AbortController | null>(null);
+  const [exportProgress, setExportProgress] = useState<{ loaded: number; total: number } | null>(null);
+  useEffect(() => () => { exportController.current?.abort(); }, []);
+  const exportAnalytics = async (url: string, params: Record<string, string | number | undefined>, filename: string, includeSchool: boolean) => {
+    if (exportController.current) return;
+    const controller = new AbortController();
+    exportController.current = controller;
+    setExportProgress({ loaded: 0, total: 0 });
+    try {
+      const rows = await readAllPages<any>(url, params, { signal: controller.signal, onProgress: (loaded, total) => { if (!controller.signal.aborted) setExportProgress({ loaded, total }); } });
+      controller.signal.throwIfAborted();
+      downloadCsv(analyticsCsv(rows, includeSchool), filename);
+      toast.success('CSV berhasil diunduh.');
+    } catch (error) {
+      if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : 'Gagal mengunduh CSV. Coba kembali.');
+    } finally {
+      if (!controller.signal.aborted) setExportProgress(null);
+      exportController.current = null;
+    }
+  };
 
   // School State
   const [isAddingSchool, setIsAddingSchool] = useState(false);
@@ -130,11 +157,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     setSelectedAnalyticsPackage(pkg);
     setAnalyticsSearch(''); setAnalyticsClass(''); setAnalyticsStatus(''); setAnalyticsSort('name_asc'); setAnalyticsSchoolSearch('');
     setSelectedAnalyticsSchool(null);
-    setPackageAnalyticsData(null);
-    fetch(`/api/analytics/packages/${pkg.id}`)
-      .then(res => res.json())
-      .then(data => setPackageAnalyticsData(data))
-      .catch(err => console.error(err));
+
   };
 
   const handleSelectAnalyticsSchool = (school: any) => {
@@ -145,11 +168,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   const handleViewItemAnalysis = (pkg: any) => {
     setSelectedItemAnalysisPackage(pkg);
-    setItemAnalysisData(null);
-    fetch(`/api/analytics/packages/${pkg.id}/items`)
-      .then(res => res.json())
-      .then(data => setItemAnalysisData(data))
-      .catch(err => console.error(err));
+
   };
 
   const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -938,7 +957,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
         {activeTab === 'results' && (
           <div className="animate-fade-in" style={{ paddingBottom: '2rem' }}>
-            
+
+            {exportProgress && <p role="status">Mengunduh CSV: {exportProgress.loaded} siswa dimuat{exportProgress.total > 0 ? ` dari ${exportProgress.total}` : ''}. Tunggu hingga seluruh halaman selesai.</p>}
             {selectedItemAnalysisPackage ? (
               <div className="animate-fade-in">
                 <div className="flex items-center gap-4 mb-8">
@@ -951,7 +971,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </div>
                 </div>
 
-                {!itemAnalysisData ? (
+                {itemAnalysis.error ? <div role="alert" className="glass-panel p-12"><p>{itemAnalysis.error}</p><button className="btn-secondary" onClick={itemAnalysis.retry}>Coba Lagi</button></div> : !itemAnalysisData ? (
                   <div className="glass-panel p-12 text-center flex flex-col items-center justify-center">
                     <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                     <p className="text-slate-500">Memuat analisis butir soal...</p>
@@ -976,6 +996,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                           </tr>
                         </thead>
                         <tbody>
+                          {itemAnalysisData.items.length === 0 && <tr><td colSpan={7} className="p-5">Belum ada soal pada paket ini.</td></tr>}
                           {itemAnalysisData.items.map((item: any) => (
                             <tr key={item.questionId} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                               <td className="p-5 font-semibold text-main">{item.questionNumber}</td>
@@ -1019,7 +1040,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </div>
                 
                 <Pagination page={resultPage} total={resultList.total} pageSize={20} onChange={setResultPage} loading={resultList.loading} />
-                {analyticsPackages.length === 0 ? (
+                {resultList.error ? <div role="alert"><p>{resultList.error}</p><button className="btn-secondary" onClick={() => void resultList.reload()}>Coba Lagi</button></div> : resultList.loading ? <p role="status">Memuat paket analitik...</p> : analyticsPackages.length === 0 ? (
                   <div className="p-12 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                     <BarChart2 size={48} className="mb-4 opacity-50" />
                     <p className="text-lg">Belum ada data analitik.</p>
@@ -1078,28 +1099,10 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                                 <button 
                                   className="btn-secondary" 
                                   style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                  onClick={async (e) => {
+                                  disabled={!!exportProgress}
+                                  onClick={e => {
                                     e.stopPropagation();
-                                    try {
-                                      const data = await readAllPages<any>(`/api/analytics/packages/${pkg.id}/all-students`);
-                                      const header = "NISN,Nama Siswa,NPSN,Sekolah,Skor Total,Lama Mengerjakan (Menit),Status,Catatan\n";
-                                      const csv = data.map((a: any) => {
-                                        let timeStr = '';
-                                        if (a.startTime && a.endTime) {
-                                          timeStr = String(Math.round((new Date(a.endTime).getTime() - new Date(a.startTime).getTime()) / 60000));
-                                        }
-                                        const catatan = Object.keys(a.elementBreakdown || {}).map(k => `${k}: ${a.elementBreakdown[k].correct}/${a.elementBreakdown[k].total}`).join(', ');
-                                        return `${a.nisn ?? ''},"${a.studentName}","${a.npsn}","${a.school}",${a.score ?? 'Belum tersedia'},"${timeStr}","${a.status}","${catatan}"`;
-                                      }).join('\n');
-                                      const blob = new Blob([header + csv], { type: 'text/csv' });
-                                      const url = window.URL.createObjectURL(blob);
-                                      const a = document.createElement('a');
-                                      a.href = url;
-                                      a.download = `analitik_semua_siswa_${pkg.id}.csv`;
-                                      a.click();
-                                    } catch(err) {
-                                      toast.error("Gagal mengunduh data seluruh siswa");
-                                    }
+                                    void exportAnalytics(`/api/analytics/packages/${pkg.id}/all-students`, {}, `analitik_semua_siswa_${pkg.id}.csv`, true);
                                   }}
                                 >
                                   <Download size={14} /> Unduh CSV
@@ -1127,7 +1130,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   <button className="btn-secondary" onClick={() => handleSelectAnalyticsSchool({ npsn: '', name: 'Semua Sekolah' })}>Lihat Semua Siswa</button>
                 </div>
 
-                {!packageAnalyticsData ? (
+                {summary.error ? <div role="alert" className="glass-panel p-12"><p>{summary.error}</p><button className="btn-secondary" onClick={summary.retry}>Coba Lagi</button></div> : !packageAnalyticsData ? (
                   <div className="glass-panel p-12 text-center flex flex-col items-center justify-center">
                     <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                     <p className="text-slate-500">Memuat data sekolah...</p>
@@ -1188,6 +1191,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             </tr>
                           </thead>
                           <tbody>
+                            {packageAnalyticsData.schools.filter((sch: any) => `${sch.name} ${sch.npsn}`.toLowerCase().includes(analyticsSchoolSearch.trim().toLowerCase())).length === 0 && <tr><td colSpan={11} className="p-5">{analyticsSchoolSearch.trim() ? 'Tidak ada sekolah sesuai pencarian.' : 'Belum ada data sekolah.'}</td></tr>}
                             {packageAnalyticsData.schools.filter((sch: any) => `${sch.name} ${sch.npsn}`.toLowerCase().includes(analyticsSchoolSearch.trim().toLowerCase())).map((sch: any) => (
                               <tr 
                                 key={sch.npsn} 
@@ -1244,27 +1248,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       {selectedAnalyticsSchool.npsn && <div className="text-sm text-slate-500 mt-1">NPSN: {selectedAnalyticsSchool.npsn === 'UNKNOWN' ? 'Belum tersedia' : selectedAnalyticsSchool.npsn}</div>}
                     </div>
                   </div>
-                  <button className="btn-secondary" disabled={studentList.loading || analyticsSearch !== analyticsQuery} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={async () => {
-                    try {
-                    const exportRows = await readAllPages<any>(analyticsStudentUrl, analyticsParams);
-                    const header = "NISN,Nama Siswa,NPSN,Skor Total,Lama Mengerjakan (Menit),Status,Catatan\n";
-                    const csv = exportRows.map((a: any) => {
-                      let timeStr = '';
-                      if (a.startTime && a.endTime) {
-                        timeStr = String(Math.round((new Date(a.endTime).getTime() - new Date(a.startTime).getTime()) / 60000));
-                      }
-                      const catatan = Object.keys(a.elementBreakdown || {}).map(k => `${k}: ${a.elementBreakdown[k].correct}/${a.elementBreakdown[k].total}`).join(', ');
-                      return `${a.nisn ?? ''},"${a.studentName}","${a.npsn}",${a.score ?? 'Belum tersedia'},"${timeStr}","${a.status}","${catatan}"`;
-                    }).join('\n');
-                    const blob = new Blob([header + csv], { type: 'text/csv' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `analitik_${selectedAnalyticsSchool.npsn || 'semua_sekolah'}_terfilter.csv`;
-                    a.click();
-                    } catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal mengunduh data sekolah'); }
-                  }}>
-                    <Download size={18} /> {selectedAnalyticsSchool.npsn ? 'Unduh CSV Sekolah' : 'Unduh CSV Hasil'}
+                  <button className="btn-secondary" disabled={!!exportProgress || studentList.loading || !!studentList.error || analyticsSearch !== analyticsQuery} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => void exportAnalytics(analyticsStudentUrl, analyticsParams, `analitik_${selectedAnalyticsSchool.npsn || 'semua_sekolah'}_terfilter.csv`, false)}>
+                    <Download size={18} /> {exportProgress ? 'Mengunduh CSV...' : selectedAnalyticsSchool.npsn ? 'Unduh CSV Sekolah' : 'Unduh CSV Hasil'}
                   </button>
                 </div>
 
@@ -1280,7 +1265,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                     sort={analyticsSort} onSort={value => { setAnalyticsSort(value); setAnalyticsStudentPage(1); }}
                     onReset={() => { setAnalyticsSearch(''); setAnalyticsClass(''); setAnalyticsStatus(''); setAnalyticsSort('name_asc'); handleSelectAnalyticsSchool({ npsn: '', name: 'Semua Sekolah' }); }} />
                   <p className="text-muted">{studentList.total} siswa sesuai filter. Nilai yang belum tersedia selalu ditempatkan setelah nilai akhir; CSV mencakup seluruh halaman sesuai filter dan urutan.</p>
-                  {studentList.error ? <p role="alert">{studentList.error}</p> : studentList.loading ? (
+                  {studentList.error ? <div role="alert"><p>{studentList.error}</p><button className="btn-secondary" onClick={() => void studentList.reload()}>Coba Lagi</button></div> : studentList.loading ? (
                     <p className="text-muted">Memuat hasil siswa...</p>
                   ) : schoolStudentsData.length === 0 ? (
                     <div className="p-12 flex flex-col items-center justify-center">

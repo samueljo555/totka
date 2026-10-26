@@ -216,3 +216,11 @@ Pada baseline lokal 4 CPU logis/RAM 3,37 GiB, dua worker tanpa Redis, alur lengk
 - **Frontend**: React, TypeScript, Vite, Vanilla CSS (Tema *Glassmorphism* modern).
 - **Backend**: Node.js, Express, Prisma ORM.
 - **Database**: PostgreSQL.
+
+### Ketahanan tampilan dan ekspor analitik
+
+Ringkasan paket dan analisis butir menampilkan kegagalan dengan tombol **Coba Lagi**. Permintaan dibatalkan ketika konteks berubah; respons lama tidak dapat mengganti paket yang sedang dibuka. Data kosong ditampilkan terpisah dari keadaan memuat atau gagal.
+
+Ekspor CSV menampilkan jumlah siswa yang telah dimuat dan mengunci tombol unduh selama proses. File dibuat setelah seluruh halaman berhasil; kegagalan satu halaman membatalkan unduhan. Ekspor menggunakan filter/urutan saat tombol ditekan. Koma, tanda kutip, dan baris baru di setiap kolom di-escape; nilai nol dan nilai belum tersedia tetap dibedakan. CSV menyimpan NISN berawalan nol secara utuh, tetapi aplikasi spreadsheet dapat menebak kolom sebagai angka: pilih tipe **Text** saat impor untuk mempertahankannya.
+
+Verifikasi: `npm run test:analytics` untuk serializer. Setelah `npm run build`, jalankan `node tests/analytics-browser.mjs` dengan Playwright/Chromium tersedia; jika dipasang di luar proyek, set `PLAYWRIGHT_MODULE` ke path absolut modul Playwright. Uji browser menggunakan API tiruan dan tidak mengubah database.
