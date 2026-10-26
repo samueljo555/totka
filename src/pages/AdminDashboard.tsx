@@ -1071,7 +1071,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                                           timeStr = String(Math.round((new Date(a.endTime).getTime() - new Date(a.startTime).getTime()) / 60000));
                                         }
                                         const catatan = Object.keys(a.elementBreakdown || {}).map(k => `${k}: ${a.elementBreakdown[k].correct}/${a.elementBreakdown[k].total}`).join(', ');
-                                        return `${a.nisn},"${a.studentName}","${a.npsn}","${a.school}",${a.score},"${timeStr}","${a.status}","${catatan}"`;
+                                        return `${a.nisn ?? ''},"${a.studentName}","${a.npsn}","${a.school}",${a.score ?? 'Belum tersedia'},"${timeStr}","${a.status}","${catatan}"`;
                                       }).join('\n');
                                       const blob = new Blob([header + csv], { type: 'text/csv' });
                                       const url = window.URL.createObjectURL(blob);
@@ -1216,7 +1216,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         timeStr = String(Math.round((new Date(a.endTime).getTime() - new Date(a.startTime).getTime()) / 60000));
                       }
                       const catatan = Object.keys(a.elementBreakdown || {}).map(k => `${k}: ${a.elementBreakdown[k].correct}/${a.elementBreakdown[k].total}`).join(', ');
-                      return `${a.nisn},"${a.studentName}","${a.npsn}",${a.score},"${timeStr}","${a.status}","${catatan}"`;
+                      return `${a.nisn ?? ''},"${a.studentName}","${a.npsn}",${a.score ?? 'Belum tersedia'},"${timeStr}","${a.status}","${catatan}"`;
                     }).join('\n');
                     const blob = new Blob([header + csv], { type: 'text/csv' });
                     const url = window.URL.createObjectURL(blob);
@@ -1260,7 +1260,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             >
                               <td className="p-5">
                                 <div className="font-semibold text-main">{item.studentName}</div>
-                                <div className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>{item.nisn}</div>
+                                <div className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>{item.nisn || '-'}</div>
                               </td>
                               <td className="p-5">
                                 <span className={`tag ${item.status === 'Selesai' ? 'bg-green-100 text-green-700' : item.status === 'Sedang Mengerjakan' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
@@ -1269,13 +1269,14 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                               </td>
                               <td className="p-5">
                                 <span className="tag" style={{ background: 'var(--primary-color)', color: 'white' }}>
-                                  {Math.round(item.score || 0)}
+                                  {item.score == null ? 'Belum tersedia' : Math.round(Number(item.score))}
                                 </span>
                               </td>
                               <td className="p-5">
                                 <button 
                                   className="btn-secondary" 
                                   style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                  disabled={item.status !== 'Selesai' || item.score == null || !item.sessionId}
                                   onClick={() => setSelectedSessionId(item.sessionId)}
                                 >
                                   <Eye size={14} /> Laporan Detail

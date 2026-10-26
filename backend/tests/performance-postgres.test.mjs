@@ -31,7 +31,7 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       { id: 'op', username: 'op', password: 'unused', fullName: 'Operator', role: 'operator', activeToken: 'sid-op', schoolNpsn: '11111111' },
       { id: 'op2', username: 'op2', password: 'unused', fullName: 'Operator B', role: 'operator', activeToken: 'sid-op2', schoolNpsn: '22222222' },
     ] });
-    await prisma.$executeRawUnsafe(`INSERT INTO "User" (id, username, password, "fullName", role, "schoolNpsn", "className", "activeToken") SELECT 's' || lpad(n::text,5,'0'), 'siswa' || n, 'unused', 'Siswa ' || lpad(n::text,5,'0'), 'siswa', CASE WHEN n <= 10000 THEN '11111111' ELSE '22222222' END, CASE WHEN n % 2 = 0 THEN '6A' ELSE '6B' END, 'sid-' || 's' || lpad(n::text,5,'0') FROM generate_series(1,10050) n`);
+    await prisma.$executeRawUnsafe(`INSERT INTO "User" (id, username, password, "fullName", role, "schoolNpsn", "className", "activeToken", nisn) SELECT 's' || lpad(n::text,5,'0'), 'siswa' || n, 'unused', 'Siswa ' || lpad(n::text,5,'0'), 'siswa', CASE WHEN n <= 10000 THEN '11111111' ELSE '22222222' END, CASE WHEN n % 2 = 0 THEN '6A' ELSE '6B' END, 'sid-' || 's' || lpad(n::text,5,'0'), lpad(n::text,10,'0') FROM generate_series(1,10050) n`);
     await prisma.package.create({ data: { id: 'p1', name: 'Ujian', token: 'TOKEN_AKTIF', mapel: 'Matematika', status: 'aktif' } });
     await prisma.$executeRawUnsafe(`INSERT INTO "Question" (id,type,mapel,element,content,options,"correctAnswer") SELECT 'q' || lpad(n::text,2,'0'), 'Pilihan Ganda Sederhana','Matematika','Bilangan','Soal ' || n,'[{"text":"A"},{"text":"B"}]'::jsonb,'[0]'::jsonb FROM generate_series(1,50) n`);
     await prisma.$executeRawUnsafe(`INSERT INTO "PackageQuestion" ("packageId","questionId") SELECT 'p1',id FROM "Question"`);
@@ -92,7 +92,7 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       assert.deepEqual(result.body.items[0].elementBreakdown.Bilangan, { total: 50, correct: 40 });
       assert.ok(!queries.some(query => /SELECT[\s\S]*"answerData"/.test(query)));
       const next = await get(`/analytics/packages/p1/all-students?pageSize=5&after=${result.body.nextCursor}`);
-      assert.equal(next.body.items[0].nisn, 'siswa6');
+      assert.equal(next.body.items[0].nisn, '0000000006');
     });
     await t.test('item statistics group 502500 answers inside PostgreSQL', async () => {
       queries.length = 0;
@@ -127,6 +127,36 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       const indexes = await pool.query('SELECT indexname FROM pg_indexes WHERE schemaname=$1', [schema]);
       assert.ok(names.every(name => indexes.rows.some(row => row.indexname === name)));
     });
+    await t.test('analytics use actual NISN and keep unavailable scores distinct from a genuine zero without rewriting results', async () => {
+      const users = [
+        { id: 'correction-zero', nisn: '0012345678' },
+        { id: 'correction-active', nisn: '0012345679' },
+        { id: 'correction-not-started', nisn: '0012345680' },
+        { id: 'correction-no-nisn', nisn: null },
+      ];
+      await prisma.user.createMany({ data: users.map(row => ({ ...row, username: 'username-' + row.id, fullName: 'AnalyticCorrection ' + row.id, password: 'unused', role: 'siswa', schoolNpsn: '11111111' })) });
+      await prisma.examSession.createMany({ data: users.filter(row => row.id !== 'correction-not-started').map(row => ({ id: 'session-' + row.id, studentId: row.id, packageId: 'p1', status: row.id === 'correction-active' ? 'sedang_mengerjakan' : 'selesai', totalScore: 0 })) });
+      const before = await prisma.examSession.findMany({ where: { studentId: { in: users.map(row => row.id) } }, orderBy: { id: 'asc' } });
+      queries.length = 0;
+      for (const endpoint of ['/analytics/packages/p1/all-students', '/analytics/packages/p1/schools/11111111']) {
+        const result = await get(endpoint + '?search=AnalyticCorrection');
+        assert.equal(result.status, 200); assert.equal(result.body.total, 4);
+        const byId = new Map(result.body.items.map(row => [row.id, row]));
+        assert.equal(byId.get('correction-zero').nisn, '0012345678');
+        assert.equal(byId.get('correction-zero').score, '0');
+        assert.equal(byId.get('correction-zero').status, 'Selesai');
+        assert.equal(byId.get('correction-active').score, null);
+        assert.equal(byId.get('correction-active').status, 'Sedang Mengerjakan');
+        assert.equal(byId.get('correction-not-started').score, null);
+        assert.equal(byId.get('correction-not-started').sessionId, null);
+        assert.equal(byId.get('correction-no-nisn').nisn, null);
+        assert.equal(byId.get('correction-no-nisn').score, '0');
+      }
+      assert.ok(!queries.some(query => /^(UPDATE|INSERT|DELETE)/.test(query)));
+      const after = await prisma.examSession.findMany({ where: { studentId: { in: users.map(row => row.id) } }, orderBy: { id: 'asc' } });
+      assert.deepEqual(after, before);
+    });
+
   } finally {
     if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     await prisma?.$disconnect(); if (pool) await pool.end();

@@ -123,7 +123,7 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
     const p = pagination(req.query), packageId = String(req.params.packageId);
     const where: Prisma.UserWhereInput = { ...studentWhere(req), ...(schoolNpsn ? { schoolNpsn: schoolNpsn === 'UNKNOWN' ? null : schoolNpsn } : {}) };
     const [rows, total] = await Promise.all([
-      prisma.user.findMany({ where: { AND: [where, afterId(p.after)] }, select: { id: true, fullName: true, username: true, schoolNpsn: true, className: true, school: { select: { name: true } }, examSessions: { where: { packageId }, select: { id: true, status: true, startTime: true, endTime: true, totalScore: true } } }, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }), prisma.user.count({ where }),
+      prisma.user.findMany({ where: { AND: [where, afterId(p.after)] }, select: { id: true, fullName: true, nisn: true, schoolNpsn: true, className: true, school: { select: { name: true } }, examSessions: { where: { packageId }, select: { id: true, status: true, startTime: true, endTime: true, totalScore: true } } }, orderBy: { id: 'asc' }, skip: p.skip, take: p.take }), prisma.user.count({ where }),
     ]);
     const shown = rows.slice(0, p.pageSize);
     const sessionIds = shown.flatMap(row => row.examSessions.filter(s => s.status === 'selesai').map(s => s.id));
@@ -137,7 +137,7 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
     for (const item of breakdown) { const value = bySession.get(item.sessionId) || {}; value[item.element] = { total: item.total, correct: item.correct }; bySession.set(item.sessionId, value); }
     const mapped = rows.map(row => {
       const session = row.examSessions[0], finished = session?.status === 'selesai';
-      return { id: row.id, sessionId: session?.id || null, studentName: row.fullName, nisn: row.username, npsn: row.schoolNpsn || '-', school: row.school?.name || '-', className: row.className, score: finished ? session.totalScore : 0, startTime: session?.startTime || null, endTime: finished ? session.endTime : null, status: finished ? 'Selesai' : session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan', elementBreakdown: finished ? bySession.get(session.id) || {} : {} };
+      return { id: row.id, sessionId: session?.id || null, studentName: row.fullName, nisn: row.nisn, npsn: row.schoolNpsn || '-', school: row.school?.name || '-', className: row.className, score: finished ? session.totalScore : null, startTime: session?.startTime || null, endTime: finished ? session.endTime : null, status: finished ? 'Selesai' : session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan', elementBreakdown: finished ? bySession.get(session.id) || {} : {} };
     });
     return pageResult(mapped, total, p, row => row.id);
   };

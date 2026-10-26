@@ -47,6 +47,17 @@ const AnalysisDetailModal: React.FC<AnalysisDetailModalProps> = ({ sessionId, on
     );
   }
 
+  if (data.session.status !== 'selesai' || data.session.totalScore == null) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+        <div className="glass-panel p-8 text-center">
+          <p>Nilai belum tersedia. Laporan hasil dapat dibuka setelah ujian selesai dan nilai akhir tersedia.</p>
+          <button className="btn mt-4" onClick={onClose}>Tutup</button>
+        </div>
+      </div>
+    );
+  }
+
   const { session, averageScore } = data;
   const questions = session.package.questions.map((pq: any) => pq.question);
   const answers = session.answers;
