@@ -98,11 +98,14 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       queries.length = 0;
       const result = await get('/analytics/packages/p1/items');
       assert.equal(result.body.items.length, 50);
+      assert.equal(result.body.totalParticipants, 5000);
       assert.equal(result.body.items[0].totalAttempts, 5000);
+      assert.equal(result.body.items[0].emptyCount, 0);
+      assert.equal(result.body.items[49].wrongCount, 5000);
       assert.equal(result.body.items[0].correctCount, 5000);
       assert.equal(result.body.items[49].correctCount, 0);
       assert.ok(queries.some(query => /GROUP BY/.test(query)));
-      assert.ok(!queries.some(query => /"answerData"/.test(query)));
+      assert.ok(!queries.some(query => /"Answer"\."answerData"/.test(query)));
     });
     await t.test('operator monitoring keeps active tokens and global counters while paging participants', async () => {
       const summary = await get('/monitoring/packages?status=aktif', 'op');
@@ -155,6 +158,57 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       assert.ok(!queries.some(query => /^(UPDATE|INSERT|DELETE)/.test(query)));
       const after = await prisma.examSession.findMany({ where: { studentId: { in: users.map(row => row.id) } }, orderBy: { id: 'asc' } });
       assert.deepEqual(after, before);
+    });
+
+    await t.test('item analysis includes unanswered participants, cleared answers, partial categories and only completed sessions', async () => {
+      const packageId = 'item-analysis-correction';
+      const noDataId = 'item-analysis-no-completed';
+      const emptyId = 'item-analysis-empty-package';
+      await prisma.package.createMany({ data: [packageId, noDataId, emptyId].map(id => ({ id, name: id, mapel: 'Matematika' })) });
+      const specs = [
+        ['item-missing', 'Pilihan Ganda Sederhana', [0]],
+        ['item-multiple', 'Pilihan Ganda Kompleks', [0]],
+        ['item-category', 'Pilihan Ganda Kompleks Kategori', [0,0]],
+        ['item-unanswered', 'Pilihan Ganda Sederhana', [0]],
+      ];
+      await prisma.question.createMany({ data: specs.map(([id, type, correctAnswer]) => ({ id, type, correctAnswer, content: id, mapel: 'Matematika', element: 'Bilangan', options: [{ text: 'A' }, { text: 'B' }] })) });
+      await prisma.packageQuestion.createMany({ data: [packageId, noDataId].flatMap(id => specs.map(([questionId]) => ({ packageId: id, questionId }))) });
+      await prisma.examSession.createMany({ data: Array.from({ length: 11 }, (_, i) => ({ id: 'item-session-' + (i+1), studentId: 's' + String(i+1).padStart(5,'0'), packageId, status: i === 10 ? 'sedang_mengerjakan' : 'selesai', totalScore: 0 })) });
+      await prisma.examSession.create({ data: { id: 'item-active-only', studentId: 's00001', packageId: noDataId, status: 'sedang_mengerjakan' } });
+      const data = [
+        [1, 'item-missing', 0, true], [2, 'item-missing', 0, true], [11, 'item-missing', 0, true],
+        [1, 'item-multiple', null, false], [2, 'item-multiple', [], false], [3, 'item-multiple', [0], true],
+        [4, 'item-multiple', [1], false], [5, 'item-multiple', '', false], [11, 'item-multiple', [1], false],
+        [1, 'item-category', [null,null], false], [2, 'item-category', [0,null], false], [3, 'item-category', [0,0], true],
+        [4, 'item-category', [], false], [5, 'item-category', [null,0], false], [11, 'item-category', [0,0], true],
+        [1, 'q01', 0, true], // Legacy answer to a question outside this package is excluded.
+      ];
+      for (const [n, questionId, answer, correct] of data) {
+        await pool.query('INSERT INTO "Answer" (id,"sessionId","questionId","answerData","isCorrect") VALUES ($1,$2,$3,$4::jsonb,$5)', ['item-answer-' + n + '-' + questionId, 'item-session-' + n, questionId, JSON.stringify(answer), correct]);
+      }
+      await pool.query(`INSERT INTO "Answer" (id,"sessionId","questionId","answerData","isCorrect") VALUES ('active-only-answer','item-active-only','item-missing','0',true)`);
+      const beforeSessions = await prisma.examSession.findMany({ where: { packageId }, orderBy: { id: 'asc' } });
+      const beforeAnswers = await prisma.answer.findMany({ where: { session: { packageId } }, orderBy: { id: 'asc' } });
+      const result = await get('/analytics/packages/' + packageId + '/items');
+      assert.equal(result.status, 200); assert.equal(result.body.totalParticipants, 10);
+      const items = new Map(result.body.items.map(item => [item.questionId, item]));
+      const missing = items.get('item-missing');
+      assert.equal(missing.correctCount, 2); assert.equal(missing.wrongCount, 0); assert.equal(missing.emptyCount, 8);
+      assert.equal(missing.totalAttempts, 10); assert.equal(missing.difficultyIndex, 0.2);
+      const multiple = items.get('item-multiple');
+      assert.equal(multiple.correctCount, 1); assert.equal(multiple.wrongCount, 1); assert.equal(multiple.emptyCount, 8);
+      const category = items.get('item-category');
+      assert.equal(category.correctCount, 1); assert.equal(category.wrongCount, 2); assert.equal(category.emptyCount, 7);
+      assert.equal(items.get('item-unanswered').emptyCount, 10);
+      assert.equal(items.get('item-unanswered').difficultyIndex, 0);
+      for (const item of items.values()) assert.equal(item.correctCount + item.wrongCount + item.emptyCount, 10);
+      const noData = await get('/analytics/packages/' + noDataId + '/items');
+      assert.equal(noData.body.totalParticipants, 0);
+      assert.ok(noData.body.items.every(item => item.difficultyIndex === null && item.category === 'Belum ada data' && item.correctCount === 0 && item.wrongCount === 0 && item.emptyCount === 0));
+      const empty = await get('/analytics/packages/' + emptyId + '/items');
+      assert.equal(empty.body.totalParticipants, 0); assert.deepEqual(empty.body.items, []);
+      assert.deepEqual(await prisma.examSession.findMany({ where: { packageId }, orderBy: { id: 'asc' } }), beforeSessions);
+      assert.deepEqual(await prisma.answer.findMany({ where: { session: { packageId } }, orderBy: { id: 'asc' } }), beforeAnswers);
     });
 
   } finally {

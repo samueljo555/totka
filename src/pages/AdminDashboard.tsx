@@ -945,6 +945,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   <div className="glass-panel" style={{ padding: '2rem' }}>
                     <div className="mb-6">
                       <h3 className="m-0">Distribusi Tingkat Kesulitan</h3>
+                      <p className="text-muted" style={{ marginTop: '0.5rem' }}>Dasar perhitungan: {itemAnalysisData.totalParticipants} peserta selesai. Persentase benar = jumlah benar dibagi seluruh peserta selesai, termasuk yang tidak menjawab.</p>
                     </div>
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -954,6 +955,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             <th className="p-5" style={{ fontWeight: 600 }}>Soal</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Level Kognitif</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Menjawab Benar</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Salah</th>
+                            <th className="p-5" style={{ fontWeight: 600 }}>Kosong</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Indeks Kesulitan</th>
                             <th className="p-5" style={{ fontWeight: 600 }}>Kategori</th>
                           </tr>
@@ -971,10 +974,12 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                               </td>
                               <td className="p-5 text-muted">{item.cognitiveLevel}</td>
                               <td className="p-5">
-                                {item.correctCount} / {item.totalAttempts} ({(item.totalAttempts > 0 ? (item.correctCount / item.totalAttempts) * 100 : 0).toFixed(0)}%)
+                                {item.correctCount} / {item.totalAttempts} {item.difficultyIndex == null ? '(Belum ada data)' : `(${(item.difficultyIndex * 100).toFixed(0)}%)`}
                               </td>
+                              <td className="p-5">{item.wrongCount}</td>
+                              <td className="p-5">{item.emptyCount}</td>
                               <td className="p-5 font-semibold text-main">
-                                {item.difficultyIndex.toFixed(2)}
+                                {item.difficultyIndex == null ? '—' : item.difficultyIndex.toFixed(2)}
                               </td>
                               <td className="p-5">
                                 <span className="tag" style={{ 

@@ -145,13 +145,43 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
   get('/api/analytics/packages/:packageId/schools/:schoolNpsn', req => students(req, String(req.params.schoolNpsn)));
   get('/api/analytics/packages/:packageId/items', async req => {
     const packageId = String(req.params.packageId);
-    return getOrSetCache(`analytics:items:${packageId}`, 15, async () => {
+    return getOrSetCache(`analytics:items:v2:${packageId}`, 15, async () => {
       const pkg = await prisma.package.findUnique({ where: { id: packageId }, select: { name: true, questions: { orderBy: { questionId: 'asc' }, select: { questionId: true, question: { select: { content: true } } } } } });
       if (!pkg) throw new QueryError(404, 'Paket tidak ditemukan.');
-      const groups = await prisma.answer.groupBy({ by: ['questionId', 'isCorrect'], where: { session: { packageId, status: 'selesai' }, questionId: { in: pkg.questions.map(q => q.questionId) } }, _count: { _all: true } });
-      const totals = new Map<string, { total: number; correct: number }>();
-      for (const group of groups) { const value = totals.get(group.questionId) || { total: 0, correct: 0 }; value.total += group._count._all; if (group.isCorrect) value.correct += group._count._all; totals.set(group.questionId, value); }
-      return { package: pkg.name, items: pkg.questions.map((q, index) => { const counts = totals.get(q.questionId) || { total: 0, correct: 0 }; const difficultyIndex = counts.total ? counts.correct / counts.total : 0; return { questionId: q.questionId, questionNumber: index + 1, content: q.question.content, cognitiveLevel: 'C3', totalAttempts: counts.total, correctCount: counts.correct, difficultyIndex, category: difficultyIndex > 0.7 ? 'Mudah' : difficultyIndex < 0.3 ? 'Sulit' : 'Sedang' }; }) };
+      // One statement keeps the completed cohort and per-question counts on the
+      // same snapshot, including participants who never saved an answer row.
+      const rows = await prisma.$queryRaw<{ questionId: string | null; participants: number; answered: number; correct: number }[]>`
+        WITH completed AS (
+          SELECT id FROM "ExamSession" WHERE "packageId" = ${packageId} AND status = 'selesai'
+        ), answer_state AS (
+          SELECT a."questionId", a."isCorrect", CASE
+            WHEN a."answerData" IS NULL OR a."answerData" IN ('null'::jsonb, '""'::jsonb) THEN false
+            WHEN jsonb_typeof(a."answerData") = 'array' THEN EXISTS (
+              SELECT 1 FROM jsonb_array_elements(a."answerData") AS part(value)
+              WHERE part.value NOT IN ('null'::jsonb, '""'::jsonb)
+            ) ELSE true END AS answered
+          FROM "Answer" a JOIN completed es ON es.id = a."sessionId"
+          JOIN "PackageQuestion" pq ON pq."packageId" = ${packageId} AND pq."questionId" = a."questionId"
+        ), counts AS (
+          SELECT "questionId", COUNT(*) FILTER (WHERE answered)::int AS answered,
+            COUNT(*) FILTER (WHERE answered AND "isCorrect" = true)::int AS correct
+          FROM answer_state GROUP BY "questionId"
+        )
+        SELECT pq."questionId", total.participants, COALESCE(counts.answered, 0)::int AS answered,
+          COALESCE(counts.correct, 0)::int AS correct
+        FROM (SELECT COUNT(*)::int AS participants FROM completed) total
+        LEFT JOIN "PackageQuestion" pq ON pq."packageId" = ${packageId}
+        LEFT JOIN counts ON counts."questionId" = pq."questionId"`;
+      const totalParticipants = rows[0]?.participants || 0;
+      const totals = new Map(rows.filter(row => row.questionId !== null).map(row => [row.questionId, row]));
+      return { package: pkg.name, totalParticipants, items: pkg.questions.map((q, index) => {
+        const counts = totals.get(q.questionId) || { answered: 0, correct: 0 };
+        const difficultyIndex = totalParticipants ? counts.correct / totalParticipants : null;
+        return { questionId: q.questionId, questionNumber: index + 1, content: q.question.content, cognitiveLevel: 'C3',
+          totalAttempts: totalParticipants, answeredCount: counts.answered, correctCount: counts.correct,
+          wrongCount: counts.answered - counts.correct, emptyCount: totalParticipants - counts.answered,
+          difficultyIndex, category: difficultyIndex === null ? 'Belum ada data' : difficultyIndex > 0.7 ? 'Mudah' : difficultyIndex < 0.3 ? 'Sulit' : 'Sedang' };
+      }) };
     }, [`analytics:pkg:${packageId}`]);
   });
 
