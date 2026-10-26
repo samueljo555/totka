@@ -80,6 +80,12 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       const result = await get('/analytics/packages/p1');
       assert.equal(result.body.summary.totalParticipants, 5000);
       assert.equal(result.body.summary.registeredStudents, 10050);
+      assert.equal(result.body.summary.totalStudents, 10050);
+      assert.equal(result.body.summary.startedCount, 10050);
+      assert.equal(result.body.summary.ongoingCount, 5050);
+      assert.equal(result.body.summary.finishedCount, 5000);
+      assert.equal(result.body.summary.notStartedCount, 0);
+      assert.equal(result.body.summary.otherCount, 0);
       assert.equal(result.body.summary.average, 80);
       assert.equal(result.body.summary.lowest, 80);
       assert.equal(result.body.schools.find(row => row.npsn === '22222222').participantCount, 0);
@@ -210,6 +216,64 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       assert.equal(empty.body.totalParticipants, 0); assert.deepEqual(empty.body.items, []);
       assert.deepEqual(await prisma.examSession.findMany({ where: { packageId }, orderBy: { id: 'asc' } }), beforeSessions);
       assert.deepEqual(await prisma.answer.findMany({ where: { session: { packageId } }, orderBy: { id: 'asc' } }), beforeAnswers);
+    });
+
+    await t.test('summary distinguishes account population and each package participation state across schools', async () => {
+      const packageId = 'participation-counts';
+      await prisma.package.create({ data: { id: packageId, name: 'Participation counts', mapel: 'Matematika' } });
+      const initial = await get('/analytics/packages/' + packageId);
+      assert.equal(initial.body.summary.totalStudents, 10054);
+      assert.equal(initial.body.summary.startedCount, 0);
+      assert.equal(initial.body.summary.notStartedCount, 10054);
+      const students = [
+        ['count-finished-a', '11111111'], ['count-active-a', '11111111'], ['count-not-started-a', '11111111'],
+        ['count-other-b', '22222222'], ['count-finished-unknown', null], ['count-not-started-unknown', null],
+      ];
+      await prisma.user.createMany({ data: students.map(([id, schoolNpsn]) => ({ id, username: id, schoolNpsn, fullName: 'CountCase ' + id, password: 'unused', role: 'siswa' })) });
+      await prisma.examSession.createMany({ data: [
+        { id: 'count-session-finished-a', studentId: 'count-finished-a', packageId, status: 'selesai', totalScore: 80 },
+        { id: 'count-session-active-a', studentId: 'count-active-a', packageId, status: 'sedang_mengerjakan' },
+        { id: 'count-session-other-b', studentId: 'count-other-b', packageId, status: 'dibatalkan' },
+        { id: 'count-session-finished-unknown', studentId: 'count-finished-unknown', packageId, status: 'selesai', totalScore: 0 },
+      ] });
+      const before = await prisma.examSession.findMany({ where: { packageId }, orderBy: { id: 'asc' } });
+      const result = await get('/analytics/packages/' + packageId);
+      assert.equal(result.status, 200);
+      const summary = result.body.summary;
+      assert.equal(summary.totalStudents, 10060);
+      assert.equal(summary.startedCount, 4);
+      assert.equal(summary.ongoingCount, 1);
+      assert.equal(summary.finishedCount, 2);
+      assert.equal(summary.otherCount, 1);
+      assert.equal(summary.notStartedCount, 10056);
+      assert.equal(summary.average, 40); assert.equal(summary.highest, 80); assert.equal(summary.lowest, 0);
+      assert.equal(summary.totalParticipants, summary.finishedCount);
+      assert.equal(summary.registeredStudents, summary.totalStudents);
+      const schools = new Map(result.body.schools.map(row => [row.npsn, row]));
+      assert.equal(schools.get('11111111').totalStudents, 10007);
+      assert.equal(schools.get('11111111').startedCount, 2);
+      assert.equal(schools.get('11111111').ongoingCount, 1);
+      assert.equal(schools.get('11111111').finishedCount, 1);
+      assert.equal(schools.get('11111111').notStartedCount, 10005);
+      assert.equal(schools.get('22222222').otherCount, 1);
+      assert.equal(schools.get('22222222').notStartedCount, 50);
+      assert.equal(schools.get('UNKNOWN').totalStudents, 2);
+      assert.equal(schools.get('UNKNOWN').finishedCount, 1);
+      assert.equal(schools.get('UNKNOWN').notStartedCount, 1);
+      for (const field of ['totalStudents', 'startedCount', 'ongoingCount', 'finishedCount', 'notStartedCount', 'otherCount']) {
+        assert.equal(result.body.schools.reduce((total, school) => total + school[field], 0), summary[field]);
+      }
+      for (const row of [summary, ...schools.values()]) {
+        assert.equal(row.totalStudents, row.startedCount + row.notStartedCount);
+        assert.equal(row.startedCount, row.ongoingCount + row.finishedCount + row.otherCount);
+      }
+      const list = await get('/analytics/packages/' + packageId + '/all-students?search=CountCase');
+      const statuses = new Map(list.body.items.map(row => [row.id, row.status]));
+      assert.equal(statuses.get('count-other-b'), 'Status Lain');
+      assert.equal(statuses.get('count-not-started-a'), 'Belum Mulai');
+      assert.equal(statuses.get('count-active-a'), 'Sedang Mengerjakan');
+      assert.equal(statuses.get('count-finished-a'), 'Selesai');
+      assert.deepEqual(await prisma.examSession.findMany({ where: { packageId }, orderBy: { id: 'asc' } }), before);
     });
 
   } finally {

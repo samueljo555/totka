@@ -1113,22 +1113,35 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                   </div>
                 ) : (
                   <>
+                    <p className="text-muted" style={{ marginBottom: '1rem' }}>Total akun siswa mencakup seluruh akun siswa dalam sistem, bukan daftar peserta khusus paket. Sudah mulai adalah jumlah siswa yang memiliki sesi pada paket ini.</p>
+                    <div className="dashboard-grid" style={{ marginTop: 0, marginBottom: '2rem' }}>
+                      {[
+                        ['Total Akun Siswa', 'totalStudents'],
+                        ['Sudah Mulai', 'startedCount'],
+                        ['Sedang Mengerjakan', 'ongoingCount'],
+                        ['Selesai', 'finishedCount'],
+                        ['Belum Mulai', 'notStartedCount'],
+                        ...(packageAnalyticsData.summary?.otherCount > 0 ? [['Status Lain', 'otherCount']] : []),
+                      ].map(([label, field]) => (
+                        <div key={field} className="glass-panel card flex flex-col justify-center">
+                          <p>{label}</p>
+                          <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.[field] ?? 0}</h2>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-muted" style={{ marginBottom: '1rem' }}>Statistik nilai dihitung dari peserta yang sudah selesai.</p>
                     <div className="dashboard-grid" style={{ marginTop: 0, marginBottom: '2rem' }}>
                       <div className="glass-panel card flex flex-col justify-center">
-                        <p>Peserta Selesai</p>
-                        <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.totalParticipants || 0}</h2>
-                      </div>
-                      <div className="glass-panel card flex flex-col justify-center">
                         <p>Rata-rata Nilai</p>
-                        <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.average?.toFixed(1) || 0}</h2>
+                        <h2 style={{ fontSize: packageAnalyticsData.summary?.finishedCount > 0 ? '3rem' : '1.2rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.finishedCount > 0 ? packageAnalyticsData.summary.average.toFixed(1) : 'Belum tersedia'}</h2>
                       </div>
                       <div className="glass-panel card flex flex-col justify-center">
                         <p>Nilai Tertinggi</p>
-                        <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.highest?.toFixed(1) || 0}</h2>
+                        <h2 style={{ fontSize: packageAnalyticsData.summary?.finishedCount > 0 ? '3rem' : '1.2rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.finishedCount > 0 ? packageAnalyticsData.summary.highest.toFixed(1) : 'Belum tersedia'}</h2>
                       </div>
                       <div className="glass-panel card flex flex-col justify-center">
                         <p>Nilai Terendah</p>
-                        <h2 style={{ fontSize: '3rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.lowest?.toFixed(1) || 0}</h2>
+                        <h2 style={{ fontSize: packageAnalyticsData.summary?.finishedCount > 0 ? '3rem' : '1.2rem', margin: '0.5rem 0 0 0', color: 'var(--primary-color)' }}>{packageAnalyticsData.summary?.finishedCount > 0 ? packageAnalyticsData.summary.lowest.toFixed(1) : 'Belum tersedia'}</h2>
                       </div>
                     </div>
 
@@ -1142,7 +1155,12 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                             <tr style={{ borderBottom: '2px solid var(--glass-border)', background: 'rgba(0,0,0,0.02)' }}>
                               <th className="p-5" style={{ fontWeight: 600 }}>NPSN</th>
                               <th className="p-5" style={{ fontWeight: 600 }}>Nama Sekolah</th>
-                              <th className="p-5" style={{ fontWeight: 600 }}>Peserta</th>
+                              <th className="p-5" style={{ fontWeight: 600 }}>Total Akun Siswa</th>
+                              <th className="p-5" style={{ fontWeight: 600 }}>Sudah Mulai</th>
+                              <th className="p-5" style={{ fontWeight: 600 }}>Sedang Mengerjakan</th>
+                              <th className="p-5" style={{ fontWeight: 600 }}>Selesai</th>
+                              <th className="p-5" style={{ fontWeight: 600 }}>Belum Mulai</th>
+                              {packageAnalyticsData.summary?.otherCount > 0 && <th className="p-5" style={{ fontWeight: 600 }}>Status Lain</th>}
                               <th className="p-5" style={{ fontWeight: 600 }}>Rata-rata Sekolah</th>
                               <th className="p-5" style={{ fontWeight: 600 }}>Aksi</th>
                             </tr>
@@ -1158,15 +1176,15 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                               >
                                 <td className="p-5 font-semibold text-muted">{sch.npsn}</td>
                                 <td className="p-5 font-semibold text-main">{sch.name}</td>
-                                <td className="p-5">
-                                  <div className="flex items-center gap-2">
-                                    <Users size={16} className="text-muted" />
-                                    {sch.participantCount} selesai / {sch.registeredCount} siswa
-                                  </div>
-                                </td>
+                                <td className="p-5">{sch.totalStudents}</td>
+                                <td className="p-5">{sch.startedCount}</td>
+                                <td className="p-5">{sch.ongoingCount}</td>
+                                <td className="p-5">{sch.finishedCount}</td>
+                                <td className="p-5">{sch.notStartedCount}</td>
+                                {packageAnalyticsData.summary?.otherCount > 0 && <td className="p-5">{sch.otherCount}</td>}
                                 <td className="p-5">
                                   <span className="tag" style={{ background: 'var(--primary-color)', color: 'white' }}>
-                                    {sch.averageScore?.toFixed(1)}
+                                    {sch.finishedCount > 0 ? sch.averageScore.toFixed(1) : 'Belum tersedia'}
                                   </span>
                                 </td>
                                 <td className="p-5">

@@ -100,21 +100,36 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
   });
   get('/api/analytics/packages/:packageId', async req => {
     const packageId = String(req.params.packageId);
-    return getOrSetCache(`analytics:summary:${packageId}`, 15, async () => {
-      const groups = await prisma.$queryRaw<{ npsn: string; name: string; registered: number; finished: number; average: number | null; highest: number | null; lowest: number | null }[]>`
+    return getOrSetCache(`analytics:summary:v2:${packageId}`, 15, async () => {
+      const groups = await prisma.$queryRaw<{ npsn: string; name: string; registered: number; started: number; ongoing: number; finished: number; other: number; average: number | null; highest: number | null; lowest: number | null }[]>`
         SELECT COALESCE(u."schoolNpsn", 'UNKNOWN') AS npsn, COALESCE(s.name, 'Tanpa Sekolah') AS name,
-          COUNT(*)::int AS registered, COUNT(es.id) FILTER (WHERE es.status = 'selesai')::int AS finished,
+          COUNT(*)::int AS registered, COUNT(es.id)::int AS started,
+          COUNT(es.id) FILTER (WHERE es.status = 'sedang_mengerjakan')::int AS ongoing,
+          COUNT(es.id) FILTER (WHERE es.status = 'selesai')::int AS finished,
+          COUNT(es.id) FILTER (WHERE es.status NOT IN ('sedang_mengerjakan', 'selesai'))::int AS other,
           AVG(es."totalScore") FILTER (WHERE es.status = 'selesai')::float8 AS average,
           MAX(es."totalScore") FILTER (WHERE es.status = 'selesai')::float8 AS highest,
           MIN(es."totalScore") FILTER (WHERE es.status = 'selesai')::float8 AS lowest
         FROM "User" u LEFT JOIN "School" s ON s.npsn = u."schoolNpsn"
         LEFT JOIN "ExamSession" es ON es."studentId" = u.id AND es."packageId" = ${packageId}
         WHERE u.role = 'siswa' GROUP BY u."schoolNpsn", s.name ORDER BY npsn`;
-      const completed = groups.reduce((n, row) => n + row.finished, 0);
+      const population = (row: { registered: number; started: number; ongoing: number; finished: number; other: number }) => ({
+        totalStudents: row.registered, startedCount: row.started, ongoingCount: row.ongoing,
+        finishedCount: row.finished, notStartedCount: row.registered - row.started, otherCount: row.other,
+      });
+      const totals = groups.reduce((sum, row) => ({ registered: sum.registered + row.registered, started: sum.started + row.started,
+        ongoing: sum.ongoing + row.ongoing, finished: sum.finished + row.finished, other: sum.other + row.other }),
+      { registered: 0, started: 0, ongoing: 0, finished: 0, other: 0 });
+      const completed = totals.finished;
       const finishedGroups = groups.filter(row => row.finished);
       return {
-        summary: groups.length ? { average: completed ? groups.reduce((n, row) => n + (row.average || 0) * row.finished, 0) / completed : 0, highest: finishedGroups.length ? Math.max(...finishedGroups.map(r => r.highest || 0)) : 0, lowest: finishedGroups.length ? Math.min(...finishedGroups.map(r => r.lowest || 0)) : 0, totalParticipants: completed, registeredStudents: groups.reduce((n, row) => n + row.registered, 0) } : null,
-        schools: groups.map(row => ({ npsn: row.npsn, name: row.name, participantCount: row.finished, registeredCount: row.registered, averageScore: row.average || 0 })),
+        summary: { ...population(totals), average: completed ? groups.reduce((n, row) => n + (row.average || 0) * row.finished, 0) / completed : 0,
+          highest: finishedGroups.length ? Math.max(...finishedGroups.map(r => r.highest || 0)) : 0,
+          lowest: finishedGroups.length ? Math.min(...finishedGroups.map(r => r.lowest || 0)) : 0,
+          // Retain previous fields for API consumers; the UI uses explicit counts.
+          totalParticipants: completed, registeredStudents: totals.registered },
+        schools: groups.map(row => ({ npsn: row.npsn, name: row.name, ...population(row),
+          participantCount: row.finished, registeredCount: row.registered, averageScore: row.average || 0 })),
       };
     }, [`analytics:pkg:${packageId}`, 'api:users', 'api:schools']);
   });
@@ -137,7 +152,7 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
     for (const item of breakdown) { const value = bySession.get(item.sessionId) || {}; value[item.element] = { total: item.total, correct: item.correct }; bySession.set(item.sessionId, value); }
     const mapped = rows.map(row => {
       const session = row.examSessions[0], finished = session?.status === 'selesai';
-      return { id: row.id, sessionId: session?.id || null, studentName: row.fullName, nisn: row.nisn, npsn: row.schoolNpsn || '-', school: row.school?.name || '-', className: row.className, score: finished ? session.totalScore : null, startTime: session?.startTime || null, endTime: finished ? session.endTime : null, status: finished ? 'Selesai' : session ? 'Sedang Mengerjakan' : 'Tidak Mengerjakan', elementBreakdown: finished ? bySession.get(session.id) || {} : {} };
+      return { id: row.id, sessionId: session?.id || null, studentName: row.fullName, nisn: row.nisn, npsn: row.schoolNpsn || '-', school: row.school?.name || '-', className: row.className, score: finished ? session.totalScore : null, startTime: session?.startTime || null, endTime: finished ? session.endTime : null, status: finished ? 'Selesai' : !session ? 'Belum Mulai' : session.status === 'sedang_mengerjakan' ? 'Sedang Mengerjakan' : 'Status Lain', elementBreakdown: finished ? bySession.get(session.id) || {} : {} };
     });
     return pageResult(mapped, total, p, row => row.id);
   };
