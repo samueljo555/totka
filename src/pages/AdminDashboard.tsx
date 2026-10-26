@@ -99,10 +99,10 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const userList = usePagedList<any>('/api/users', userPage, usersPerPage, { search: query }, activeTab === 'accounts');
   const schoolList = usePagedList<any>('/api/schools', schoolPage, schoolsPerPage, { search: query }, activeTab === 'schools');
   const packageList = usePagedList<any>('/api/packages', packagePage, 20, { search: query }, activeTab === 'packages');
-  const questionList = usePagedList<any>('/api/questions', questionPage, questionsPerPage, { search: query }, activeTab === 'packages' && isAddingPackage);
+  const questionList = usePagedList<any>('/api/questions', questionPage, questionsPerPage, { search: query, mapel: newPackageMapel }, activeTab === 'packages' && isAddingPackage);
   const resultList = usePagedList<any>('/api/analytics/packages', resultPage, 20, { search: query }, activeTab === 'results');
   const studentList = usePagedList<any>(`/api/analytics/packages/${selectedAnalyticsPackage?.id}/schools/${selectedAnalyticsSchool?.npsn}`, analyticsStudentPage, analyticsStudentsPerPage, { search: query }, activeTab === 'results' && !!selectedAnalyticsSchool);
-  const users = userList.items, schools = schoolList.items, packages = packageList.items, questions = questionList.items, analyticsPackages = resultList.items, schoolStudentsData = studentList.items;
+  const users = userList.items, schools = schoolList.items, packages = packageList.items, questions = questionList.items.filter(q => q.mapel === newPackageMapel), analyticsPackages = resultList.items, schoolStudentsData = studentList.items;
   const fetchUsers = () => { void userList.reload(); };
   const fetchSchools = () => { void schoolList.reload(); };
   useEffect(() => {
@@ -738,6 +738,8 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 setNewPackageName('');
                 setNewPackageToken(Math.random().toString(36).substring(2, 12).toUpperCase());
                 setNewPackageDuration(90);
+                setNewPackageMapel('Matematika');
+                setQuestionPage(1);
                 setSelectedQuestionIds([]);
                 setIsAddingPackage(true);
               }}>
@@ -766,6 +768,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                       setEditingPackageId(pkg.id);
                       setNewPackageName(pkg.name);
                       setNewPackageMapel(pkg.mapel);
+                      setQuestionPage(1);
                       setNewPackageDuration(pkg.durationMinutes);
                       setNewPackageNavMode(pkg.navigationMode || 'bebas');
                       setNewPackageReleaseMode(pkg.releaseScoreMode || 'langsung');
@@ -824,7 +827,11 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                 </div>
                 <div className="input-group">
                   <label className="input-label">Mata Pelajaran</label>
-                  <select className="input-field" value={newPackageMapel} onChange={e => setNewPackageMapel(e.target.value)}>
+                  <select className="input-field" value={newPackageMapel} onChange={e => {
+                    setNewPackageMapel(e.target.value);
+                    setQuestionPage(1);
+                    setSelectedQuestionIds([]);
+                  }}>
                     <option value="Matematika">Matematika</option>
                     <option value="Bahasa Indonesia">Bahasa Indonesia</option>
                   </select>
@@ -859,7 +866,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
               </div>
 
               <div>
-                <h3 className="mb-4" style={{ fontSize: '1.1rem' }}>2. Pilih Soal dari Bank</h3>
+                <h3 className="mb-4" style={{ fontSize: '1.1rem' }}>2. Pilih Soal {newPackageMapel}</h3>
                 <div className="input-group" style={{ marginBottom: '1rem', position: 'relative' }}>
                   <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                   <input type="text" className="input-field" placeholder="Cari ID soal atau teks..." style={{ paddingLeft: '36px' }} />
@@ -892,8 +899,9 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                         </div>
                       </label>
                     ))}
-                    {questions.length === 0 && (
-                      <div className="p-8 text-center text-muted">Belum ada soal di bank soal.</div>
+                    {questionList.loading && <div className="p-8 text-center text-muted">Memuat soal {newPackageMapel}...</div>}
+                    {!questionList.loading && questions.length === 0 && (
+                      <div className="p-8 text-center text-muted">Belum ada soal {newPackageMapel} yang sesuai.</div>
                     )}
                   </div>
                   <Pagination page={questionPage} total={questionList.total} pageSize={questionsPerPage} onChange={setQuestionPage} loading={questionList.loading} />
