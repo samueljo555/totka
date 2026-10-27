@@ -591,6 +591,9 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
           username: user.username,
           role: user.role,
           fullName: user.fullName,
+          nisn: user.nisn ?? null,
+          className: user.className ?? null,
+          schoolNpsn: user.schoolNpsn ?? null,
           school: user.school,
           activeToken: sessionToken
         }
@@ -735,7 +738,11 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
 
   app.post('/api/sessions/start', async (req, res) => {
     try {
-      res.json(await startExam(prisma, req.user!.id, req.body?.token));
+      const exam = await startExam(prisma, req.user!.id, req.body?.token);
+      // Refresh the authenticated student's display profile, including old cached logins.
+      const student = await prisma.user.findUnique({ where: { id: req.user!.id }, select: safeUserSelect });
+      res.set('Cache-Control', 'no-store');
+      res.json({ ...exam, student });
     } catch (error) { examFailure(res, error); }
   });
 

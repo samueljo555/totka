@@ -25,7 +25,7 @@ async function openFixture({remaining=5400,release='langsung',holdFinish=false,a
  const context=await browser.newContext({viewport:{width:1440,height:1100}});
  await context.addInitScript(blockReviews=>{
   if(blockReviews){for(const method of ['setItem','removeItem']){const original=Storage.prototype[method];Storage.prototype[method]=function(key,...args){if(String(key).startsWith('tka_exam_review_v1_'))throw new DOMException('Blocked test review storage','SecurityError');return original.call(this,key,...args);};}}
-  localStorage.setItem('tka_auth_user',JSON.stringify({id:'student-actual',role:'siswa',fullName:'Nadia Putri Salsabila',nisn:'0001234567',className:'VI B',school:{name:'SD Negeri Sekolah Uji'}}));
+  localStorage.setItem('tka_auth_user',JSON.stringify({id:'student-actual',role:'siswa',fullName:'Nama Lama',school:{name:'Sekolah Lama'}}));
   localStorage.setItem('tka_jwt_token','test-only-token');localStorage.setItem('tka_token_created_at',String(Date.now()));localStorage.setItem('tka_last_activity_at',String(Date.now()));
  },blockReviews);
  const page=await context.newPage();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
@@ -35,7 +35,7 @@ async function openFixture({remaining=5400,release='langsung',holdFinish=false,a
   if(url.pathname==='/api/auth/session-check')return json({status:'valid'});
   if(url.pathname==='/api/sessions/start'){
    fixture.startCount++;
-   return json({session:{id:fixture.id,status:'sedang_mengerjakan',totalScore:null},package:{name:'Paket Aktual dari API',mapel:'Matematika',durationMinutes:90,releaseScoreMode:release},questions,existingAnswers:[...fixture.records.values()],remainingSeconds:fixture.remaining});
+   return json({session:{id:fixture.id,status:'sedang_mengerjakan',totalScore:null},student:{id:'student-actual',role:'siswa',fullName:'Nadia Putri Salsabila',nisn:'0001234567',className:'VI B',school:{name:'SD Negeri Sekolah Uji'}},package:{name:'Paket Aktual dari API',mapel:'Matematika',durationMinutes:90,releaseScoreMode:release},questions,existingAnswers:[...fixture.records.values()],remainingSeconds:fixture.remaining});
   }
   if(url.pathname.endsWith('/answer')){
    assert.equal(req.headers().authorization,'Bearer test-only-token');const answer=req.postDataJSON();fixture.saves.push(answer);
@@ -57,7 +57,7 @@ const waitSaved=page=>page.locator('.exam-save-status').getByText('Jawaban telah
 const go=async(page,n)=>{await page.locator('.exam-sidebar').getByRole('button',{name:new RegExp('^Soal '+n+':')}).click();await page.getByRole('article',{name:'Soal '+n,exact:true}).waitFor();};
 try{
  const {fixture,context,page}=await openFixture();
- const side=page.locator('.exam-sidebar');await side.getByText('Nadia Putri Salsabila',{exact:true}).waitFor();assert.ok((await side.innerText()).includes('0001234567'));assert.ok((await side.innerText()).includes('SD Negeri Sekolah Uji'));
+ const side=page.locator('.exam-sidebar');await side.getByText('Nadia Putri Salsabila',{exact:true}).waitFor();assert.ok((await side.innerText()).includes('0001234567'));assert.ok((await side.innerText()).includes('VI B'));assert.ok(!(await side.innerText()).includes('Nama Lama'));assert.ok((await side.innerText()).includes('SD Negeri Sekolah Uji'));
  assert.equal(await page.locator('.exam-question-content .katex').count(),1);assert.equal(await page.locator('.exam-number:visible').count(),4);
  await page.getByRole('radio',{name:'Pilihan C',exact:true}).check();await waitSaved(page);assert.equal(fixture.records.get('q1').answerData,2);
  await page.getByRole('button',{name:'Tandai untuk ditinjau',exact:true}).click();assert.equal(await page.locator('.exam-number.flagged:visible').count(),1);

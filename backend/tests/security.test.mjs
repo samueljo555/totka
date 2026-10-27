@@ -344,6 +344,36 @@ test('login signs session-bound JWT and replacement login invalidates earlier JW
   await request('/login', null, 'POST', { username: 's1', password: 'legacy-password' });
   assert.equal((await request('/auth/session-check', null, 'GET', undefined, headers)).status, 401);
 });
+test('login includes student identity and exam start refreshes the authenticated profile without secrets', async () => {
+  const student = users.find(u => u.id === 's1');
+  Object.assign(student, { nisn: '0001234567', className: 'VI B', fullName: 'Nama Saat Login' });
+  const login = await request('/login', null, 'POST', { username: 's1', password: 'legacy-password' });
+  assert.equal(login.status, 200);
+  assert.equal(login.body.user.nisn, '0001234567');
+  assert.equal(login.body.user.className, 'VI B');
+  assert.equal(login.body.user.schoolNpsn, '11111111');
+  assert.equal(login.body.user.school.name, 'Sekolah A');
+  assertNoSecrets(login.body.user, ['password', 'loginCardPassword']);
+  Object.assign(student, { nisn: '0007654321', className: 'VI C', fullName: 'Nama Terbaru', schoolNpsn: '22222222' });
+  const headers = { Authorization: `Bearer ${login.body.token}` };
+  // Cross-student profile requests stay forbidden; JWT identity determines the profile.
+  const spoofed = await request('/sessions/start', null, 'POST', { token: 'EXAM', studentId: 's2' }, headers);
+  assert.equal(spoofed.status, 403);
+  assert.ok(!Object.hasOwn(spoofed.body, 'student'));
+  const exam = await request('/sessions/start', null, 'POST', { token: 'EXAM' }, headers);
+  assert.equal(exam.status, 200);
+  assert.equal(exam.body.student.id, 's1');
+  assert.equal(exam.body.student.nisn, '0007654321');
+  assert.equal(exam.body.student.className, 'VI C');
+  assert.equal(exam.body.student.fullName, 'Nama Terbaru');
+  assert.equal(exam.body.student.school.name, 'Sekolah B');
+  assert.equal(exam.headers.get('cache-control'), 'no-store');
+  assertNoSecrets(exam.body.student, ['password', 'activeToken', 'loginCardPassword', 'loginPassword']);
+  Object.assign(student, { nisn: null, className: null });
+  const missing = await request('/sessions/start', null, 'POST', { token: 'EXAM' }, headers);
+  assert.equal(missing.body.student.nisn, null);
+  assert.equal(missing.body.student.className, null);
+});
 test('current database role overrides stale signed admin role and unknown routes are denied', async () => {
   const token = tokenFor('admin');
   users.find(u => u.id === 'admin').role = 'siswa';

@@ -8,6 +8,7 @@ import { ExamWorkspace } from '../components/ExamWorkspace';
 import 'katex/dist/katex.min.css';
 
 const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
+  const [studentProfile, setStudentProfile] = useState(user);
   const [hasEnteredToken, setHasEnteredToken] = useState(false);
   const [token, setToken] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -152,6 +153,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
       sessionStorage.setItem('activeExamToken', examToken);
 
+      if (data.student?.id === user.id) setStudentProfile(data.student);
       setSessionId(data.session.id);
       setExamInfo(data.package || {});
       setCurrentQuestion(1);
@@ -350,7 +352,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   return (
     <>
-      {!kickedData && <ExamWorkspace key={sessionId} sessionId={sessionId!} user={user} exam={examInfo}
+      {!kickedData && <ExamWorkspace key={sessionId} sessionId={sessionId!} user={studentProfile} exam={examInfo}
         questions={questions} current={currentQuestion} answers={answers} answeredCount={answeredCount}
         remaining={timeLeft} online={isOnline} submitting={isSubmitting} snapshot={syncStatus}
         onNavigate={setCurrentQuestion} onAnswer={handleAnswer} onRetry={() => sync.current?.retry()}
