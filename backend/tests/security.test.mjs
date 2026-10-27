@@ -473,7 +473,7 @@ test('imported students receive printable six-character passwords after reload',
 test('rich content and image-only choices round trip without changing answer indexes or content locks', async () => {
   const rich = doc => encodeRichContent({ version: 1, format: 'poem', indent: false, lineHeight: 1.85, doc: { type: 'doc', content: doc } });
   const image = { type: 'image', attrs: { src: '/uploads/example.png', alt: 'Pilihan gambar', width: 50, align: 'right' } };
-  const content = rich([{ type: 'paragraph', content: [{ type: 'text', text: 'Kalimat di atas.' }, { type: 'hardBreak' }, { type: 'text', text: 'Larik kedua.' }] }, image, { type: 'paragraph', content: [{ type: 'text', text: 'Pertanyaan di bawah gambar?' }] }]);
+  const content = rich([{ type: 'paragraph', content: [{ type: 'text', text: 'Kalimat di atas.', marks: [{ type: 'fontSize', attrs: { size: 22 } }] }, { type: 'hardBreak' }, { type: 'text', text: 'Larik kedua.' }] }, image, { type: 'paragraph', content: [{ type: 'text', text: 'Pertanyaan di bawah gambar?' }] }]);
   const created = await request('/questions', 'guru', 'POST', { type: 'Pilihan Ganda Sederhana', mapel: 'Bahasa Indonesia', element: 'Membaca', content, options: [{ id: 1, text: rich([image]) }, { id: 2, text: 'Pilihan teks' }], correctAnswer: [0] });
   assert.equal(created.status, 200); assert.equal(created.body.content, content); assert.deepEqual(created.body.correctAnswer, [0]);
   assert.ok(created.body.options[0].text.startsWith(RICH_PREFIX));

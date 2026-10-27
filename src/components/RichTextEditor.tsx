@@ -8,9 +8,10 @@ import { TableKit } from '@tiptap/extension-table';
 import Mathematics from '@tiptap/extension-mathematics';
 import { Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify, ImagePlus, List, ListOrdered, Table2, Undo2, Redo2, Sigma, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { encodeRichContent, safeImageUrl } from '../../backend/rich-content';
+import { encodeRichContent, safeImageUrl, FONT_SIZES } from '../../backend/rich-content';
 import type { RichDocument, RichNode } from '../../backend/rich-content';
 import { editorDocument } from '../lib/rich-editor-content';
+import { AutomaticMath, FontSize, applyFontSize } from '../lib/rich-editor-extensions';
 import '../rich-content.css';
 
 const BlockLayout = Extension.create({
@@ -38,7 +39,7 @@ export function RichTextEditor({ value, onChange, label, compact = false, onBloc
     catch (failure) { setError(failure instanceof Error ? failure.message : 'Konten belum dapat disimpan.'); }
   };
   const editor = useEditor({
-    extensions: [StarterKit.configure({ heading: { levels: [2, 3] }, link: false }), PositionedImage.configure({ allowBase64: false }), TextAlign.configure({ types: ['heading', 'paragraph'] }), BlockLayout, TableKit.configure({ table: { resizable: false } }), Mathematics.configure({
+    extensions: [StarterKit.configure({ heading: { levels: [2, 3] }, link: false }), FontSize, AutomaticMath, PositionedImage.configure({ allowBase64: false }), TextAlign.configure({ types: ['heading', 'paragraph'] }), BlockLayout, TableKit.configure({ table: { resizable: false } }), Mathematics.configure({
       katexOptions: { throwOnError: false, trust: false },
       inlineOptions: { onClick: (node, pos) => setFormula({ latex: node.attrs.latex, block: false, pos }) },
       blockOptions: { onClick: (node, pos) => setFormula({ latex: node.attrs.latex, block: true, pos }) },
@@ -97,6 +98,7 @@ export function RichTextEditor({ value, onChange, label, compact = false, onBloc
   return <div className={`wysiwyg-editor${compact ? ' compact' : ''}`}>
     {!compact && <div className="rich-settings"><label>Format <select aria-label={`Format ${label}`} disabled={busy} value={layout.format} onChange={event => settings({ format: event.target.value as RichDocument['format'] })}><option value="free">Bebas</option><option value="prose">Paragraf</option><option value="poem">Puisi</option></select></label><label>Jarak baris <select aria-label={`Jarak baris ${label}`} disabled={busy} value={layout.lineHeight} onChange={event => settings({ lineHeight: Number(event.target.value) })}><option value={1.6}>Rapat</option><option value={1.85}>Normal</option><option value={2.2}>Longgar</option></select></label><label><input type="checkbox" disabled={busy || layout.format !== 'prose'} checked={layout.indent} onChange={event => settings({ indent: event.target.checked })} />Inden awal</label></div>}
     <div className="rich-toolbar" role="toolbar" aria-label={`Alat format ${label}`}>
+      <select aria-label={`Ukuran font ${label}`} title="Blok teks atau tekan Ctrl+A dalam editor untuk mengubah ukurannya" disabled={busy} value={editor.getAttributes('fontSize').size || ''} onChange={event => applyFontSize(editor, event.target.value)}><option value="">Ukuran otomatis</option>{FONT_SIZES.map(size => <option key={size} value={size}>{size} px</option>)}</select>
       {!compact && <select aria-label={`Gaya teks ${label}`} disabled={busy} value={editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p'} onChange={event => event.target.value === 'p' ? editor.chain().focus().setParagraph().run() : editor.chain().focus().setHeading({ level: event.target.value === 'h2' ? 2 : 3 }).run()}><option value="p">Teks biasa</option><option value="h2">Judul bagian</option><option value="h3">Subjudul</option></select>}
       {tools.map(tool => <button type="button" key={tool.label} title={tool.label} aria-label={`${tool.label} — ${label}`} aria-pressed={'active' in tool ? tool.active : undefined} disabled={busy} onMouseDown={event => event.preventDefault()} onClick={tool.run}>{tool.icon}</button>)}
       {!compact && <button type="button" disabled={busy} onClick={() => editor.chain().focus().updateAttributes('paragraph', { indent: editor.getAttributes('paragraph').indent ? 0 : 1 }).run()}>Inden</button>}
@@ -108,6 +110,6 @@ export function RichTextEditor({ value, onChange, label, compact = false, onBloc
     <div className={`rich-editor-surface format-${layout.format}${layout.indent ? ' with-indent' : ''}`} style={{ lineHeight: layout.lineHeight }}><EditorContent editor={editor} /></div>
     <input ref={uploadInput} type="file" accept="image/png,image/jpeg,image/webp" aria-label={`Unggah gambar ${label}`} hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void upload(file); }} />
     {busy && <p className="rich-status" role="status">Mengunggah gambar... Tunggu sebelum menyimpan soal.</p>}{error && <p className="rich-status error" role="alert">{error}</p>}
-    {!compact && <p className="rich-help">Enter: paragraf/bait baru · Shift+Enter: baris baru. Klik posisi tulisan lalu sisipkan gambar. Gambar dapat dipindahkan dengan seret atau potong/tempel.</p>}
+    <p className="rich-help">Ketik {'\\frac{a}{b}'} lalu Spasi/Enter untuk menampilkan rumus. Blok teks untuk mengatur ukuran font{compact ? '.' : '; Ctrl+A di dalam editor memilih seluruh teks. Enter: paragraf/bait baru · Shift+Enter: baris baru. Klik posisi tulisan lalu sisipkan gambar. Gambar dapat dipindahkan dengan seret atau potong/tempel.'}</p>
   </div>;
 }

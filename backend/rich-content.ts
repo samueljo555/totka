@@ -1,6 +1,8 @@
 /** Shared, dependency-free contract. Stored in existing text fields; never stores raw HTML. */
 export const RICH_PREFIX = 'TKA_RICH_V1:';
-export interface RichNode { type: string; text?: string; attrs?: Record<string, unknown>; marks?: { type: string }[]; content?: RichNode[] }
+export const FONT_SIZES = [14, 16, 18, 20, 22, 24] as const;
+export interface RichMark { type: string; attrs?: { size: number } }
+export interface RichNode { type: string; text?: string; attrs?: Record<string, unknown>; marks?: RichMark[]; content?: RichNode[] }
 export interface RichDocument { version: 1; format: 'prose' | 'poem' | 'free'; indent: boolean; lineHeight: number; doc: RichNode }
 export class RichContentError extends Error {}
 export function safeImageUrl(value: unknown): value is string {
@@ -24,8 +26,17 @@ export function validateRichDocument(input: unknown): RichDocument {
     const result: RichNode = { type }, attrs = node.attrs && typeof node.attrs === 'object' ? node.attrs as Record<string, unknown> : {};
     if (type === 'text') { if (typeof node.text !== 'string' || !node.text || node.text.length > 40000) return fail(); result.text = node.text; }
     if (node.marks !== undefined) {
-      if (type !== 'text' || !Array.isArray(node.marks) || node.marks.length > 5) return fail();
-      result.marks = node.marks.map(mark => { if (!mark || !['bold', 'italic', 'underline', 'strike', 'code'].includes(mark.type)) return fail();return { type: mark.type }; });
+      if (!['text', 'inlineMath', 'hardBreak'].includes(type) || !Array.isArray(node.marks) || node.marks.length > 6) return fail();
+      const seen = new Set<string>();
+      result.marks = node.marks.map(mark => {
+        if (!mark || !['bold', 'italic', 'underline', 'strike', 'code', 'fontSize'].includes(mark.type) || seen.has(mark.type)) return fail();
+        seen.add(mark.type);
+        if (mark.type === 'fontSize') {
+          if (!FONT_SIZES.includes(mark.attrs?.size)) return fail();
+          return { type: mark.type, attrs: { size: mark.attrs.size } };
+        }
+        return { type: mark.type };
+      });
     }
     const clean: Record<string, unknown> = {};
     if (['paragraph', 'heading'].includes(type)) {

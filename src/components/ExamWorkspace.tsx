@@ -72,7 +72,7 @@ export function ExamWorkspace(props: Props) {
     {syncCard}<p className={`exam-network${online ? '' : ' offline'}`}><i />{online ? 'Terhubung' : 'Koneksi terputus'}</p>
     <button type="button" className="exam-btn" disabled={submitting || !total} onClick={openFinish}><Check size={15} />Periksa & selesaikan</button>
   </>;
-  return <div className="exam-workspace" style={{ '--exam-font-size': `${fontSize}px` } as CSSProperties}>
+  return <div className="exam-workspace" style={{ '--exam-font-size': `${fontSize}px`, '--exam-font-scale': fontSize / 17 } as CSSProperties}>
     <header className="exam-topbar"><div className="exam-top-inner"><div className="exam-brand-area"><div className="exam-brand"><b>t</b><span>TOTKA</span></div><i /><div><h1>{exam.name || 'Try Out TKA'}</h1><p>{exam.mapel || 'Ujian'} · {total} soal{exam.durationMinutes ? ` · ${exam.durationMinutes} menit` : ''}</p></div></div><div className="exam-header-actions">
       <div className={`exam-timer${remaining < 300 ? ' urgent' : ''}`} aria-label="Sisa waktu ujian"><Clock size={19} /><div><small>Sisa waktu</small><strong>{[Math.floor(remaining / 3600), Math.floor(remaining % 3600 / 60), remaining % 60].map(value => String(value).padStart(2, '0')).join(':')}</strong></div></div>
       <button className="exam-btn exam-header-finish" disabled={submitting || !total} onClick={openFinish}><Check size={15} />Selesai ujian</button>

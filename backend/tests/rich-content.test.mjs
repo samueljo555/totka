@@ -27,3 +27,11 @@ test('image-only options keep existing single, multiple and category grading sem
  assert.equal(gradeAnswer({type:'Pilihan Ganda Sederhana',options,correctAnswer:[0]},0),true);assert.equal(gradeAnswer({type:'Pilihan Ganda Sederhana',options,correctAnswer:[0]},1),false);
  assert.equal(gradeAnswer({type:'Pilihan Ganda Kompleks',options,correctAnswer:[0,1]},[1,0]),true);assert.equal(gradeAnswer({type:'Pilihan Ganda Kompleks Kategori',options,correctAnswer:[0,1]},[0,1]),true);
 });
+test('font sizes survive roundtrip on text and inline math with a strict allowlist', () => {
+ const text={type:'text',text:'Teks besar',marks:[{type:'bold'},{type:'fontSize',attrs:{size:24}}]};
+ const math={type:'inlineMath',attrs:{latex:'\\frac{a}{b}'},marks:[{type:'fontSize',attrs:{size:20}}]};
+ const doc=document([{type:'paragraph',content:[text,math,{type:'hardBreak',marks:[{type:'fontSize',attrs:{size:20}}]}]}]);assert.deepEqual(parseRichContent(encodeRichContent(doc)),doc);assert.equal(contentText(encodeRichContent(doc)),'Teks besar\\frac{a}{b}\n');
+ for(const size of [0,15,100,'24','24px','20px;color:red',null])assert.throws(()=>encodeRichContent(document([{type:'paragraph',content:[{...text,marks:[{type:'fontSize',attrs:{size}}]}]}])));
+ const unknown=document([{type:'paragraph',content:[{...text,marks:[{type:'fontSize',attrs:{size:18,onclick:'x',style:'color:red'}}]}]}]);assert.deepEqual(parseRichContent(encodeRichContent(unknown)).doc.content[0].content[0].marks,[{type:'fontSize',attrs:{size:18}}]);
+ assert.throws(()=>encodeRichContent(document([{type:'paragraph',content:[{...text,marks:[{type:'fontSize',attrs:{size:20}},{type:'fontSize',attrs:{size:22}}]}]}])));
+});

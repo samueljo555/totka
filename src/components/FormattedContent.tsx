@@ -5,8 +5,13 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import katex from 'katex';
 import { parseRichContent, RICH_PREFIX, safeImageUrl } from '../../backend/rich-content';
-import type { RichNode } from '../../backend/rich-content';
+import type { RichNode, RichMark } from '../../backend/rich-content';
 import '../rich-content.css';
+
+const marked = (content: ReactNode, marks: RichMark[] = []): ReactNode => marks.reduce<ReactNode>((text, mark) => {
+  if (mark.type === 'fontSize') return <span data-font-size={mark.attrs!.size} style={{ fontSize: `calc(${mark.attrs!.size}px * var(--exam-font-scale, 1))` }}>{text}</span>;
+  return mark.type === 'bold' ? <strong>{text}</strong> : mark.type === 'italic' ? <em>{text}</em> : mark.type === 'underline' ? <u>{text}</u> : mark.type === 'strike' ? <s>{text}</s> : <code>{text}</code>;
+}, content);
 
 export function FormattedContent({ value, onImage, inline = false }: { value: string; onImage?: (src: string) => void; inline?: boolean }) {
   const data = parseRichContent(value);
@@ -18,7 +23,7 @@ export function FormattedContent({ value, onImage, inline = false }: { value: st
     const parts = node.content?.map(render), a = node.attrs || {};
     const style = { ...(a.textAlign ? { textAlign: a.textAlign } : {}), ...(a.indent != null ? { textIndent: a.indent ? '1.65em' : '0' } : {}) } as CSSProperties;
     switch (node.type) {
-      case 'text': return <Fragment key={key}>{(node.marks || []).reduce<ReactNode>((text, mark) => mark.type === 'bold' ? <strong>{text}</strong> : mark.type === 'italic' ? <em>{text}</em> : mark.type === 'underline' ? <u>{text}</u> : mark.type === 'strike' ? <s>{text}</s> : <code>{text}</code>, node.text)}</Fragment>;
+      case 'text': return <Fragment key={key}>{marked(node.text, node.marks)}</Fragment>;
       case 'paragraph': return <p key={key} style={style}>{parts?.length ? parts : <br />}</p>;
       case 'heading': return a.level === 3 ? <h3 key={key} style={style}>{parts}</h3> : <h2 key={key} style={style}>{parts}</h2>;
       case 'hardBreak': return <br key={key} />;
@@ -33,7 +38,7 @@ export function FormattedContent({ value, onImage, inline = false }: { value: st
       case 'tableRow': return <tr key={key}>{parts}</tr>;
       case 'tableCell': return <td key={key} colSpan={Number(a.colspan)} rowSpan={Number(a.rowspan)}>{parts}</td>;
       case 'tableHeader': return <th key={key} colSpan={Number(a.colspan)} rowSpan={Number(a.rowspan)}>{parts}</th>;
-      case 'inlineMath': case 'blockMath': return <span key={key} className={node.type === 'blockMath' ? 'rich-math-block' : 'rich-math'} dangerouslySetInnerHTML={{ __html: katex.renderToString(String(a.latex || ''), { throwOnError: false, trust: false, displayMode: node.type === 'blockMath' }) }} />;
+      case 'inlineMath': case 'blockMath': return <Fragment key={key}>{marked(<span className={node.type === 'blockMath' ? 'rich-math-block' : 'rich-math'} dangerouslySetInnerHTML={{ __html: katex.renderToString(String(a.latex || ''), { throwOnError: false, trust: false, displayMode: node.type === 'blockMath' }) }} />, node.marks)}</Fragment>;
       default: return null;
     }
   };
