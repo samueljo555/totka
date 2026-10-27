@@ -1,17 +1,13 @@
-import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import { useState, useEffect, useRef } from 'react';
-import { Clock, ChevronRight, ChevronLeft, CheckCircle2, ZoomIn, WifiOff, RefreshCw, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { AnswerSync } from '../lib/answer-sync';
 import type { SyncSnapshot } from '../lib/answer-sync';
 import { ImageModal } from '../components/ImageModal';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { ExamWorkspace } from '../components/ExamWorkspace';
 import 'katex/dist/katex.min.css';
 
 const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
-  const confirmModal = useConfirm();
   const [hasEnteredToken, setHasEnteredToken] = useState(false);
   const [token, setToken] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -21,7 +17,6 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(1);
   const [questions, setQuestions] = useState<any[]>([]);
-  const totalQuestions = questions.length;
   const [answers, setAnswers] = useState<Record<number, any>>({});
   const hasAnswer = (value: any) => value !== undefined && value !== null && (Array.isArray(value) ? value.some(item => item !== null && item !== undefined) : typeof value === 'number');
   const answeredCount = Object.values(answers).filter(hasAnswer).length;
@@ -37,12 +32,12 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   const deadlineAt = useRef<number | null>(null);
   const finishHandler = useRef<(expired?: boolean) => Promise<void>>(async () => {});
   const finishedRef = useRef(false);
+  const [examInfo, setExamInfo] = useState<{ name?: string; mapel?: string; durationMinutes?: number }>({});
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Offline & Auto-Sync State
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [syncStatus, setSyncStatus] = useState<SyncSnapshot | null>(null);
-  const pendingSyncCount = syncStatus?.pendingCount || 0;
 
   // Single Device Policy State (Kicked)
   const [kickedData, setKickedData] = useState<{ show: boolean; message: string } | null>(null);
@@ -76,13 +71,8 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     setFinalScore(session.totalScore === null ? null : Number(session.totalScore));
     setIsFinished(true);
     sessionStorage.removeItem('activeExamToken');
+    try { if (sessionId) sessionStorage.removeItem(`tka_exam_review_v1_${sessionId}`); } catch { /* Optional review marks cannot block finalization. */ }
     sync.current?.complete();
-  };
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   // Listeners call the current engine, so closures never retain an old queue.
@@ -163,6 +153,8 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
       sessionStorage.setItem('activeExamToken', examToken);
 
       setSessionId(data.session.id);
+      setExamInfo(data.package || {});
+      setCurrentQuestion(1);
       setQuestions(data.questions || []);
       setReleaseScoreMode(data.package?.releaseScoreMode || 'langsung');
       
@@ -205,6 +197,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
         if (engine.snapshot().pendingCount) toast.error('Waktu ujian telah berakhir. Jawaban offline yang belum diterima server tidak dinilai.', { duration: 8000 });
         engine.complete();
         sessionStorage.removeItem('activeExamToken');
+        try { sessionStorage.removeItem(`tka_exam_review_v1_${data.session.id}`); } catch { /* Optional review marks cannot block finalization. */ }
         setFinalScore(data.session.totalScore === null ? null : Number(data.session.totalScore));
         setIsFinished(true);
       } else engine.wake();
@@ -355,370 +348,14 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
     );
   }
 
-  // Question Content from API
-  const renderQuestion = () => {
-    if (questions.length === 0) {
-      return (
-        <div className="animate-fade-in text-center p-8">
-          <h2 className="text-muted">Soal ujian belum tersedia (Atau sedang memuat).</h2>
-        </div>
-      );
-    }
-
-    const questionIndex = currentQuestion - 1;
-    const q = questions[questionIndex];
-    if (!q) return null;
-
-    const type = q.type || 'Pilihan Ganda Sederhana';
-
-    return (
-      <div className="animate-fade-in">
-        <div className="flex justify-between items-center mb-6">
-          <h2 style={{ margin: 0 }}>Soal No. {currentQuestion}</h2>
-          <span className="tag">{type}</span>
-        </div>
-
-        {q.reading && (
-          <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '1rem', color: 'var(--primary-dark)' }}>Wacana: {q.reading.title}</h3>
-            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.8', color: 'var(--text-main)' }}>{q.reading.content}</div>
-          </div>
-        )}
-
-        <div style={{ fontSize: '1.2rem', marginBottom: '2rem', lineHeight: '1.8' }}>
-          {q.content ? (
-            <div className="katex-container">
-              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {q.content}
-              </ReactMarkdown>
-            </div>
-          ) : (
-            <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>[Pertanyaan kosong...]</span>
-          )}
-          {q.imageUrl && (
-            <div className="mt-4">
-              <div 
-                onClick={() => setPreviewImage(q.imageUrl)}
-                style={{
-                  display: 'inline-block',
-                  position: 'relative',
-                  cursor: 'zoom-in',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  border: '1px solid #cbd5e1',
-                  transition: 'all 0.2s ease',
-                  backgroundColor: '#f8fafc'
-                }}
-                title="Klik untuk memperbesar gambar"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 82, 204, 0.15)';
-                  e.currentTarget.style.borderColor = 'var(--primary-color)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'none';
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.borderColor = '#cbd5e1';
-                }}
-              >
-                <img 
-                  src={q.imageUrl} 
-                  alt="Gambar Soal" 
-                  style={{ maxWidth: '100%', maxHeight: '300px', display: 'block', borderRadius: '7px' }} 
-                />
-                <div style={{
-                  position: 'absolute',
-                  bottom: '8px',
-                  right: '8px',
-                  background: 'rgba(15, 23, 42, 0.75)',
-                  backdropFilter: 'blur(4px)',
-                  color: 'white',
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  pointerEvents: 'none'
-                }}>
-                  <ZoomIn size={14} />
-                  <span>Klik untuk perbesar</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {type.includes('Pilihan Ganda Sederhana') && q.options && (
-          <div className="flex flex-col gap-4">
-            {(Array.isArray(q.options) ? q.options : []).map((opt: any, i: number) => (
-              <label 
-                key={opt.id || i} 
-                className="flex items-center gap-4 p-4" 
-                style={{ 
-                  background: answers[currentQuestion] === i ? 'rgba(0, 82, 204, 0.05)' : 'white', 
-                  border: answers[currentQuestion] === i ? '2px solid var(--primary-color)' : '1px solid #cbd5e1', 
-                  borderRadius: '8px', 
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <input 
-                  type="radio" disabled={isSubmitting || timeLeft === 0}
-                  name={`q_${currentQuestion}`} 
-                  checked={answers[currentQuestion] === i}
-                  onChange={() => handleAnswer(currentQuestion, i)}
-                  style={{ width: '20px', height: '20px' }} 
-                />
-                <span style={{ fontSize: '1.1rem' }} className="katex-container">
-                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pilihan ${i + 1}`}</ReactMarkdown>
-                </span>
-              </label>
-            ))}
-          </div>
-        )}
-
-        {type === 'Pilihan Ganda Kompleks' && q.options && (
-          <div className="flex flex-col gap-4">
-            {(Array.isArray(q.options) ? q.options : []).map((opt: any, i: number) => {
-              const currentAnswers = Array.isArray(answers[currentQuestion]) ? answers[currentQuestion] : [];
-              const isChecked = currentAnswers.includes(i);
-              return (
-                <label 
-                  key={opt.id || i} 
-                  className="flex items-center gap-4 p-4" 
-                  style={{ 
-                    background: isChecked ? 'rgba(0, 82, 204, 0.05)' : 'white', 
-                    border: isChecked ? '2px solid var(--primary-color)' : '1px solid #cbd5e1', 
-                    borderRadius: '8px', 
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <input 
-                    type="checkbox" disabled={isSubmitting || timeLeft === 0}
-                    checked={isChecked}
-                    onChange={(e) => {
-                      let newAnswers = [...currentAnswers];
-                      if (e.target.checked) newAnswers.push(i);
-                      else newAnswers = newAnswers.filter((a: number) => a !== i);
-                      handleAnswer(currentQuestion, newAnswers);
-                    }}
-                    style={{ width: '20px', height: '20px' }} 
-                  />
-                  <span style={{ fontSize: '1.1rem' }} className="katex-container">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        )}
-
-        {type === 'Pilihan Ganda Kompleks Kategori' && q.options && (
-          <div className="flex flex-col gap-4">
-            <div className="flex gap-4 p-4" style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-               <div style={{ flex: 2, fontWeight: 600 }}>Pernyataan</div>
-               <div style={{ flex: 1, fontWeight: 600, textAlign: 'center' }}>Benar</div>
-               <div style={{ flex: 1, fontWeight: 600, textAlign: 'center' }}>Salah</div>
-            </div>
-            {(Array.isArray(q.options) ? q.options : []).map((opt: any, i: number) => {
-              const currentAnswers = Array.isArray(answers[currentQuestion]) ? answers[currentQuestion] : [];
-              return (
-                <div key={opt.id || i} className="flex items-center gap-4 p-4" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
-                  <div style={{ flex: 2, fontSize: '1.1rem' }} className="katex-container">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                    <input 
-                      type="radio" disabled={isSubmitting || timeLeft === 0}
-                      name={`cat_stmt_${currentQuestion}_${i}`} 
-                      checked={currentAnswers[i] === 0}
-                      onChange={() => {
-                        const newAnswers = [...currentAnswers];
-                        newAnswers[i] = 0;
-                        handleAnswer(currentQuestion, newAnswers);
-                      }}
-                      style={{ width: '20px', height: '20px', cursor: 'pointer' }} 
-                    />
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                    <input 
-                      type="radio" disabled={isSubmitting || timeLeft === 0}
-                      name={`cat_stmt_${currentQuestion}_${i}`} 
-                      checked={currentAnswers[i] === 1}
-                      onChange={() => {
-                        const newAnswers = [...currentAnswers];
-                        newAnswers[i] = 1;
-                        handleAnswer(currentQuestion, newAnswers);
-                      }}
-                      style={{ width: '20px', height: '20px', cursor: 'pointer' }} 
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-color)', overflow: 'hidden' }}>
-      
-      {/* Main Exam Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <header className="glass-panel" style={{ borderRadius: 0, padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
-          <div className="flex items-center gap-4">
-            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>TKA Ujian</h2>
-          </div>
-          
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2" style={{ background: timeLeft < 300 ? 'rgba(255,0,0,0.1)' : 'rgba(0, 82, 204, 0.1)', color: timeLeft < 300 ? 'red' : 'var(--primary-dark)', padding: '8px 16px', borderRadius: '30px', fontWeight: 700, fontSize: '1.2rem' }}>
-              <Clock size={20} />
-              <span>{formatTime(timeLeft)}</span>
-            </div>
-            <button className="btn" style={{ background: '#d32f2f', opacity: isSubmitting ? 0.7 : 1 }} disabled={isSubmitting} onClick={async () => {
-              if (await confirmModal({ title: 'Konfirmasi', message: "Apakah Anda yakin ingin menyelesaikan ujian? Jawaban tidak bisa diubah lagi." })) {
-                handleFinishExam();
-              }
-            }}>
-              {isSubmitting ? 'Menyimpan...' : 'Selesai Ujian'}
-            </button>
-          </div>
-        </header>
-
-        <div role="status" aria-live="polite" style={{ padding: '10px 24px', background: pendingSyncCount ? '#fff7ed' : '#f0fdf4', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-          {!isOnline ? <WifiOff size={18} /> : syncStatus?.sending ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-          <span>{!isOnline ? 'Koneksi terputus. ' : ''}{pendingSyncCount ? `${pendingSyncCount} jawaban belum dikonfirmasi server.` : answeredCount ? 'Semua perubahan jawaban telah dikonfirmasi server.' : 'Belum ada jawaban yang perlu dikirim.'} Jawaban harus diterima sebelum waktu ujian habis.</span>
-          {Object.values(syncStatus?.pending || {}).some(record => record.retryable) && <button className="btn-secondary" disabled={!isOnline || isSubmitting || timeLeft === 0} onClick={() => sync.current?.retry()}>Coba kirim ulang</button>}
-        </div>
-        {syncStatus?.storageWarning && <div role="alert" style={{ padding: '10px 24px', background: '#fee2e2', color: '#991b1b' }}>{syncStatus.storageWarning}</div>}
-
-        {/* Question Area */}
-        <main style={{ flex: 1, padding: '3rem', overflowY: 'auto' }}>
-          <div className="glass-panel p-8" style={{ maxWidth: '800px', margin: '0 auto', background: 'rgba(255,255,255,0.9)' }}>
-            {renderQuestion()}
-            {(() => {
-              const id = questions[currentQuestion - 1]?.id;
-              const state = syncStatus?.states[id] || 'unanswered';
-              const pending = syncStatus?.pending[id];
-              const labels = { unanswered: 'Belum dijawab', saved: 'Tersimpan di server', pending: isOnline ? 'Menunggu pengiriman' : 'Menunggu koneksi', sending: 'Menyimpan...', retry: 'Menunggu kirim ulang', failed: 'Gagal disimpan — perlu tindakan', conflict: 'Ada perbedaan dengan jawaban server' };
-              return <div role="status" style={{ marginTop: '1rem', padding: '0.75rem', background: ['failed', 'conflict'].includes(state) ? '#fee2e2' : '#f8fafc', borderRadius: '8px' }}>
-                <strong>{labels[state]}</strong>
-                {pending?.message && <p>{pending.message}</p>}
-                {state === 'conflict' && <div className="flex gap-2 mt-2">
-                  <button className="btn-secondary" disabled={isSubmitting || timeLeft === 0} onClick={() => sync.current?.resolve(id, 'server')}>Gunakan jawaban server</button>
-                  <button className="btn-secondary" disabled={!isOnline || isSubmitting || timeLeft === 0} onClick={async () => {
-                    if (await confirmModal({ title: 'Konfirmasi jawaban', message: 'Kirim pilihan yang tampil di halaman ini untuk menggantikan jawaban di server?' })) sync.current?.resolve(id, 'local');
-                  }}>Kirim jawaban saya</button>
-                </div>}
-              </div>;
-            })()}
-
-            <div className="flex justify-between mt-12 pt-6" style={{ borderTop: '1px solid rgba(0,0,0,0.1)' }}>
-              <button 
-                className="btn-secondary" 
-                disabled={currentQuestion === 1}
-                onClick={() => setCurrentQuestion(prev => Math.max(1, prev - 1))}
-              >
-                <ChevronLeft size={18} style={{ marginRight: '4px' }} /> Sebelumnya
-              </button>
-              {currentQuestion < totalQuestions ? (
-                <button 
-                  className="btn" 
-                  onClick={() => setCurrentQuestion(prev => Math.min(totalQuestions, prev + 1))}
-                >
-                  Selanjutnya <ChevronRight size={18} style={{ marginLeft: '4px' }} />
-                </button>
-              ) : (
-                <button 
-                  className="btn" 
-                  style={{ background: '#d32f2f' }}
-                  disabled={isSubmitting}
-                  onClick={async () => {
-              if (await confirmModal({ title: 'Konfirmasi', message: "Apakah Anda yakin ingin menyelesaikan TO? Jawaban tidak bisa diubah lagi." })) {
-                      handleFinishExam();
-                    }
-                  }}
-                >
-                  {isSubmitting ? 'Menyimpan...' : 'Selesai'}
-                </button>
-              )}
-            </div>
-          </div>
-        </main>
-      </div>
-
-      {/* Navigation Sidebar */}
-      <aside className="glass-panel" style={{ width: '320px', borderRadius: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(0,0,0,0.1)' }}>
-        <div className="p-6" style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h2 style={{ fontSize: '1.4rem', margin: 0 }}>Siswa TKA</h2>
-            {isOnline ? (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 600, background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '12px' }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }}></span>
-                Online
-              </span>
-            ) : (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', fontWeight: 600, background: '#fee2e2', color: '#991b1b', padding: '3px 8px', borderRadius: '12px' }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ef4444' }}></span>
-                Offline
-              </span>
-            )}
-          </div>
-          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{user?.school?.name || 'Sekolah Pusat / Belum Terdaftar'}</p>
-        </div>
-        
-        <div className="p-6" style={{ overflowY: 'auto', flex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
-            {Array.from({ length: totalQuestions }).map((_, i) => {
-              const qNum = i + 1;
-              const isAnswered = hasAnswer(answers[qNum]);
-              const saveState = syncStatus?.states[questions[i]?.id] || 'unanswered';
-              const saveProblem = ['failed', 'conflict'].includes(saveState);
-              const unsynced = !['saved', 'unanswered'].includes(saveState);
-              const isCurrent = currentQuestion === qNum;
-              
-              return (
-                <button
-                  key={qNum}
-                  title={`Soal ${qNum}: ${saveState === 'saved' ? 'tersimpan' : saveProblem ? 'perlu tindakan' : unsynced ? 'belum tersimpan' : 'belum dijawab'}`}
-                  onClick={() => setCurrentQuestion(qNum)}
-                  style={{
-                    aspectRatio: '1',
-                    borderRadius: '8px',
-                    border: isCurrent ? '2px solid var(--primary-color)' : isAnswered ? '1px solid var(--primary-color)' : '1px solid #cbd5e1',
-                    background: saveProblem ? '#b91c1c' : unsynced ? '#b45309' : isAnswered ? 'var(--primary-color)' : 'white',
-                    color: isAnswered || unsynced ? 'white' : 'var(--text-main)',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    boxShadow: isCurrent ? '0 0 0 3px rgba(0,82,204,0.2)' : 'none',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  {qNum}
-                </button>
-              );
-            })}
-          </div>
-
-          <p style={{ marginTop: '1rem', fontSize: '0.85rem' }}>Oranye: belum dikonfirmasi server. Merah: perlu tindakan.</p>
-          <div className="mt-8">
-            <div className="flex items-center gap-2 mb-2" style={{ fontSize: '0.85rem' }}>
-              <div style={{ width: '16px', height: '16px', background: 'var(--primary-color)', borderRadius: '4px' }}></div>
-              <span>Sudah Dijawab ({answeredCount})</span>
-            </div>
-            <div className="flex items-center gap-2" style={{ fontSize: '0.85rem' }}>
-              <div style={{ width: '16px', height: '16px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '4px' }}></div>
-              <span>Belum Dijawab ({totalQuestions - answeredCount})</span>
-            </div>
-          </div>
-        </div>
-      </aside>
+    <>
+      {!kickedData && <ExamWorkspace key={sessionId} sessionId={sessionId!} user={user} exam={examInfo}
+        questions={questions} current={currentQuestion} answers={answers} answeredCount={answeredCount}
+        remaining={timeLeft} online={isOnline} submitting={isSubmitting} snapshot={syncStatus}
+        onNavigate={setCurrentQuestion} onAnswer={handleAnswer} onRetry={() => sync.current?.retry()}
+        onResolve={(id, choice) => sync.current?.resolve(id, choice)} onFinish={() => handleFinishExam()}
+        onImage={setPreviewImage} />}
 
       {/* Modal Lightbox untuk Perbesar Gambar Soal */}
       <ImageModal 
@@ -777,7 +414,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
