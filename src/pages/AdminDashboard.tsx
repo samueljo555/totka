@@ -1,9 +1,7 @@
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { FormattedContent } from '../components/FormattedContent';
 import 'katex/dist/katex.min.css';
 import { 
   Users, 
@@ -839,9 +837,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
                           <div style={{ fontSize: '0.95rem', lineHeight: '1.5', color: '#334155', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                             {q.imageUrl && <ImageIcon size={16} style={{ color: 'var(--primary-color)', flexShrink: 0, marginTop: '2px' }} />}
                             <div className="katex-container" style={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {q.content || ''}
-                              </ReactMarkdown>
+                              <FormattedContent value={q.content || ''} />
                             </div>
                           </div>
                           <div className="flex gap-2 mt-3">

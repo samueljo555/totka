@@ -13,6 +13,14 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/extension-image": "^3.32.0",
+    "@tiptap/extension-mathematics": "^3.32.0",
+    "@tiptap/extension-table": "^3.32.0",
+    "@tiptap/extension-text-align": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
     "katex": "0.16.47",
     "lucide-react": "^1.28.0",
     "react": "^19.2.8",
@@ -21,7 +29,9 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.2",
     "rehype-katex": "^7.0.1",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

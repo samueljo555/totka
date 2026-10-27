@@ -1,3 +1,4 @@
+import { validateContentField, parseRichContent, encodeRichContent, safeImageUrl, contentHasValue, RichContentError } from './rich-content.js';
 import { listOrder } from './list-order.js';
 import express from 'express';
 import cors from 'cors';
@@ -29,7 +30,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   const app = express();
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '512kb' }));
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
   app.use('/api', authorizeApi(prisma, JWT_SECRET));
@@ -50,7 +51,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
     },
     filename: function (req, file, cb) {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-      cb(null, uniqueSuffix + path.extname(file.originalname))
+      cb(null, uniqueSuffix + ({ 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' }[file.mimetype] || '.bin'))
     }
   });
 
@@ -58,7 +59,9 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   const memoryStorage = multer.memoryStorage();
 
   const upload = multer({
-    storage: STORAGE_PROVIDER === 'GCP' ? memoryStorage : diskStorage
+    storage: STORAGE_PROVIDER === 'GCP' ? memoryStorage : diskStorage,
+    limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    fileFilter: (_req, file, cb) => ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype) ? cb(null, true) : cb(new Error('Gunakan gambar PNG, JPEG, atau WebP.'))
   });
 
   let gcpStorage: Storage | null = null;
@@ -73,15 +76,23 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
 
   app.use('/uploads', express.static(uploadDir));
 
-  app.post('/api/upload', upload.single('image'), (req, res) => {
+  app.post('/api/upload', (req, res, next) => { upload.single('image')(req, res, error => error ? res.status(error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: 'UPLOAD_FAILED', message: error instanceof multer.MulterError ? 'Gambar maksimal 5 MB dan satu file per unggahan.' : 'Gunakan gambar PNG, JPEG, atau WebP.' }) : next()); }, (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No image uploaded' });
     }
 
+    const bytes = req.file.buffer || fs.readFileSync(req.file.path);
+    const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+    const webp = bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
+    if (!(req.file.mimetype === 'image/png' && png || req.file.mimetype === 'image/jpeg' && jpeg || req.file.mimetype === 'image/webp' && webp)) {
+      if (req.file.path) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'INVALID_IMAGE', message: 'Isi file bukan gambar PNG, JPEG, atau WebP yang sesuai.' });
+    }
     if (STORAGE_PROVIDER === 'GCP' && gcpStorage) {
       const bucket = gcpStorage.bucket(bucketName);
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      const blobName = uniqueSuffix + path.extname(req.file.originalname);
+      const blobName = uniqueSuffix + ({ 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' }[req.file.mimetype] || '.bin');
       const blob = bucket.file(blobName);
 
       const blobStream = blob.createWriteStream({
@@ -612,7 +623,23 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
     return res.json({ status: 'valid' });
   });
 
+  const questionContent = (value: unknown) => {
+    if (value !== undefined && typeof value !== 'string') throw new RichContentError('Isi soal dan pilihan harus berupa teks atau konten editor.');
+    validateContentField(value);
+    if (typeof value === 'string' && parseRichContent(value) && !contentHasValue(value)) throw new RichContentError('Konten editor tidak boleh kosong.');
+    return typeof value === 'string' && parseRichContent(value) ? encodeRichContent(parseRichContent(value)!) : value;
+  };
+  const validateQuestionContent = (body: Record<string, unknown>) => {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new RichContentError('Konten soal tidak valid.');
+    body.content = questionContent(body.content);
+    if (body.imageUrl && !safeImageUrl(body.imageUrl)) throw new RichContentError('Alamat gambar soal tidak valid.');
+    if (Array.isArray(body.options)) body.options = body.options.map(option => {
+      if (!option || typeof option !== 'object') throw new RichContentError('Pilihan jawaban tidak valid.');
+      return { ...option, text: questionContent(option.text) };
+    });
+  };
   app.post('/api/questions', async (req, res) => {
+    try { validateQuestionContent(req.body); } catch (error) { return res.status(400).json({ error: 'INVALID_CONTENT', message: error instanceof Error ? error.message : 'Konten tidak valid.' }); }
     const { type, mapel, element, content, imageUrl, options, correctAnswer, readingId } = req.body;
     if (!content || !type || !mapel || !element) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -642,6 +669,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
 
   app.put('/api/questions/:id', async (req, res) => {
     try {
+      validateQuestionContent(req.body);
       const { type, mapel, element, content, imageUrl, options, correctAnswer, readingId } = req.body;
       const question = await examTransaction(prisma, async tx => {
         await lockExamContent(tx, true);
@@ -663,6 +691,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
       await Promise.all([deleteCache('v2:api:questions:all'), deleteCache(`v2:api:questions:${question.authorId || req.user!.id}`)]);
       res.json(question);
     } catch (error) {
+      if (error instanceof RichContentError) return res.status(400).json({ error: 'INVALID_CONTENT', message: error.message });
       if (error instanceof ExamError) return res.status(error.status).json({ error: error.code, message: error.message });
       console.error("Update question error:", error);
       res.status(500).json({ error: 'Failed to update question' });

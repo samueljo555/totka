@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ArrowDownUp, Download, RotateCcw, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { FormattedContent } from './FormattedContent';
+import { contentText } from '../../backend/rich-content';
 import { readAllPages, readJson, useDebounced, usePagedList } from '../lib/paging';
 import { analyticsCsv, downloadCsv, serializeCsv } from '../lib/analytics-csv';
 import { TableFrame, StatusBadge } from './TableFrame';
@@ -57,7 +56,7 @@ export function ReportTable({ kind, initialPackage = '', initialSchool = '', ini
       let csv: string;
       if (isStudent) csv = analyticsCsv(rows as any, true, true);
       else if (kind === 'schools') csv = serializeCsv([['Paket Try Out', 'Mata Pelajaran', 'NPSN', 'Sekolah', 'Total Akun Siswa', 'Sudah Mulai', 'Sedang Mengerjakan', 'Selesai', 'Belum Mulai', 'Status Lain', 'Rata-rata'], ...rows.map(r => [r.packageName, r.mapel, r.npsn === 'UNKNOWN' ? '' : r.npsn, r.name, r.totalStudents, r.startedCount, r.ongoingCount, r.finishedCount, r.notStartedCount, r.otherCount, r.score ?? 'Belum tersedia'])]);
-      else csv = serializeCsv([['Paket Try Out', 'Mata Pelajaran', 'Nomor', 'Soal', 'Peserta Selesai', 'Benar', 'Salah', 'Kosong', 'Indeks Kesulitan', 'Kategori'], ...rows.map(r => [r.packageName, r.mapel, r.questionNumber, r.name, r.totalAttempts, r.correctCount, r.wrongCount, r.emptyCount, r.score ?? 'Belum tersedia', r.category])]);
+      else csv = serializeCsv([['Paket Try Out', 'Mata Pelajaran', 'Nomor', 'Soal', 'Peserta Selesai', 'Benar', 'Salah', 'Kosong', 'Indeks Kesulitan', 'Kategori'], ...rows.map(r => [r.packageName, r.mapel, r.questionNumber, contentText(r.name), r.totalAttempts, r.correctCount, r.wrongCount, r.emptyCount, r.score ?? 'Belum tersedia', r.category])]);
       downloadCsv(csv, `analitik_${kind}_${packageId || 'semua_paket'}_terfilter.csv`); toast.success('CSV berhasil diunduh.');
     } catch (error) { if (!abort.signal.aborted) toast.error(error instanceof Error ? error.message : 'Gagal mengunduh CSV.'); }
     finally { if (!abort.signal.aborted) setProgress(null); controller.current = null; }
@@ -80,7 +79,7 @@ export function ReportTable({ kind, initialPackage = '', initialSchool = '', ini
       { key: 'score', title: 'Rata-rata', numeric: true, content: (r: Row) => <span className={r.score == null ? 'table-unavailable' : 'table-score'}>{number(r.score, 1)}</span> },
     ] : [
       { key: 'questionNumber', title: 'No.', numeric: true, content: (r: Row) => r.questionNumber },
-      { key: 'name', title: 'Soal', content: (r: Row) => <div className="table-question katex-container"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{r.name}</ReactMarkdown></div> },
+      { key: 'name', title: 'Soal', content: (r: Row) => <div className="table-question katex-container"><FormattedContent value={r.content ?? r.name} /></div> },
       ...[['totalAttempts', 'Peserta Selesai'], ['correctCount', 'Benar'], ['wrongCount', 'Salah'], ['emptyCount', 'Kosong']].map(([key, title]) => ({ key, title, numeric: true, content: (r: Row) => number(r[key]) })),
       { key: 'score', title: 'Indeks Kesulitan', numeric: true, content: (r: Row) => number(r.score, 2) },
       { key: 'category', title: 'Kategori', content: (r: Row) => <StatusBadge value={r.category} /> },

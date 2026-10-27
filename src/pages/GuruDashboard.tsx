@@ -1,10 +1,9 @@
 import { TableFrame, SortableHeading, TableState } from '../components/TableFrame';
 import { Pagination } from '../components/Pagination';
-import { RemoteSelect } from '../components/RemoteSelect';
 import { usePagedList, useDebounced } from '../lib/paging';
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   FileText, 
   Library, 
@@ -16,9 +15,12 @@ import {
   Trash2,
   Eye
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { lazy, Suspense } from 'react';
+import { ExamQuestion } from '../components/ExamQuestion';
+import { ExamDialog } from '../components/ExamDialog';
+import { RichImageDialog } from '../components/RichImageDialog';
+import { contentText } from '../../backend/rich-content';
+const QuestionEditor = lazy(() => import('../components/QuestionEditor').then(module => ({ default: module.QuestionEditor })));
 import 'katex/dist/katex.min.css';
 
 const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
@@ -70,147 +72,9 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
     }
   };
 
-  const [questionType, setQuestionType] = useState('Pilihan Ganda Sederhana');
-  
-  const [subjectElements, setSubjectElements] = useState<{ [key: string]: string[] }>({
-    'Matematika': ['Bilangan', 'Aljabar', 'Geometri & Pengukuran', 'Data & Ketidakpastian'],
-    'Bahasa Indonesia': ['Menemukan Informasi', 'Memahami (Interpretasi & Integrasi)', 'Mengevaluasi & Merefleksi']
-  });
-  const [selectedMapel, setSelectedMapel] = useState('Matematika');
-  const [selectedElement, setSelectedElement] = useState('');
-  const [isAddingElement, setIsAddingElement] = useState(false);
-  const [newElement, setNewElement] = useState('');
-  
-  const [options, setOptions] = useState([
-    { id: 1, text: '' }, 
-    { id: 2, text: '' }, 
-    { id: 3, text: '' }, 
-    { id: 4, text: '' }
-  ]);
-  const [correctAnswer, setCorrectAnswer] = useState<number[]>([]);
-  const [questionText, setQuestionText] = useState('');
-  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
-  const [selectedReadingId, setSelectedReadingId] = useState('');
-  const [questionImage, setQuestionImage] = useState<File | null>(null);
-  const [questionImageUrl, setQuestionImageUrl] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
-
-  const handleSaveQuestion = async () => {
-    if (!questionText || options.length === 0) {
-      toast.error("Pertanyaan dan opsi tidak boleh kosong!");
-      return;
-    }
-    if (!selectedElement) {
-      toast.error("Elemen/Kompetensi harus dipilih terlebih dahulu!");
-      return;
-    }
-
-    try {
-      let finalImageUrl = questionImageUrl;
-      if (questionImage) {
-        const formData = new FormData();
-        formData.append('image', questionImage);
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          finalImageUrl = uploadData.imageUrl;
-        } else {
-          toast.error('Gagal mengupload gambar.');
-          return;
-        }
-      }
-
-      const url = editingQuestionId ? `/api/questions/${editingQuestionId}` : '/api/questions';
-      const method = editingQuestionId ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: questionType,
-          mapel: selectedMapel,
-          element: selectedElement,
-          content: questionText,
-          imageUrl: finalImageUrl,
-          options: options,
-          correctAnswer: correctAnswer,
-          authorId: user?.id,
-          ...(selectedReadingId && { readingId: selectedReadingId })
-        })
-      });
-
-      if (res.ok) {
-        alert(editingQuestionId ? "Soal berhasil diperbarui!" : "Soal berhasil disimpan!");
-        setQuestionText('');
-        setQuestionImage(null);
-        setQuestionImageUrl('');
-        setCorrectAnswer([]);
-        setEditingQuestionId(null);
-        setIsAdding(false);
-        setOptions([{ id: 1, text: '' }, { id: 2, text: '' }, { id: 3, text: '' }, { id: 4, text: '' }]);
-        await questionList.reload();
-      } else {
-        const error = await res.json();
-        toast.error(error.message || 'Gagal menyimpan soal');
-      }
-    } catch(err) {
-      toast.error("Error saving question");
-    }
-  };
-
-  const handleAddOption = () => {
-    setOptions([...options, { id: Date.now(), text: '' }]);
-  };
-
-  const handleOptionChange = (id: number, text: string) => {
-    setOptions(options.map(o => o.id === id ? { ...o, text } : o));
-  };
-
-  const handleDeleteOption = (id: number) => {
-    if (options.length > 2) {
-      setOptions(options.filter(o => o.id !== id));
-    } else {
-      toast.error("Harus ada minimal 2 pilihan jawaban/pernyataan.");
-    }
-  };
-
-  useEffect(() => {
-    const currentElements = subjectElements[selectedMapel] || [];
-    if (selectedElement && !currentElements.includes(selectedElement)) {
-      setSelectedElement('');
-    }
-  }, [selectedMapel, subjectElements]);
-
-  const handleAddElement = () => {
-    const elements = subjectElements[selectedMapel] || [];
-    if (newElement.trim() && !elements.includes(newElement.trim())) {
-      setSubjectElements(prev => ({
-        ...prev,
-        [selectedMapel]: [...elements, newElement.trim()]
-      }));
-      setSelectedElement(newElement.trim());
-    }
-    setNewElement('');
-    setIsAddingElement(false);
-  };
-
-  const handleDeleteElement = () => {
-    const elements = subjectElements[selectedMapel] || [];
-    if (elements.length > 1) {
-      const newElements = elements.filter(el => el !== selectedElement);
-      setSubjectElements(prev => ({
-        ...prev,
-        [selectedMapel]: newElements
-      }));
-      setSelectedElement(newElements[0]);
-    } else {
-      toast.error("Harus menyisakan minimal 1 elemen.");
-    }
-  };
-
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
+  const [previewQuestion, setPreviewQuestion] = useState<any>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const tabs = [
     { id: 'bank', name: 'Bank Soal', icon: <Library size={20} /> },
     { id: 'bacaan', name: 'Manajemen Bacaan', icon: <FileText size={20} /> },
@@ -297,16 +161,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                 <p>Kelola bank soal untuk materi Matematika dan Bahasa Indonesia.</p>
               </div>
               <button className="btn" onClick={() => {
-                setEditingQuestionId(null);
-                setQuestionText('');
-                setQuestionImageUrl('');
-                setQuestionImage(null);
-                setOptions([{ id: 1, text: '' }, { id: 2, text: '' }, { id: 3, text: '' }, { id: 4, text: '' }]);
-                setCorrectAnswer([]);
-                setQuestionType('Pilihan Ganda Sederhana');
-                setSelectedMapel('Matematika');
-                setSelectedElement('');
-                setSelectedReadingId('');
+                setEditingQuestion(null);
                 setIsAdding(true);
               }}>
                 <Plus size={18} /> Tambah Soal
@@ -327,7 +182,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
               </select>
             </div>
 
-            <TableFrame exportOptions={{ url: '/api/questions', params: { search: query, mapel: filterSubject, type: filterType, sort: questionSort }, filename: 'bank_soal.csv', disabled: questionList.loading || !!questionList.error || search !== query, columns: [{ title: 'Mata Pelajaran', value: r => r.mapel }, { title: 'Elemen', value: r => r.element }, { title: 'Tipe Soal', value: r => r.type }, { title: 'Soal', value: r => r.content }] }} sortLabel="Soal" sort={questionSort} onSort={value => { setQuestionSort(value); setQuestionPage(1); }} total={questionList.total} pageSize={questionPageSize} onPageSize={value => { setQuestionPageSize(value); setQuestionPage(1); }} label="Bank soal">
+            <TableFrame exportOptions={{ url: '/api/questions', params: { search: query, mapel: filterSubject, type: filterType, sort: questionSort }, filename: 'bank_soal.csv', disabled: questionList.loading || !!questionList.error || search !== query, columns: [{ title: 'Mata Pelajaran', value: r => r.mapel }, { title: 'Elemen', value: r => r.element }, { title: 'Tipe Soal', value: r => r.type }, { title: 'Soal', value: r => contentText(r.content) }] }} sortLabel="Soal" sort={questionSort} onSort={value => { setQuestionSort(value); setQuestionPage(1); }} total={questionList.total} pageSize={questionPageSize} onPageSize={value => { setQuestionPageSize(value); setQuestionPage(1); }} label="Bank soal">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
@@ -347,31 +202,18 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
                     <td className="p-4" style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       <div className="flex items-center gap-2">
                         {soal.imageUrl && <ImageIcon size={14} style={{ color: 'var(--primary-color)', flexShrink: 0 }} />}
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{soal.content}</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{contentText(soal.content)}</span>
                       </div>
                     </td>
                     <td className="p-4 flex gap-2">
                       <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: 'var(--primary-color)' }} title="Lihat Pratinjau" onClick={() => {
-                        setQuestionText(soal.content);
-                        setQuestionType(soal.type || 'Pilihan Ganda Sederhana');
-                        setQuestionImageUrl(soal.imageUrl || '');
-                        setOptions(soal.options && soal.options.length ? soal.options : [{ id: 1, text: 'Contoh A' }, { id: 2, text: 'Contoh B' }]);
-                        setShowPreview(true);
+                        setPreviewQuestion(soal);
                       }}>
                         <Eye size={16}/>
                       </button>
                       <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px' }} title="Edit" onClick={() => {
                         setIsAdding(true);
-                        setEditingQuestionId(soal.id);
-                        setQuestionType(soal.type);
-                        setSelectedMapel(soal.mapel || 'Matematika');
-                        const mapelElements = subjectElements[soal.mapel || 'Matematika'] || [];
-                        setSelectedElement(soal.element || mapelElements[0]);
-                        setQuestionText(soal.content);
-                        setQuestionImageUrl(soal.imageUrl || '');
-                        setOptions(soal.options && soal.options.length ? soal.options : [{ id: 1, text: '' }, { id: 2, text: '' }]);
-                        setCorrectAnswer(soal.correctAnswer || []);
-                        setSelectedReadingId(soal.readingId || '');
+                        setEditingQuestion(soal);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}>
                         <Edit size={16}/>
@@ -403,166 +245,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
           </div>
         )}
 
-        {activeTab === 'bank' && isAdding && (
-          <div className="animate-fade-in glass-panel p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2>Formulir Pembuatan Soal Baru</h2>
-              <button className="btn-secondary" onClick={() => setIsAdding(false)}>Batal</button>
-            </div>
-
-            <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 0, gap: '2rem' }}>
-              <div>
-                <div className="input-group">
-                  <label className="input-label">Mata Pelajaran</label>
-                  <select className="input-field" value={selectedMapel} onChange={e => setSelectedMapel(e.target.value)}>
-                    <option value="Matematika">Matematika</option>
-                    <option value="Bahasa Indonesia">Bahasa Indonesia</option>
-                  </select>
-                </div>
-                <div className="input-group">
-                  <label className="input-label">Elemen / Kompetensi</label>
-                  {!isAddingElement ? (
-                    <div className="flex gap-2">
-                      <select 
-                        className="input-field" 
-                        value={selectedElement}
-                        onChange={(e) => setSelectedElement(e.target.value)}
-                      >
-                        <option value="" disabled>Pilih Elemen...</option>
-                        {(subjectElements[selectedMapel] || []).map(el => (
-                          <option key={el} value={el}>{el}</option>
-                        ))}
-                      </select>
-                      <button className="btn-secondary" onClick={() => setIsAddingElement(true)} style={{ padding: '0 12px', display: 'flex', alignItems: 'center' }} title="Tambah Elemen Baru">
-                        <Plus size={18} />
-                      </button>
-                      <button className="btn-secondary" onClick={handleDeleteElement} style={{ padding: '0 12px', display: 'flex', alignItems: 'center', color: '#d32f2f' }} title="Hapus Elemen Terpilih">
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        className="input-field" 
-                        placeholder="Nama elemen baru..." 
-                        value={newElement}
-                        onChange={(e) => setNewElement(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddElement()}
-                      />
-                      <button className="btn" onClick={handleAddElement} style={{ padding: '0 16px' }}>Simpan</button>
-                      <button className="btn-secondary" onClick={() => { setIsAddingElement(false); setNewElement(''); }} style={{ padding: '0 12px' }}>Batal</button>
-                    </div>
-                  )}
-                </div>
-                <div className="input-group">
-                  <label className="input-label">Bentuk Soal</label>
-                  <select className="input-field" value={questionType} onChange={(e) => setQuestionType(e.target.value)}>
-                    <option value="Pilihan Ganda Sederhana">Pilihan Ganda Sederhana</option>
-                    <option value="Pilihan Ganda Kompleks">Pilihan Ganda Kompleks</option>
-                    <option value="Pilihan Ganda Kompleks Kategori">Pilihan Ganda Kompleks Kategori</option>
-                  </select>
-                </div>
-                <div className="input-group">
-                  <label className="input-label">Tautan Bacaan (Opsional)</label>
-                  <RemoteSelect url="/api/readings" value={selectedReadingId} onChange={setSelectedReadingId} labelField="title" placeholder="Pilih bacaan" />
-                </div>
-              </div>
-
-              <div>
-                <div className="input-group">
-                  <label className="input-label">Pertanyaan Soal</label>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>*Gunakan format Markdown untuk tulisan tebal/miring. Untuk rumus matematika (pecahan, akar, pangkat, dll), apit dengan tanda dolar (contoh: <code>$x^2 + \frac{1}{2}$</code>).</p>
-                  <textarea className="input-field" rows={5} placeholder="Ketik pertanyaan di sini..." value={questionText} onChange={(e) => setQuestionText(e.target.value)}></textarea>
-                  <div className="mt-4">
-                    <input type="file" id="upload-image" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setQuestionImage(e.target.files[0]);
-                        setQuestionImageUrl(URL.createObjectURL(e.target.files[0]));
-                      }
-                    }} />
-                    <label htmlFor="upload-image" className="btn-secondary" style={{ padding: '8px 12px', fontSize: '0.85rem', display: 'inline-flex', gap: '8px', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
-                      <ImageIcon size={16}/> Sisipkan Gambar
-                    </label>
-                    {questionImageUrl && (
-                      <div className="mt-4" style={{ position: 'relative', display: 'inline-block' }}>
-                        <img src={questionImageUrl} alt="Preview Soal" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-                        <button className="btn-secondary" style={{ position: 'absolute', top: '-10px', right: '-10px', padding: '4px', borderRadius: '50%', color: 'red', background: 'white', border: '1px solid #e2e8f0' }} onClick={() => { setQuestionImage(null); setQuestionImageUrl(''); }}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="input-group mt-4">
-                  {questionType === 'Pilihan Ganda Sederhana' && (
-                    <>
-                      <label className="input-label">Pilihan Jawaban (Beri centang pada kunci yang benar)</label>
-                      {options.map((opt, index) => (
-                        <div key={opt.id} className="flex items-center gap-4 mb-2">
-                          <input type="radio" name="correct_answer" checked={correctAnswer.includes(index)} onChange={() => setCorrectAnswer([index])} style={{ width: '20px', height: '20px' }} />
-                          <input type="text" className="input-field" placeholder={`Pilihan ${index + 1}`} value={opt.text} onChange={(e) => handleOptionChange(opt.id, e.target.value)} />
-                          <button className="btn-secondary" onClick={() => handleDeleteOption(opt.id)} style={{ padding: '8px', color: '#d32f2f' }} title="Hapus Opsi"><Trash2 size={16}/></button>
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  {questionType === 'Pilihan Ganda Kompleks' && (
-                    <>
-                      <label className="input-label">Pilihan Jawaban (Bisa pilih lebih dari satu jawaban benar)</label>
-                      {options.map((opt, index) => (
-                        <div key={opt.id} className="flex items-center gap-4 mb-2">
-                          <input type="checkbox" name={`correct_answer_${opt.id}`} checked={correctAnswer.includes(index)} onChange={(e) => {
-                            if (e.target.checked) setCorrectAnswer([...correctAnswer, index]);
-                            else setCorrectAnswer(correctAnswer.filter(i => i !== index));
-                          }} style={{ width: '20px', height: '20px' }} />
-                          <input type="text" className="input-field" placeholder={`Pernyataan ${index + 1}`} value={opt.text} onChange={(e) => handleOptionChange(opt.id, e.target.value)} />
-                          <button className="btn-secondary" onClick={() => handleDeleteOption(opt.id)} style={{ padding: '8px', color: '#d32f2f' }} title="Hapus Opsi"><Trash2 size={16}/></button>
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  {questionType === 'Pilihan Ganda Kompleks Kategori' && (
-                    <>
-                      <label className="input-label">Kategori / Pernyataan (Tentukan pasangan kategori yang benar)</label>
-                      <div className="flex gap-4 mb-2">
-                        <div style={{ flex: 2, fontWeight: 600, fontSize: '0.85rem' }}>Pernyataan</div>
-                        <div style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem', textAlign: 'center' }}>Benar</div>
-                        <div style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem', textAlign: 'center' }}>Salah</div>
-                        <div style={{ width: '36px' }}></div> {/* Spacer for delete button */}
-                      </div>
-                      {options.map((opt, index) => (
-                        <div key={opt.id} className="flex items-center gap-4 mb-2">
-                          <input type="text" className="input-field" style={{ flex: 2 }} placeholder={`Pernyataan ${index + 1}`} value={opt.text} onChange={(e) => handleOptionChange(opt.id, e.target.value)} />
-                          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                            <input type="radio" name={`cat_stmt_${opt.id}`} checked={correctAnswer[index] === 0} onChange={() => { const newArr = [...correctAnswer]; newArr[index] = 0; setCorrectAnswer(newArr); }} style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
-                          </div>
-                          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                            <input type="radio" name={`cat_stmt_${opt.id}`} checked={correctAnswer[index] === 1} onChange={() => { const newArr = [...correctAnswer]; newArr[index] = 1; setCorrectAnswer(newArr); }} style={{ width: '20px', height: '20px', cursor: 'pointer' }} />
-                          </div>
-                          <button className="btn-secondary" onClick={() => handleDeleteOption(opt.id)} style={{ padding: '8px', color: '#d32f2f' }} title="Hapus Pernyataan"><Trash2 size={16}/></button>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                  
-                  <button className="btn-secondary mt-2" onClick={handleAddOption} style={{ fontSize: '0.85rem', padding: '6px 12px' }}>
-                    <Plus size={16} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-bottom' }} />
-                    Tambah Opsi
-                  </button>
-                </div>
-
-                <div className="flex justify-end gap-4 mt-8">
-                  <button className="btn-secondary" onClick={() => setShowPreview(true)}>Pratinjau (Preview)</button>
-                  <button className="btn" onClick={handleSaveQuestion}>Simpan ke Bank Soal</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === 'bank' && isAdding && <Suspense fallback={<p role="status">Memuat editor soal...</p>}><QuestionEditor key={editingQuestion?.id || 'new'} initial={editingQuestion} onCancel={() => setIsAdding(false)} onSaved={async () => { setIsAdding(false); setEditingQuestion(null); await questionList.reload(); }} /></Suspense>}
 
         {activeTab === 'bacaan' && !isAddingReading && (
           <div className="animate-fade-in glass-panel p-8" style={{ minHeight: '400px' }}>
@@ -576,7 +259,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
               </button>
             </div>
             
-            <TableFrame exportOptions={{ url: '/api/readings', params: { search: query, sort: readingSort }, filename: 'teks_bacaan.csv', disabled: readingList.loading || !!readingList.error || search !== query, columns: [{ title: 'Judul', value: r => r.title }, { title: 'Teks Bacaan', value: r => r.content }, { title: 'Soal Ditautkan', value: r => r._count?.questions || 0 }] }} sortLabel="Judul" sort={readingSort} onSort={value => { setReadingSort(value); setReadingPage(1); }} total={readingList.total} pageSize={readingPageSize} onPageSize={value => { setReadingPageSize(value); setReadingPage(1); }} label="Teks bacaan">
+            <TableFrame exportOptions={{ url: '/api/readings', params: { search: query, sort: readingSort }, filename: 'teks_bacaan.csv', disabled: readingList.loading || !!readingList.error || search !== query, columns: [{ title: 'Judul', value: r => r.title }, { title: 'Teks Bacaan', value: r => contentText(r.content) }, { title: 'Soal Ditautkan', value: r => r._count?.questions || 0 }] }} sortLabel="Judul" sort={readingSort} onSort={value => { setReadingSort(value); setReadingPage(1); }} total={readingList.total} pageSize={readingPageSize} onPageSize={value => { setReadingPageSize(value); setReadingPage(1); }} label="Teks bacaan">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
@@ -651,84 +334,11 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         )}
 
         {/* Preview Modal */}
-        {showPreview && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="glass-panel p-8 animate-fade-in" style={{ width: '600px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto', background: 'white' }}>
-              <div className="flex justify-between items-center mb-6">
-                <h2 style={{ margin: 0 }}>Pratinjau Tampilan Siswa</h2>
-                <button className="btn-secondary" onClick={() => setShowPreview(false)}>Tutup</button>
-              </div>
-              
-              <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1.5rem', background: '#f8fafc' }}>
-                <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', whiteSpace: 'pre-wrap' }}>
-                  {questionText ? (
-                    <div className="katex-container">
-                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                        {questionText}
-                      </ReactMarkdown>
-                    </div>
-                  ) : (
-                    <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>[Pertanyaan kosong...]</span>
-                  )}
-                  {questionImageUrl && (
-                    <div className="mt-4">
-                      <img src={questionImageUrl} alt="Preview" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }} />
-                    </div>
-                  )}
-                </div>
-                
-                {questionType === 'Pilihan Ganda Sederhana' && (
-                  <div className="flex flex-col gap-3">
-                    {options.map((opt, i) => (
-                      <label key={opt.id} className="flex items-center gap-3 p-3" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>
-                        <input type="radio" disabled /> 
-                        <span style={{ fontSize: '0.95rem' }} className="katex-container">
-                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pilihan ${i + 1}`}</ReactMarkdown>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+        <ExamDialog open={!!previewQuestion} title="Pratinjau Tampilan Siswa" className="question-preview-dialog" onClose={() => setPreviewQuestion(null)}>
+          {previewQuestion && <div className="exam-workspace"><div className="exam-question-body"><ExamQuestion question={previewQuestion} number={1} answer={null} disabled onAnswer={() => {}} onImage={setPreviewImage} /></div></div>}
+        </ExamDialog>
+        <RichImageDialog src={previewImage} onClose={() => setPreviewImage(null)} />
 
-                {questionType === 'Pilihan Ganda Kompleks' && (
-                  <div className="flex flex-col gap-3">
-                    {options.map((opt, i) => (
-                      <label key={opt.id} className="flex items-center gap-3 p-3" style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>
-                        <input type="checkbox" disabled /> 
-                        <span style={{ fontSize: '0.95rem' }} className="katex-container">
-                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-
-                {questionType === 'Pilihan Ganda Kompleks Kategori' && (
-                  <div style={{ background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
-                    <div className="flex p-3" style={{ background: '#f1f5f9', fontWeight: 600, borderBottom: '1px solid #cbd5e1' }}>
-                      <div style={{ flex: 2 }}>Pernyataan</div>
-                      <div style={{ flex: 1, textAlign: 'center' }}>Kategori 1</div>
-                      <div style={{ flex: 1, textAlign: 'center' }}>Kategori 2</div>
-                    </div>
-                    {options.map((opt, i) => (
-                      <div key={opt.id} className="flex items-center p-3" style={{ borderBottom: '1px solid #e2e8f0' }}>
-                        <div style={{ flex: 2, fontSize: '0.95rem' }} className="katex-container">
-                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{opt.text || `Pernyataan ${i + 1}`}</ReactMarkdown>
-                        </div>
-                        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                          <input type="radio" name={`prev_cat_${opt.id}`} disabled style={{ width: '18px', height: '18px' }} />
-                        </div>
-                        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                          <input type="radio" name={`prev_cat_${opt.id}`} disabled style={{ width: '18px', height: '18px' }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );

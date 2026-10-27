@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { pagination, QueryError, text } from './pagination.js';
+import { visibleContent } from './content-sql.js';
 
 // Bounded pages and scoped export cursors. Each record belongs to one package.
 export async function reportPage(prisma: PrismaClient, req: Request, source: Prisma.Sql, scopeName: string) {
@@ -87,7 +88,7 @@ export async function itemReport(prisma: PrismaClient, req: Request) {
         COUNT(*) FILTER (WHERE answered AND "isCorrect" = true)::int AS correct
       FROM answer_state GROUP BY "packageId", "questionId"
     ), numbered AS (
-      SELECT pk.id AS "packageId", pk.name AS "packageName", pk.mapel, q.id AS "questionId", q.content AS name,
+      SELECT pk.id AS "packageId", pk.name AS "packageName", pk.mapel, q.id AS "questionId", ${visibleContent(Prisma.sql`q.content`)} AS name, q.content AS content,
         ROW_NUMBER() OVER (PARTITION BY pk.id ORDER BY q.id)::int AS "questionNumber",
         COALESCE(p.total, 0) AS "totalAttempts", COALESCE(c.correct, 0) AS "correctCount",
         COALESCE(c.answered, 0) - COALESCE(c.correct, 0) AS "wrongCount", COALESCE(p.total, 0) - COALESCE(c.answered, 0) AS "emptyCount",

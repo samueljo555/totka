@@ -1,3 +1,4 @@
+import { visibleQuestionPage } from './question-pages.js';
 import type { Express, Request } from 'express';
 import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
@@ -67,12 +68,13 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
     }, ['v2:api:packages']);
   });
   get('/api/questions', async req => {
+    if (text(req.query, 'search') || ['name_asc', 'name_desc'].includes(text(req.query, 'sort'))) return visibleQuestionPage(prisma, req);
     const search = text(req.query, 'search'), mapel = text(req.query, 'mapel'), type = text(req.query, 'type');
     const where: Prisma.QuestionWhereInput = { ...(isAdmin(req.user!.role) ? {} : { authorId: req.user!.id }), ...(mapel ? { mapel } : {}), ...(type ? { type } : {}), ...(search ? { content: { contains: search, mode: 'insensitive' } } : {}) };
     const { p, sort, following, orderBy, cursor } = await listOrder(req, prisma.question, where, 'content', 'id');
     return getOrSetCache(`questions:${JSON.stringify({ p, where, sort })}`, 30, async () => {
       const [rows, total] = await Promise.all([
-        prisma.question.findMany({ where: { AND: [where, following] }, orderBy: orderBy as Prisma.QuestionOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.question.count({ where }),
+        prisma.question.findMany({ where: { AND: [where, following] }, include: { reading: { select: { id: true, title: true, content: true } } }, orderBy: orderBy as Prisma.QuestionOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.question.count({ where }),
       ]);
       return pageResult(rows, total, p, cursor);
     }, ['v2:api:questions:all', `v2:api:questions:${req.user!.id}`]);

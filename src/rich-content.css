@@ -1,0 +1,57 @@
+/* The editor and read-only document share typography and block layout. */
+.rich-document,.rich-editor-surface{font-size:var(--exam-font-size,16px);line-height:1.85;color:inherit;overflow-wrap:anywhere;white-space:pre-wrap}
+.rich-document p,.rich-editor-surface p{margin:0 0 .85em!important;padding:0;min-height:1em}
+.rich-document>:last-child,.rich-editor-surface .tiptap>:last-child{margin-bottom:0!important}
+.rich-document h2,.rich-editor-surface h2{font-size:1.2em!important;margin:0 0 .7em!important;line-height:1.6;font-weight:650}
+.rich-document h3,.rich-editor-surface h3{font-size:1.08em!important;margin:0 0 .65em!important;line-height:1.6;font-weight:650}
+.rich-document ul,.rich-document ol,.rich-editor-surface ul,.rich-editor-surface ol{padding-left:1.6em;margin:0 0 .85em}
+.rich-document blockquote,.rich-editor-surface blockquote{border-left:3px solid #b4cbed;background:#f6f9fe;margin:0 0 .85em;padding:.5em 1em;color:#7286a2}
+.rich-document.with-indent.format-prose p,.rich-editor-surface.with-indent.format-prose p{text-indent:1.65em}
+.rich-document.format-poem p,.rich-editor-surface.format-poem p{margin-bottom:1.1em!important;text-indent:0}
+.rich-document u,.rich-editor-surface u{text-underline-offset:3px}
+.rich-document pre,.rich-editor-surface pre{white-space:pre-wrap;background:#f3f6fb;border:1px solid #e3eaf5;padding:12px;border-radius:6px}
+.rich-document .rich-image{margin:.8em auto;max-width:100%}
+.rich-document .rich-image.align-left{margin-left:0}.rich-document .rich-image.align-right{margin-right:0}
+.rich-document img,.rich-editor-surface img{display:block;max-width:100%;height:auto;max-height:none;margin:.8em auto;object-fit:contain;border-radius:5px}
+.rich-editor-surface img[data-align=left]{margin-left:0}.rich-editor-surface img[data-align=right]{margin-right:0}
+.rich-zoomable{cursor:zoom-in}.rich-zoomable:focus-visible{outline:3px solid #a3c1ff;outline-offset:3px}
+.rich-table-scroll{max-width:100%;overflow-x:auto}
+.rich-document table,.rich-editor-surface table{border-collapse:collapse!important;display:table!important;width:100%;font-size:.9em;table-layout:fixed;margin:.8em 0}
+.rich-document th,.rich-document td,.rich-editor-surface th,.rich-editor-surface td{border:1px solid #dce6f3;padding:9px 10px;vertical-align:top;min-width:40px}
+.rich-document th,.rich-editor-surface th{background:#f0f5fd;font-weight:600;text-align:left}
+.rich-math-block{display:block;overflow-x:auto}.rich-document .katex-display{margin:.7em 0}
+.wysiwyg-editor{border:1px solid #dce5f2;background:white;border-radius:7px;overflow:hidden;margin-top:7px;min-width:0}
+.rich-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:3px;background:#f8fafe;border-bottom:1px solid #e3ebf6;padding:7px}
+.rich-toolbar button,.rich-context-tools button,.rich-formula button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:29px;min-height:30px;padding:4px 7px;border:1px solid transparent;border-radius:4px;background:transparent;color:#6682a9;font-size:11px;cursor:pointer}
+.rich-toolbar button:hover,.rich-toolbar button[aria-pressed=true]{background:#eaf2ff;border-color:#cbddf9;color:#2563eb}
+.rich-toolbar select,.rich-context-tools select,.rich-settings select{font-size:11px;border:1px solid #dce5f2;border-radius:5px;background:white;padding:5px;color:#607a9f;max-width:150px}
+.rich-settings{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 12px;font-size:11px;color:#8194af;border-bottom:1px solid #e8eef7}
+.rich-settings label{display:flex;align-items:center;gap:6px}.rich-settings input{accent-color:#2563eb}
+.rich-editor-surface .tiptap{padding:20px 22px;min-height:250px;outline-offset:-3px;max-height:570px;overflow-y:auto}
+.wysiwyg-editor.compact .tiptap{min-height:75px;max-height:260px;padding:12px 14px}
+.rich-editor-surface .tiptap:focus{outline:2px solid #bad2fb}
+.rich-editor-surface .ProseMirror-selectednode{outline:3px solid #8caff3}
+.rich-context-tools{display:flex;align-items:center;gap:10px;padding:7px 10px;background:#eff5ff;flex-wrap:wrap;font-size:11px;color:#6081ad}
+.rich-formula{display:flex;gap:8px;padding:12px;flex-wrap:wrap;background:#f2f7ff;font-size:11px;align-items:end;color:#6e88ad}
+.rich-formula input:not([type=checkbox]){display:block;width:220px;max-width:100%;padding:6px;border:1px solid #d5e1f4;background:white;border-radius:5px}
+.rich-formula button{background:white;border-color:#d5e1f4}.rich-status,.rich-help{font-size:11px!important;color:#8b9db7!important;padding:9px 12px!important;border-top:1px solid #e8eef7}
+.rich-status.error{color:#b55f50!important;background:#fff5f1}
+.authoring-metadata{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin:20px 0}
+.authoring-metadata label{font-size:12px;color:#7288a6}.authoring-metadata input,.authoring-metadata select{margin-top:6px}
+.authoring-columns{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;align-items:start}
+.authoring-input,.authoring-preview{min-width:0}.authoring-input>h3,.authoring-preview h3{font-size:14px!important;color:#526f96}
+.authoring-preview{position:sticky;top:0;border:1px solid #e1e9f5;border-radius:8px;padding:15px;background:#f2f6fc;max-height:calc(100dvh - 60px);overflow:auto}
+.authoring-preview-heading,.option-editor-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:13px}
+.option-editor-heading{margin-top:24px}.option-editor-heading h3{font-size:14px;color:#526f96}
+.option-editor{border:1px solid #dfe7f2;border-radius:8px;padding:12px;margin:12px 0;background:#fbfcff}
+.option-editor-top{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:#6d86a9;margin-bottom:8px;flex-wrap:wrap}
+.option-editor-top input{accent-color:#2563eb;margin-right:5px}.option-editor-top select{border:1px solid #dce5f2;background:white;border-radius:5px;padding:5px;color:#6984a9;font-size:11px}
+.authoring-student{min-height:0!important;padding:0;background:transparent!important;max-width:100%;font-size:15px}
+.authoring-student.phone{width:360px;max-width:100%;margin:auto}.authoring-student .exam-question-body{padding:20px!important}
+.exam-workspace.authoring-student fieldset:disabled .exam-option{opacity:1}.authoring-student .exam-option{padding:12px;gap:10px}.authoring-student .exam-option-text{font-size:15px}
+.authoring-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin:22px 0 10px}
+.legacy-reading-note{margin-bottom:15px;background:#f4f8ff;border:1px solid #dbe7fc;border-radius:7px;padding:13px;font-size:12px;color:#6a82a4}.legacy-reading-note button{margin-top:9px}
+.legacy-image{font-size:11px;color:#8096b4;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px;border:1px dashed #d4e2f6;margin-top:12px}.legacy-image img{max-width:100px;max-height:90px}
+.question-preview-dialog{max-width:850px!important}.question-preview-dialog .exam-workspace{min-height:0!important}.question-preview-dialog .exam-question-body{padding:0!important}
+@media(max-width:1100px){.authoring-columns{grid-template-columns:minmax(0,1fr)}.authoring-preview{position:static;max-height:none}.authoring-student{max-width:750px;margin:auto}.authoring-metadata{grid-template-columns:1fr}}
+.rich-image-dialog{max-width:850px!important}.rich-image-controls{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0;font-size:12px;color:#7e97b5}.rich-image-controls button{width:32px;height:32px;border:1px solid #dae5f5;border-radius:5px;background:#f5f8fe;color:#6684ae;cursor:pointer}.rich-image-viewport{overflow:auto;max-height:70dvh;background:#f8faff;border:1px solid #e4ebf5}.rich-image-viewport img{display:block}

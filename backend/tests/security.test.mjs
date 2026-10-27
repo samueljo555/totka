@@ -3,12 +3,18 @@ import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
+import { mkdtemp, rm, readdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 // Exercise the actual HTTP middleware and handlers with an isolated repository.
 // These tests never connect to or alter the configured application database.
 process.env.USE_REDIS = 'false';
 process.env.STORAGE_PROVIDER = 'LOCAL';
+const testUploads = await mkdtemp(path.join(tmpdir(), 'tka-security-media-'));
+process.env.UPLOAD_DIR = testUploads;
 const { createApp } = await import('../dist/app.js');
+const { encodeRichContent, RICH_PREFIX } = await import('../dist/rich-content.js');
 const { loadJwtSecret } = await import('../dist/config.js');
 const secret = 'test-only-secret-with-at-least-32-characters';
 let users, questions, readings, sessions, answers, packages;
@@ -132,6 +138,7 @@ before(async () => {
 after(async () => {
   server.closeAllConnections();
   await new Promise(resolve => server.close(resolve));
+  await rm(testUploads, { recursive: true, force: true });
 });
 beforeEach(() => {
   users = [
@@ -461,4 +468,29 @@ test('imported students receive printable six-character passwords after reload',
   assert.equal(card.body.loginPassword, result.body.credentials[0].tempPassword);
   assert.match(card.body.loginPassword, /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/);
   assert.ok(await bcrypt.compare(card.body.loginPassword, row.password));
+});
+
+test('rich content and image-only choices round trip without changing answer indexes or content locks', async () => {
+  const rich = doc => encodeRichContent({ version: 1, format: 'poem', indent: false, lineHeight: 1.85, doc: { type: 'doc', content: doc } });
+  const image = { type: 'image', attrs: { src: '/uploads/example.png', alt: 'Pilihan gambar', width: 50, align: 'right' } };
+  const content = rich([{ type: 'paragraph', content: [{ type: 'text', text: 'Kalimat di atas.' }, { type: 'hardBreak' }, { type: 'text', text: 'Larik kedua.' }] }, image, { type: 'paragraph', content: [{ type: 'text', text: 'Pertanyaan di bawah gambar?' }] }]);
+  const created = await request('/questions', 'guru', 'POST', { type: 'Pilihan Ganda Sederhana', mapel: 'Bahasa Indonesia', element: 'Membaca', content, options: [{ id: 1, text: rich([image]) }, { id: 2, text: 'Pilihan teks' }], correctAnswer: [0] });
+  assert.equal(created.status, 200); assert.equal(created.body.content, content); assert.deepEqual(created.body.correctAnswer, [0]);
+  assert.ok(created.body.options[0].text.startsWith(RICH_PREFIX));
+  const edited = await request(`/questions/${created.body.id}`, 'guru', 'PUT', { ...created.body, correctAnswer: [1], readingId: null });
+  assert.equal(edited.status, 200); assert.deepEqual(edited.body.correctAnswer, [1]);
+  const bad = await request('/questions', 'guru', 'POST', { type: 'Pilihan Ganda Sederhana', mapel: 'Matematika', element: 'Bilangan', content: RICH_PREFIX + '{bad', options: [], correctAnswer: [] });
+  assert.equal(bad.status, 400);
+  const locked = await request('/questions/q1', 'guru', 'PUT', { content, options: created.body.options, correctAnswer: [0] });
+  assert.equal(locked.status, 409);
+});
+test('image uploads verify raster signatures, limit size, and cannot store spoofed HTML', async () => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8p0AAAAASUVORK5CYII=', 'base64');
+  const upload = async (bytes, type, name) => { const form = new FormData();form.append('image', new Blob([bytes], { type }), name);const response = await fetch(base + '/upload', { method: 'POST', headers: { Authorization: `Bearer ${tokenFor('guru')}` }, body: form });return { status: response.status, body: await response.json() }; };
+  const valid = await upload(png, 'image/png', 'pretend.html'); assert.equal(valid.status, 200);assert.match(valid.body.imageUrl, /\.png$/);
+  assert.deepEqual(Buffer.from(await (await fetch(base.replace('/api', '') + valid.body.imageUrl)).arrayBuffer()), png);
+  assert.equal((await upload(Buffer.from('<script>alert(1)</script>'), 'image/png', 'bad.png')).status, 400);
+  assert.equal((await upload(Buffer.from('<svg/>'), 'image/svg+xml', 'bad.svg')).status, 400);
+  assert.equal((await upload(Buffer.alloc(5 * 1024 * 1024 + 1), 'image/png', 'large.png')).status, 413);
+  assert.equal((await readdir(testUploads)).length, 1);
 });

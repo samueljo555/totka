@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 process.env.USE_REDIS = 'false';
 process.env.STORAGE_PROVIDER = 'LOCAL';
 const { createApp } = await import('../dist/app.js');
+const { encodeRichContent } = await import('../dist/rich-content.js');
 const url = process.env.INTEGRITY_TEST_DATABASE_URL;
 test('cross-package reports preserve cohorts, paging, exports and school access in isolated PostgreSQL', { skip: !url, timeout: 60000 }, async t => {
  const schema = `tka_reports_${crypto.randomUUID().replaceAll('-', '')}`;
@@ -106,6 +107,19 @@ test('cross-package reports preserve cohorts, paging, exports and school access 
    const reading=(await get('/readings?sort=name_asc')).body;assert.deepEqual(reading.items.map(r=>r.title),['Alfa','Zeta']);
    assert.equal((await get('/packages?mapel=Bahasa%20Indonesia')).body.total,1);
    assert.equal((await get('/users?sort=invalid')).status,400);
+  });
+  await t.test('mixed rich/plain questions search and sort visible text with scoped pages',async()=>{
+   const rich=encodeRichContent({version:1,format:'poem',indent:false,lineHeight:1.85,doc:{type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'Alfa cerita bunga'}]},{type:'image',attrs:{src:'/uploads/metadata-only.png',alt:'Ilustrasi'}}]}});
+   await prisma.question.createMany({data:[{id:'rich',authorId:'s000',type:'Pilihan Ganda Sederhana',mapel:'Indonesia',element:'Bacaan',content:rich,options:[],correctAnswer:[0]},{id:'plain',authorId:'s001',type:'Pilihan Ganda Sederhana',mapel:'Indonesia',element:'Bacaan',content:'Zeta cerita',options:[],correctAnswer:[0]}]});
+   await prisma.packageQuestion.createMany({data:[{packageId:'p3',questionId:'rich'},{packageId:'p3',questionId:'plain'}]});
+   const path='/questions?mapel=Indonesia&sort=name_asc&pageSize=1',first=await get(path);assert.equal(first.status,200,JSON.stringify(first.body));assert.equal(first.body.items[0].id,'rich');assert.equal(first.body.total,2);
+   assert.equal((await get(path+'&after='+encodeURIComponent(first.body.nextCursor))).body.items[0].id,'plain');assert.equal((await get(path+'&page=2')).body.items[0].id,'plain');assert.equal((await get(path+'&mapel=Other&after='+encodeURIComponent(first.body.nextCursor))).status,400);
+   assert.equal((await get('/questions?sort=name_desc&mapel=Indonesia')).body.items[0].id,'plain');
+   assert.deepEqual((await get('/questions?search=bunga')).body.items.map(q=>q.id),['rich']);assert.equal((await get('/questions?search=metadata-only')).body.total,0);
+   for(const search of ['poem','metadata-only','textAlign']){assert.equal((await get('/questions?sort=name_asc&search='+search)).body.total,0);assert.equal((await get('/analytics/reports/items?search='+search)).body.total,0);}
+   const rows=(await get('/analytics/reports/items?packageId=p3&search=bunga')).body.items;assert.equal(rows.length,1,JSON.stringify((await get('/analytics/reports/items?packageId=p3')).body));assert.equal(rows[0].questionId,'rich');assert.equal(rows[0].content,rich);assert.ok(rows[0].name.startsWith('Alfa cerita'));
+   assert.equal((await get('/questions?sort=name_asc&search=%25')).body.total,0);
+   await prisma.user.update({where:{id:'s000'},data:{role:'guru'}});const own=(await get('/questions?sort=name_asc','s000')).body;assert.deepEqual(own.items.map(q=>q.id),['rich']);await prisma.user.update({where:{id:'s000'},data:{role:'siswa'}});
   });
   await t.test('invalid inputs and literal wildcard searches do not broaden reports',async()=>{
    for(const path of ['/analytics/reports/items?sort=unsafe','/analytics/reports/items?category=invalid','/analytics/reports/schools?pageSize=101','/analytics/reports/students?status=invalid','/analytics/reports/schools?packageId=p1&packageId=p2'])assert.equal((await get(path)).status,400,path);

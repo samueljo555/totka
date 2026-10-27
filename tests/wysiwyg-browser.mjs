@@ -1,0 +1,65 @@
+// Build first. Uses the real UI and AnswerSync with controlled API responses; no database changes.
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import http from 'node:http';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const root=path.resolve('dist');
+const web=http.createServer(async(req,res)=>{
+ const pathname=new URL(req.url,'http://local').pathname;
+ let file=path.join(root,pathname);if(!file.startsWith(root+path.sep)&&file!==root){res.writeHead(403);res.end();return;}
+ try{if(!(await fs.stat(file)).isFile())file=path.join(root,'index.html');}catch{file=path.join(root,'index.html');}
+ res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2'})[path.extname(file)]||'application/octet-stream');res.end(await fs.readFile(file));
+}).listen(0,'127.0.0.1');await new Promise(resolve=>web.once('listening',resolve));
+const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH}:{})});
+const errors=[],questions=new Map(),answers=[];let uploads=0,savedId=0;
+questions.set('old',{id:'old',type:'Pilihan Ganda Sederhana',mapel:'Matematika',element:'Bilangan',content:'Teks lama $\\frac{1}{2}$.',imageUrl:'/uploads/old.png',options:[{id:1,text:'Pilihan lama A'},{id:2,text:'Pilihan lama B'}],correctAnswer:[0],readingId:'r1',reading:{id:'r1',title:'Cerita lama',content:'Bait lama satu\nLarik lama dua\n\nParagraf berikutnya.'}});
+const page=await browser.newPage({viewport:{width:1600,height:1100}});page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));
+const png=Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=360;c.height=200;const x=c.getContext('2d');x.fillStyle='#edf4ff';x.fillRect(0,0,360,200);x.fillStyle='#2563eb';x.beginPath();x.moveTo(180,25);x.lineTo(290,175);x.lineTo(70,175);x.closePath();x.fill();return c.toDataURL('image/png').split(',')[1];}),'base64');
+const pack=items=>({items,total:items.length,page:1,pageSize:10,totalPages:1,hasMore:false,nextCursor:null});
+await page.addInitScript(()=>{if(!localStorage.getItem('tka_auth_user'))localStorage.setItem('tka_auth_user',JSON.stringify({id:'teacher',role:'guru',fullName:'Guru Uji'}));localStorage.setItem('tka_jwt_token','test-token');localStorage.setItem('tka_token_created_at',String(Date.now()));localStorage.setItem('tka_last_activity_at',String(Date.now()));});
+await page.route('**/uploads/**',route=>route.fulfill({contentType:'image/png',body:png}));
+await page.route('**/api/**',async route=>{
+ const req=route.request(),url=new URL(req.url());const json=body=>route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
+ if(url.pathname==='/api/auth/session-check')return json({status:'valid'});
+ if(url.pathname==='/api/upload'){uploads++;return json({imageUrl:`/uploads/image-${uploads}.png`});}
+ if(url.pathname==='/api/questions'&&req.method()==='GET')return json(pack([...questions.values()]));
+ if(url.pathname==='/api/questions'&&req.method()==='POST'){const body=req.postDataJSON(),id='new-'+(++savedId);questions.set(id,{id,...body});return json({id,...body});}
+ if(url.pathname.startsWith('/api/questions/')&&req.method()==='PUT'){const id=url.pathname.split('/').at(-1),body=req.postDataJSON();questions.set(id,{id,...body,reading:body.readingId?'r1'===body.readingId?questions.get('old').reading:null:null});return json(questions.get(id));}
+ if(url.pathname==='/api/sessions/start')return json({session:{id:'rich-exam',status:'sedang_mengerjakan',totalScore:null},package:{name:'Paket Gambar',mapel:'Bahasa Indonesia',durationMinutes:90,releaseScoreMode:'langsung'},student:{id:'student',role:'siswa',fullName:'Siswa Uji',nisn:'000001',className:'VI A',school:{name:'Sekolah Uji'}},questions:[...questions.values()].filter(q=>q.id!=='old').map(({correctAnswer:_correctAnswer,...q})=>q),existingAnswers:[],remainingSeconds:5400});
+ if(url.pathname.endsWith('/answer')){const body=req.postDataJSON();answers.push(body);return json({...body,acknowledged:true});}
+ return json(pack([]));
+});
+const base=`http://127.0.0.1:${web.address().port}`;
+try{
+ await page.goto(base+'/guru');await page.getByRole('button',{name:'Tambah Soal',exact:true}).click();
+ await page.getByLabel('Mata Pelajaran',{exact:true}).selectOption('Bahasa Indonesia');await page.getByLabel('Elemen / Kompetensi',{exact:true}).fill('Memahami');
+ const body=page.getByRole('textbox',{name:'Isi soal',exact:true});await body.fill('Kalimat di atas gambar.');await body.press('Shift+Enter');await page.keyboard.insertText('Larik kedua tetap satu bait.');await body.press('Enter');
+ await page.getByLabel('Unggah gambar Isi soal',{exact:true}).setInputFiles({name:'bentuk.png',mimeType:'image/png',buffer:png});
+ await page.waitForFunction(()=>document.querySelector('[role=textbox][aria-label="Isi soal"] img'));
+ await body.locator('img').click();await page.getByLabel('Lebar gambar Isi soal',{exact:true}).selectOption('50');await page.getByLabel('Posisi gambar Isi soal',{exact:true}).selectOption('right');await page.getByLabel('Keterangan gambar Isi soal',{exact:true}).fill('Ilustrasi bangun');
+ // Insert the question after the picture, preserving the preceding paragraph.
+ await body.locator('p').last().click();await page.keyboard.press('End');await page.keyboard.insertText('Apa bentuk pada gambar tersebut?');
+ await page.getByLabel('Format Isi soal',{exact:true}).selectOption('poem');
+ await page.getByRole('textbox',{name:'Pilihan A',exact:true}).fill('');await page.getByLabel('Unggah gambar Pilihan A',{exact:true}).setInputFiles({name:'jawaban.png',mimeType:'image/png',buffer:png});await page.waitForFunction(()=>document.querySelector('[role=textbox][aria-label="Pilihan A"] img'));
+ for(const letter of ['B','C','D'])await page.getByRole('textbox',{name:'Pilihan '+letter,exact:true}).fill('Jawaban '+letter);
+ await page.getByRole('radio',{name:'Kunci pilihan A',exact:true}).check();
+ await page.getByRole('button',{name:'Sisipkan rumus — Pilihan B',exact:true}).click();await page.getByLabel('Rumus LaTeX Pilihan B',{exact:true}).fill('\\frac{1}{2}');await page.getByRole('button',{name:'Terapkan rumus',exact:true}).click();
+ assert.ok(await page.locator('.authoring-preview .katex').count()>0);
+ await page.screenshot({path:'/tmp/totka-wysiwyg-author.png',fullPage:true});
+ await page.getByRole('button',{name:'Simpan ke Bank Soal',exact:true}).click();await page.getByRole('heading',{name:'Daftar Soal',exact:true}).waitFor();
+ const created=questions.get('new-1');assert.ok(created.content.startsWith('TKA_RICH_V1:'));const rich=JSON.parse(created.content.slice('TKA_RICH_V1:'.length));
+ const types=rich.doc.content.map(n=>n.type);assert.ok(types.includes('image'));assert.equal(rich.doc.content[0].content[0].text,'Kalimat di atas gambar.');assert.ok(JSON.stringify(rich.doc.content.at(-1)).includes('Apa bentuk pada gambar tersebut?'));assert.equal(created.readingId,null);assert.deepEqual(created.correctAnswer,[0]);assert.ok(JSON.parse(created.options[0].text.slice('TKA_RICH_V1:'.length)).doc.content.some(n=>n.type==='image'));
+ assert.equal(rich.doc.content[0].content[1].type,'hardBreak');const picture=rich.doc.content.find(n=>n.type==='image');assert.equal(picture.attrs.width,50);assert.equal(picture.attrs.align,'right');assert.equal(picture.attrs.alt,'Ilustrasi bangun');
+ await page.getByRole('row').filter({hasText:'Kalimat di atas gambar.'}).getByRole('button',{name:'Edit',exact:true}).click();assert.equal(await page.getByRole('textbox',{name:'Isi soal',exact:true}).locator('img').getAttribute('data-width'),'50');await page.getByRole('button',{name:'Simpan ke Bank Soal',exact:true}).click();await page.getByRole('heading',{name:'Daftar Soal',exact:true}).waitFor();assert.equal(questions.get('new-1').content,created.content);
+ // Editing a legacy question without changes leaves its Markdown, image and reading intact.
+ const oldRow=page.getByRole('row').filter({hasText:'Teks lama'});await oldRow.getByRole('button',{name:'Edit',exact:true}).click();await page.getByRole('button',{name:'Simpan ke Bank Soal',exact:true}).click();await page.getByRole('heading',{name:'Daftar Soal',exact:true}).waitFor();assert.equal(questions.get('old').content,'Teks lama $\\frac{1}{2}$.');assert.equal(questions.get('old').readingId,'r1');
+ await page.getByRole('row').filter({hasText:'Teks lama'}).getByRole('button',{name:'Edit',exact:true}).click();await page.getByRole('button',{name:'Gabungkan bacaan ke isi soal',exact:true}).click();await page.getByRole('button',{name:'Simpan ke Bank Soal',exact:true}).click();await page.getByRole('heading',{name:'Daftar Soal',exact:true}).waitFor();assert.equal(questions.get('old').readingId,null);assert.ok(questions.get('old').content.includes('Cerita lama'));assert.ok(questions.get('old').content.includes('inlineMath'));
+ // The pupil receives the same ordered blocks and chooses image options by index.
+ await page.evaluate(()=>{localStorage.setItem('tka_auth_user',JSON.stringify({id:'student',role:'siswa',fullName:'Siswa Uji'}));sessionStorage.removeItem('activeExamToken');});await page.goto(base+'/siswa');await page.getByPlaceholder('Masukkan Token').fill('GAMBAR');await page.getByRole('button',{name:'Mulai Kerjakan',exact:true}).click();await page.getByRole('heading',{name:'Paket Gambar',exact:true}).waitFor();
+ const studentBlocks=await page.locator('.exam-question-content .rich-document').evaluate(el=>[...el.children].map(node=>node.tagName));assert.ok(studentBlocks.indexOf('FIGURE')>0);assert.equal(studentBlocks.at(-1),'P');assert.equal(await page.locator('.exam-option').first().locator('img').count(),1);
+ await page.getByRole('button',{name:'Perbesar jawaban.png',exact:true}).click();await page.getByRole('button',{name:'Tutup',exact:true}).click();assert.equal(await page.getByRole('radio',{name:'Pilihan A',exact:true}).isChecked(),false);
+ await page.getByRole('radio',{name:'Pilihan A',exact:true}).check();await page.locator('.exam-save-status').getByText('Jawaban telah diterima server.',{exact:true}).waitFor();assert.equal(answers.at(-1).answerData,0);
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:'/tmp/totka-wysiwyg-student-mobile.png',fullPage:true});
+ assert.deepEqual(errors,[]);console.log('PASS: unified WYSIWYG authoring, body image between paragraphs, image-only answer, math option, save/roundtrip, legacy nonrewrite/explicit reading merge, shared pupil rendering, image zoom without answer change, index payload and mobile.');
+}finally{await browser.close();web.closeAllConnections();await new Promise(resolve=>web.close(resolve));}
