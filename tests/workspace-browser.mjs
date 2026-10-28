@@ -46,8 +46,9 @@ try {
     }
     if (role.includes('admin') || role === 'guru') {
       const label = role === 'guru' ? 'Cari soal atau bacaan' : 'Cari data';
-      await page.getByLabel(label, { exact: true }).fill('contoh pencarian');
       if (role.includes('admin')) await menu.getByRole('button', { name: 'Manajemen Akun', exact: true }).click();
+      await page.getByLabel(label, { exact: true }).fill('contoh pencarian');
+      if (role.includes('admin')) await menu.getByRole('button', { name: 'Data Sekolah', exact: true }).click();
       else await menu.getByRole('button', { name: 'Bank Soal', exact: true }).click();
       if (role.includes('admin')) assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), '');
       else await page.waitForFunction(() => document.querySelector('[aria-label="Cari soal atau bacaan"]').value === 'contoh pencarian');
