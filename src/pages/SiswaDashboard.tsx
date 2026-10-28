@@ -1,3 +1,5 @@
+import { WorkspaceShell } from '../components/WorkspaceShell';
+import { BookOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useState, useEffect, useRef } from 'react';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
@@ -280,7 +282,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
 
   if (!hasEnteredToken) {
     return (
-      <div className="app-container flex justify-center items-center">
+      <WorkspaceShell user={studentProfile} roleLabel="Siswa" items={[{ id: 'start', name: 'Mulai Try Out', icon: <BookOpen aria-hidden="true" /> }]} activeId="start" onNavigate={() => {}} onLogout={() => { sessionStorage.removeItem('activeExamToken'); onLogout(); }} description="Siapkan diri dan masukkan token yang diberikan operator sekolah.">
         <div className="glass-panel p-8 animate-fade-in text-center" style={{ maxWidth: '500px', width: '100%' }}>
           <h2 className="mb-2">Mulai Ujian</h2>
           <p className="mb-6">Silakan masukkan Token Ujian yang diberikan oleh Operator Sekolah Anda.</p>
@@ -312,7 +314,7 @@ const SiswaDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             Kembali
           </button>
         </div>
-      </div>
+      </WorkspaceShell>
     );
   }
 

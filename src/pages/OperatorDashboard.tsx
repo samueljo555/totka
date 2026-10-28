@@ -1,3 +1,4 @@
+import { WorkspaceShell } from '../components/WorkspaceShell';
 import { TableFrame, SortableHeading, TableState } from '../components/TableFrame';
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
@@ -5,7 +6,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Activity, 
-  LogOut,
   Plus,
   Upload,
   Download,
@@ -211,71 +211,10 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
   ];
 
   return (
-    <div className="flex dashboard-app" style={{ minHeight: '100vh' }}>
-      {/* Sidebar */}
-      <aside className="glass-panel" style={{ width: '280px', margin: '1rem', display: 'flex', flexDirection: 'column' }}>
-        <div className="p-6">
-          <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Operator Sekolah</h2>
-          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{user?.school?.name || 'Sekolah Pusat / Belum Terdaftar'}</p>
-        </div>
-        
-        <nav style={{ flex: 1, padding: '0 1rem' }}>
-          {tabs.map(tab => (
-            <button 
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setIsAddingSiswa(false); }}
-              className="flex items-center gap-4"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                marginBottom: '8px',
-                borderRadius: '8px',
-                border: 'none',
-                background: activeTab === tab.id ? 'var(--primary-color)' : 'transparent',
-                color: activeTab === tab.id ? 'white' : 'var(--text-main)',
-                cursor: 'pointer',
-                fontWeight: activeTab === tab.id ? 600 : 500,
-                textAlign: 'left',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {tab.icon}
-              {tab.name}
-            </button>
-          ))}
-        </nav>
+    <WorkspaceShell user={user} roleLabel="Operator Sekolah" items={tabs} activeId={activeTab}
+      onNavigate={id => { setActiveTab(id); setIsAddingSiswa(false); }} onLogout={onLogout}
+      description={({students:'Siapkan data siswa dan kartu login sebelum ujian dimulai.',monitoring:'Pantau partisipasi siswa dan temukan token paket aktif.',history:'Telusuri sesi ujian yang sudah selesai di sekolah Anda.'} as Record<string, string>)[activeTab]}>
 
-        <div className="p-6 mt-auto">
-          <button 
-            onClick={onLogout}
-            className="flex items-center gap-4"
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: 'rgba(255, 0, 0, 0.1)',
-              color: '#d32f2f',
-              cursor: 'pointer',
-              fontWeight: 600
-            }}
-          >
-            <LogOut size={20} />
-            Keluar
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main style={{ flex: 1, padding: '2rem', height: '100vh', overflowY: 'auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <h1>{tabs.find(t => t.id === activeTab)?.name}</h1>
-          <div className="flex items-center gap-4">
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--secondary-color)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-              OP
-            </div>
-          </div>
-        </header>
         {studentList.error && <p role="alert">{studentList.error}</p>}
 
         {activeTab === 'students' && !isAddingSiswa && (
@@ -470,8 +409,7 @@ const OperatorDashboard = ({ user, onLogout }: { user?: any, onLogout: () => voi
 
         {(activeTab === 'monitoring' || activeTab === 'history') && <OperatorExams key={activeTab} history={activeTab === 'history'} />}
 
-      </main>
-    </div>
+    </WorkspaceShell>
   );
 };
 

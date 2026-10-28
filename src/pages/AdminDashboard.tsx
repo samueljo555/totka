@@ -1,3 +1,4 @@
+import { WorkspaceShell } from '../components/WorkspaceShell';
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
@@ -8,7 +9,6 @@ import {
   BookOpen, 
   Settings, 
   BarChart3, 
-  LogOut,
   Plus,
   Search,
   LineChart,
@@ -197,75 +197,14 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
   ];
 
   return (
-    <div className="flex dashboard-app" style={{ minHeight: '100vh' }}>
-      {/* Sidebar */}
-      <aside className="glass-panel" style={{ width: '280px', margin: '1rem', display: 'flex', flexDirection: 'column' }}>
-        <div className="p-6">
-          <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Super Admin</h2>
-          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{user?.school?.name || 'Pusat TKA'}</p>
-        </div>
-        
-        <nav style={{ flex: 1, padding: '0 1rem' }}>
-          {tabs.map(tab => (
-            <button 
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setSearch(''); setUserPage(1); setSchoolPage(1); setPackagePage(1); }}
-              className="flex items-center gap-4"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                marginBottom: '8px',
-                borderRadius: '8px',
-                border: 'none',
-                background: activeTab === tab.id ? 'var(--primary-color)' : 'transparent',
-                color: activeTab === tab.id ? 'white' : 'var(--text-main)',
-                cursor: 'pointer',
-                fontWeight: activeTab === tab.id ? 600 : 500,
-                textAlign: 'left',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {tab.icon}
-              {tab.name}
-            </button>
-          ))}
-        </nav>
+    <WorkspaceShell user={user} roleLabel="Super Admin" items={tabs} activeId={activeTab}
+      onNavigate={id => { setActiveTab(id); setSearch(''); setUserPage(1); setSchoolPage(1); setPackagePage(1); }} onLogout={onLogout}
+      description={({overview:'Kelola persiapan dan pelaksanaan try out dari satu workspace.',accounts:'Kelola akses pengguna dengan identitas dan peran yang jelas.',schools:'Kelola sekolah peserta dan identitas operatornya.',packages:'Susun, periksa, dan aktifkan paket try out.',results:'Tinjau capaian siswa, kualitas soal, dan hasil per sekolah.',settings:'Pengaturan pelaksanaan try out.'} as Record<string, string>)[activeTab]}
+      actions={<>{activeTab !== 'results' && <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
+          <Search size={16} aria-hidden="true" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input type="text" className="input-field" aria-label="Cari data" placeholder="Cari..." value={search} onChange={event => { setSearch(event.target.value); setUserPage(1); setSchoolPage(1); setQuestionPage(1); setPackagePage(1); }} style={{ paddingLeft: '34px', width: '250px' }} />
+        </div>}</>}>
 
-        <div className="p-6 mt-auto">
-          <button 
-            onClick={onLogout}
-            className="flex items-center gap-4"
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: 'rgba(255, 0, 0, 0.1)',
-              color: '#d32f2f',
-              cursor: 'pointer',
-              fontWeight: 600
-            }}
-          >
-            <LogOut size={20} />
-            Keluar
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main style={{ flex: 1, padding: '2rem', height: '100vh', overflowY: 'auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <h1>{tabs.find(t => t.id === activeTab)?.name}</h1>
-          <div className="flex items-center gap-4">
-            {activeTab !== 'results' && <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input type="text" className="input-field" placeholder="Cari..." value={search} onChange={event => { setSearch(event.target.value); setUserPage(1); setSchoolPage(1); setQuestionPage(1); setPackagePage(1); }} style={{ paddingLeft: '40px', width: '250px' }} />
-            </div>}
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-light)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-              SA
-            </div>
-          </div>
-        </header>
         {[userList, schoolList, packageList, questionList].some(list => list.loading) && <p role="status">Memuat data...</p>}
         {[userList, schoolList, packageList, questionList].filter(list => list.error).map((list, index) => <p role="alert" key={index}>{list.error}</p>)}
 
@@ -878,8 +817,7 @@ const AdminDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }
             <p style={{ maxWidth: '400px' }}>Pengaturan sistem global.</p>
           </div>
         )}
-      </main>
-    </div>
+    </WorkspaceShell>
   );
 };
 

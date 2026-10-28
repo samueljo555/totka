@@ -1,3 +1,4 @@
+import { WorkspaceShell } from '../components/WorkspaceShell';
 import { TableFrame, SortableHeading, TableState } from '../components/TableFrame';
 import { Pagination } from '../components/Pagination';
 import { usePagedList, useDebounced } from '../lib/paging';
@@ -7,7 +8,6 @@ import { useState } from 'react';
 import { 
   FileText, 
   Library, 
-  LogOut,
   Plus,
   Search,
   Image as ImageIcon,
@@ -81,75 +81,14 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
   ];
 
   return (
-    <div className="flex dashboard-app" style={{ minHeight: '100vh' }}>
-      {/* Sidebar */}
-      <aside className="glass-panel" style={{ width: '280px', margin: '1rem', display: 'flex', flexDirection: 'column' }}>
-        <div className="p-6">
-          <h2 style={{ fontSize: '1.5rem', margin: 0 }}>Guru Penulis</h2>
-          <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>{user?.school?.name || 'Sekolah Pusat / Belum Terdaftar'}</p>
-        </div>
-        
-        <nav style={{ flex: 1, padding: '0 1rem' }}>
-          {tabs.map(tab => (
-            <button 
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setIsAdding(false); }}
-              className="flex items-center gap-4"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                marginBottom: '8px',
-                borderRadius: '8px',
-                border: 'none',
-                background: activeTab === tab.id ? 'var(--primary-color)' : 'transparent',
-                color: activeTab === tab.id ? 'white' : 'var(--text-main)',
-                cursor: 'pointer',
-                fontWeight: activeTab === tab.id ? 600 : 500,
-                textAlign: 'left',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {tab.icon}
-              {tab.name}
-            </button>
-          ))}
-        </nav>
+    <WorkspaceShell user={user} roleLabel="Guru Penulis" items={tabs} activeId={activeTab}
+      onNavigate={id => { setActiveTab(id); setIsAdding(false); }} onLogout={onLogout}
+      description={({bank:'Susun soal yang mudah dibaca, lengkap dengan gambar dan rumus.',bacaan:'Kelola bacaan tertaut pada soal yang sudah tersedia.'} as Record<string, string>)[activeTab]}
+      actions={<><div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
+          <Search size={16} aria-hidden="true" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input type="text" className="input-field" aria-label="Cari soal atau bacaan" placeholder="Cari soal/bacaan..." value={search} onChange={event => { setSearch(event.target.value); setQuestionPage(1); setReadingPage(1); }} style={{ paddingLeft: '34px', width: '250px' }} />
+        </div></>}>
 
-        <div className="p-6 mt-auto">
-          <button 
-            onClick={onLogout}
-            className="flex items-center gap-4"
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: 'rgba(255, 0, 0, 0.1)',
-              color: '#d32f2f',
-              cursor: 'pointer',
-              fontWeight: 600
-            }}
-          >
-            <LogOut size={20} />
-            Keluar
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main style={{ flex: 1, padding: '2rem', height: '100vh', overflowY: 'auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <h1>{tabs.find(t => t.id === activeTab)?.name}</h1>
-          <div className="flex items-center gap-4">
-            <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
-              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-              <input type="text" className="input-field" placeholder="Cari soal/bacaan..." value={search} onChange={event => { setSearch(event.target.value); setQuestionPage(1); setReadingPage(1); }} style={{ paddingLeft: '40px', width: '250px' }} />
-            </div>
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#00b8d9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-              GP
-            </div>
-          </div>
-        </header>
         {(questionList.loading || readingList.loading) && <p role="status">Memuat data...</p>}
         {(questionList.error || readingList.error) && <p role="alert">{questionList.error || readingList.error}</p>}
 
@@ -339,8 +278,7 @@ const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void })
         </ExamDialog>
         <RichImageDialog src={previewImage} onClose={() => setPreviewImage(null)} />
 
-      </main>
-    </div>
+    </WorkspaceShell>
   );
 };
 

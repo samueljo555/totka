@@ -8,63 +8,7 @@
   min-width:0;
   align-items:flex-start;
 }
-.dashboard-app>aside {
-  width:244px!important;
-  flex:0 0 244px;
-  margin:0!important;
-  border:0;
-  border-right:1px solid #e5eaf1;
-  border-radius:0;
-  background:#fff;
-  box-shadow:none;
-  backdrop-filter:none;
-  height:100dvh;
-  overflow-y:auto;
-  position:sticky;
-  top:0;
-}
-.dashboard-app>aside h2 {
-  font-size:20px!important;
-  letter-spacing:-.4px;
-}
-.dashboard-app>aside p {
-  font-size:11px!important;
-  color:#8290a5;
-}
-.dashboard-app>aside nav button {
-  font-size:12px;
-  padding:11px 13px!important;
-  gap:10px;
-  margin-bottom:4px!important;
-  min-height:40px;
-}
-.dashboard-app>aside nav button[style*="white"] {
-  background:#eff6ff!important;
-  color:#2563eb!important;
-}
-.dashboard-app>aside nav button:hover {
-  background:#f3f6fc!important;
-}
-.dashboard-app>main {
-  min-width:0;
-  padding:28px 32px!important;
-  height:100dvh!important;
-  overflow-y:auto;
-  overflow-x:hidden;
-  flex:1;
-}
-.dashboard-app>main>header {
-  min-height:45px;
-  margin-bottom:24px!important;
-  gap:18px;
-  flex-wrap:wrap;
-}
-.dashboard-app>main>header h1 {
-  font-size:25px;
-  letter-spacing:-.7px;
-  font-weight:700;
-}
-.dashboard-app>main>.glass-panel:has(.table-frame),.dashboard-app .report-panel {
+.dashboard-app .workspace-main>.glass-panel:has(.table-frame),.dashboard-app .report-panel {
   border-radius:8px;
   border:1px solid #e5eaf1;
   border-top:3px solid #2563eb;
@@ -677,62 +621,8 @@
   color:#8290a6;
   padding:12px 8px;
 }
-@media(max-width:1200px) {
-  .dashboard-app>aside {
-    width:215px!important;
-    flex-basis:215px;
-  }
-  .dashboard-app>main {
-    padding:24px 20px!important;
-  }
-}
 @media(max-width:800px) {
-  .dashboard-app {
-    flex-direction:column!important;
-  }
-  .dashboard-app>aside {
-    width:100%!important;
-    flex-basis:auto;
-    height:auto;
-    position:static;
-    border-right:0;
-    border-bottom:1px solid #e5eaf1;
-  }
-  .dashboard-app>aside>.p-6 {
-    padding:14px 18px;
-  }
-  .dashboard-app>aside nav {
-    display:flex;
-    gap:5px;
-    overflow-x:auto;
-    padding:0 12px 10px!important;
-    flex-shrink:0;
-  }
-  .dashboard-app>aside nav button {
-    width:auto!important;
-    white-space:nowrap;
-    margin:0!important;
-    padding:9px 10px!important;
-  }
-  .dashboard-app>aside>.mt-auto {
-    padding:8px 18px;
-  }
-  .dashboard-app>aside>.mt-auto button {
-    padding:6px 10px!important;
-    width:auto!important;
-    font-size:11px;
-  }
-  .dashboard-app>main {
-    width:100%;
-    height:auto!important;
-    min-height:70dvh;
-    overflow:visible;
-    padding:20px 16px!important;
-  }
-  .dashboard-app>main>header h1 {
-    font-size:22px;
-  }
-  .dashboard-app>main>.glass-panel:has(.table-frame),.dashboard-app .report-panel {
+  .dashboard-app .workspace-main>.glass-panel:has(.table-frame),.dashboard-app .report-panel {
     padding:16px!important;
   }
   .dashboard-app .report-filters .input-field {
@@ -779,10 +669,10 @@
   }
 }
 @media print {
-  .dashboard-app>aside,.dashboard-app>main>header,.report-filters,.report-tabs,.table-toolbar,.table-pagination,.report-heading>button {
+  .workspace-desktop-nav,.workspace-topbar,.workspace-page-heading,.report-filters,.report-tabs,.table-toolbar,.table-pagination,.report-heading>button {
     display:none!important;
   }
-  .dashboard-app>main {
+  .workspace-main {
     height:auto!important;
     padding:0!important;
     overflow:visible;
@@ -822,6 +712,6 @@
 .dashboard-app h1,.dashboard-app h2 {
   color:#18273c;
 }
-.dashboard-app>main>.glass-panel>div:has(>h2),.dashboard-app>main>.glass-panel>div:has(>div>h2) {
+.dashboard-app .workspace-main>.glass-panel>div:has(>h2),.dashboard-app .workspace-main>.glass-panel>div:has(>div>h2) {
   margin-bottom:20px;
 }
