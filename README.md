@@ -2,6 +2,8 @@
 
 Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Bank Soal, Paket Ujian, manajemen peserta didik, dan penilaian otomatis.
 
+**Rilis Tahap 5:** dashboard Guru menggunakan satu editor soal dan tidak memiliki bacaan terpisah. Untuk keputusan memulai database dari kosong, ikuti [panduan penerapan Tahap 5](docs/FRESH_DATABASE_STAGE5.md). Catatan migrasi P0/P1 di bawah merupakan riwayat perubahan; urutan penerapan rilis ini mengikuti panduan tersebut.
+
 
 ## Keamanan API dan konfigurasi JWT
 
@@ -11,8 +13,8 @@ Setelah pembaruan keamanan ini diterapkan, semua pengguna perlu login kembali ka
 
 | Peran | Akses |
 | --- | --- |
-| Admin / super admin | Mengelola akun, sekolah, paket, seluruh bank soal/bacaan, dan analitik |
-| Guru | Membaca, membuat, dan mengubah soal serta bacaan miliknya; mengunggah gambar |
+| Admin / super admin | Mengelola akun, sekolah, paket, seluruh bank soal, dan analitik |
+| Guru | Membaca, membuat, dan mengubah soal miliknya; mengunggah gambar |
 | Operator | Melihat dan mendaftarkan siswa di sekolahnya; melihat token paket aktif dan sesi sekolahnya; detail hasil hanya untuk sesi selesai di sekolahnya, tanpa kunci jawaban |
 | Siswa | Memulai, menjawab, dan menyelesaikan sesi miliknya; tidak mendapat akses bank soal atau API administrasi |
 
@@ -50,7 +52,7 @@ Penyimpanan jawaban dan finalisasi menggunakan transaksi serta row lock PostgreS
 
 Format jawaban: pilihan tunggal berupa indeks angka; pilihan kompleks berupa array indeks unik; kategori berupa array 0/1 dengan `null` untuk pernyataan belum dijawab. Array kategori parsial dilengkapi `null`. Jawaban kosong tidak dianggap benar. Paket baru hanya dapat dimulai jika durasi, opsi, tipe soal, dan kunci jawaban valid. Urutan soal memakai ID yang stabil; backup baru memakai ID soal, dan antrean offline lama dipulihkan berdasarkan ID soal, bukan nomor tampilan.
 
-Setelah terdapat sesi ujian, isi paket (termasuk durasi dan daftar soal), soal, serta bacaan terkait tidak dapat diedit atau dihapus melalui API. Buat konten/paket baru untuk revisi. Status paket dan pengaturan rilis nilai tetap dapat diubah. Menutup status paket mencegah peserta baru; peserta yang sudah memulai tetap dapat melanjutkan sampai deadline semula. Advisory lock bersama pada mulai ujian dan eksklusif pada perubahan konten mencegah benturan saat peserta pertama masuk. Lihat [mekanisme locking PostgreSQL](https://www.postgresql.org/docs/current/explicit-locking.html).
+Setelah terdapat sesi ujian, isi paket (termasuk durasi dan daftar soal), serta isi soal tidak dapat diedit atau dihapus melalui API. Buat konten/paket baru untuk revisi. Status paket dan pengaturan rilis nilai tetap dapat diubah. Menutup status paket mencegah peserta baru; peserta yang sudah memulai tetap dapat melanjutkan sampai deadline semula. Advisory lock bersama pada mulai ujian dan eksklusif pada perubahan konten mencegah benturan saat peserta pertama masuk. Lihat [mekanisme locking PostgreSQL](https://www.postgresql.org/docs/current/explicit-locking.html).
 
 Backend menjalankan sweep sesi kedaluwarsa saat startup dan setiap 15 detik. Setiap batch memproses maksimal 100 sesi, lalu menjadwalkan batch berikutnya jika penuh; row lock menjaga konsistensi ketika beberapa worker menjalankannya bersamaan. Sesi yang ditinggalkan browser tetap diselesaikan. Waktu selesai dibatasi pada deadline, meski sweep berjalan lebih lambat. Ini tidak memerlukan perubahan schema database.
 
@@ -240,7 +242,7 @@ API baru (pagination maksimal 100 baris):
 - `GET /api/analytics/reports/items`: admin; `packageId`, `search`, `category`, `sort`.
 - `GET /api/monitoring/history`: operator/admin; filter hasil siswa yang sama, hanya sesi selesai; operator selalu dibatasi sekolah akun.
 
-Kosongkan `packageId` untuk seluruh paket. Urutan laporan: `name_asc`, `name_desc`, `score_asc`, `score_desc`; nilai belum tersedia selalu di akhir. Endpoint daftar akun, sekolah, paket, soal, bacaan, kartu login, dan pantau ujian juga menerima `sort=name_asc|name_desc`; default API lama tetap urutan ID. Cursor ekspor terkait filter/urutan dan ditolak jika konteks berubah. Ekspor lintas permintaan bukan snapshot historis: perubahan data selama proses dapat menggeser urutan; penanda yang hilang menghasilkan 409 dan ekspor harus diulang.
+Kosongkan `packageId` untuk seluruh paket. Urutan laporan: `name_asc`, `name_desc`, `score_asc`, `score_desc`; nilai belum tersedia selalu di akhir. Endpoint daftar akun, sekolah, paket, soal, kartu login, dan pantau ujian juga menerima `sort=name_asc|name_desc`; default API lama tetap urutan ID. Cursor ekspor terkait filter/urutan dan ditolak jika konteks berubah. Ekspor lintas permintaan bukan snapshot historis: perubahan data selama proses dapat menggeser urutan; penanda yang hilang menghasilkan 409 dan ekspor harus diulang.
 
 Tidak ada perubahan skema atau migrasi database. Perbarui frontend dan backend bersama. Untuk uji browser dengan PostgreSQL terisolasi: build frontend/backend, lalu jalankan `node tests/tables-real-browser.mjs` dengan `INTEGRITY_TEST_DATABASE_URL` mengarah ke instance uji dan `PLAYWRIGHT_MODULE` jika Playwright dipasang di luar proyek. Uji ini membuat dan menghapus schema sendiri. `tests/analytics-browser.mjs` menguji kegagalan jaringan, respons terlambat, dan kegagalan di tengah ekspor menggunakan API tiruan.
 
@@ -268,7 +270,7 @@ Untuk menempatkan gambar di antara tulisan, klik posisi yang diinginkan lalu pil
 
 Setiap pilihan jawaban/pernyataan memiliki editor sendiri: dapat berisi teks, rumus, gambar saja, atau gabungannya. Kunci tetap dipilih melalui kontrol terpisah dan penilaian tetap menggunakan indeks pilihan. Pratinjau langsung, pratinjau lengkap, serta ujian siswa menggunakan renderer yang sama. Pada ujian, siswa dapat memperbesar gambar tanpa memilih jawaban secara tidak sengaja.
 
-Soal Markdown, gambar terpisah, dan bacaan tertaut lama tetap didukung. Membuka lalu menyimpan soal tanpa mengedit tidak mengubah format lama. Tombol **Gabungkan bacaan ke isi soal** menyalin bacaan tertaut ke editor hanya jika guru memilihnya; data bacaan sumber tetap ada. Gambar terpisah lama dapat dipindahkan ke posisi kursor melalui tombol khusus. Penguncian konten yang sudah memiliki sesi ujian tetap berlaku.
+Mulai Tahap 5, bacaan ditulis langsung pada isi soal. Menu, API, relasi, dan model bacaan terpisah dihapus; tidak ada penggabungan atau migrasi konten soal lama. Penguncian konten yang sudah memiliki sesi ujian tetap berlaku.
 
 Konten baru disimpan sebagai dokumen terstruktur berversi di kolom teks yang sudah ada, dengan validasi jenis node, URL gambar, kedalaman, dan ukuran di backend. HTML mentah tidak disimpan/dirender sebagai HTML. Teks pencarian, urutan soal, dan CSV memakai isi yang terbaca, bukan metadata editor. Unggahan memeriksa tipe dan signature raster; media lokal/GCP mengikuti konfigurasi yang sudah ada. Editor dimuat hanya ketika form soal dibuka.
 
@@ -313,3 +315,13 @@ Pendaftaran tetap mengirim NISN sebagai teks dan kelas bebas. Password 6 karakte
 Pantau ujian memperbarui data setiap 15 detik ketika tab terlihat, dengan pengiriman pembaruan yang tidak bertumpuk. Token tampil pada daftar dan paket terpilih. Paket yang tidak ditemukan lagi pada halaman daftar aktif terbaru ditandai untuk diperiksa, dengan token/ringkasan tidak ditampilkan sebagai data terverifikasi. Ringkasan menghitung seluruh siswa sekolah per paket; pencarian, kelas, dan status hanya memfilter tabel peserta. Skor akhir ditampilkan hanya pada sesi selesai, termasuk skor nol. Riwayat tetap memakai komponen/API laporan yang sama, termasuk Semua Paket dan CSV.
 
 Tahap 4 memerlukan build/deploy frontend saja, tanpa migrasi. Setelah build, `node tests/operator-browser.mjs` memeriksa alur operator dengan API terkontrol, termasuk kredensial terbaru, cetak lebih dari 100 kartu, kegagalan di tengah pemuatan, pembatalan, polling, serta tampilan ponsel. Variabel Playwright sama dengan uji sebelumnya. Regresi: `node tests/workspace-browser.mjs`, `node tests/analytics-browser.mjs`, `npm run test:analytics`, serta `tests/tables-real-browser.mjs` dengan PostgreSQL terisolasi. Tahap selanjutnya adalah dashboard Guru dan memerlukan persetujuan pengguna.
+
+### Rekonstruksi frontend — tahap 5
+
+Dashboard Guru kini hanya memiliki **Bank Soal**, dengan pencarian, filter mata pelajaran/tipe, pengurutan, pagination, CSV, tambah/edit/hapus, serta pratinjau yang sama dengan siswa. Editor menggabungkan cerita, puisi, pertanyaan, tabel, rumus, dan gambar, termasuk pilihan jawaban bergambar, ukuran font, serta konversi LaTeX otomatis. Kegagalan simpan tetap mempertahankan isi; kontrol dikunci selama penyimpanan.
+
+Menu dan CRUD bacaan terpisah, relasi `Question.readingId`, model `ReadingText`, dan tombol penggabungan bacaan dihapus. API menolak payload bacaan terpisah; respons ujian tidak menyertakan relasi tersebut. Histori migrasi yang sudah diterbitkan tetap utuh, dengan migrasi baru `20261029090000_unify_question_content`. Migrasi baru menolak bacaan terpisah yang masih berisi data, sesuai keputusan pengguna memulai dari database kosong; tidak ada penggabungan soal lama.
+
+**Tahap ini memerlukan build frontend dan backend, Prisma Client baru, serta migrasi/reset yang direncanakan pengelola server.** Ikuti [urutan penerapan database kosong](docs/FRESH_DATABASE_STAGE5.md). Pembuatan Super Admin dilakukan kembali setelah reset. Jika Redis dipakai, gunakan namespace baru untuk memisahkan cache instalasi lama. `db:adopt` hanya menerima schema lengkap model terbaru.
+
+Verifikasi mencakup build, pengujian HTTP keamanan, PostgreSQL integritas ujian/laporan, fresh deploy tanpa drift, penolakan migrasi pada bacaan terisi, backup/restore nyata, dan browser editor/siswa. Jalankan `tests/wysiwyg-browser.mjs`, `tests/student-exam-browser.mjs`, `tests/workspace-browser.mjs`, dan `tests/tables-real-browser.mjs` dengan variabel Playwright/database uji seperti tahap sebelumnya. Tahap 6 (halaman siswa dan pemeriksaan menyeluruh) tetap memerlukan persetujuan pengguna.

@@ -37,7 +37,6 @@ model User {
   @@index([schoolNpsn, role, className, id])
 
   authoredQuestions Question[]
-  authoredReadings  ReadingText[]
   createdPackages   Package[]
   examSessions      ExamSession[]
 }
@@ -53,15 +52,12 @@ model Question {
   correctAnswer Json
   authorId      String?
   author        User?    @relation(fields: [authorId], references: [id])
-  readingId     String?
-  reading       ReadingText? @relation(fields: [readingId], references: [id])
   createdAt     DateTime @default(now())
 
   packages PackageQuestion[]
   answers  Answer[]
 
   @@index([authorId, id])
-  @@index([readingId])
 }
 
 model Package {
@@ -92,19 +88,6 @@ model PackageQuestion {
 
   @@id([packageId, questionId])
   @@index([questionId, packageId])
-}
-
-model ReadingText {
-  id        String   @id @default(uuid())
-  title     String
-  content   String   @db.Text
-  authorId  String?
-  author    User?    @relation(fields: [authorId], references: [id])
-  createdAt DateTime @default(now())
-
-  questions Question[]
-
-  @@index([authorId, id])
 }
 
 model ExamSession {

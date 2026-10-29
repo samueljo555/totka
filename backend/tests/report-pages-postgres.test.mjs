@@ -95,8 +95,7 @@ test('cross-package reports preserve cohorts, paging, exports and school access 
    assert.equal((await get('/monitoring/history','s000')).status,403);
   });
   await t.test('administrative and credential list sorts apply before pagination and retain filtered cursors',async()=>{
-   await prisma.readingText.createMany({data:[{id:'r1',title:'Zeta',content:'Bacaan'},{id:'r2',title:'Alfa',content:'Bacaan'}]});
-   for(const path of ['/users?role=siswa','/schools?','/packages?','/questions?','/readings?','/users/login-cards?','/monitoring/packages?','/monitoring/packages/p1/students?']){
+   for(const path of ['/users?role=siswa','/schools?','/packages?','/questions?','/users/login-cards?','/monitoring/packages?','/monitoring/packages/p1/students?']){
     const who=path.includes('login-cards')?'op':'admin',url=path+'&sort=name_desc&pageSize=2';let first=await get(url,who);assert.equal(first.status,200,JSON.stringify(first.body));
     if(first.body.nextCursor){
      const next=await get(`${url}&after=${encodeURIComponent(first.body.nextCursor)}`,who);assert.equal(next.status,200,JSON.stringify(next.body));const numbered=await get(`${url}&page=2`,who);assert.deepEqual(next.body.items.map(r=>r.id||r.npsn),numbered.body.items.map(r=>r.id||r.npsn));
@@ -104,7 +103,6 @@ test('cross-package reports preserve cohorts, paging, exports and school access 
     }
    }
    const cards=(await get('/users/login-cards?sort=name_asc&pageSize=100','op')).body;assert.ok(cards.items.every(r=>r.schoolNpsn==='A'));assert.equal(cards.total,120);
-   const reading=(await get('/readings?sort=name_asc')).body;assert.deepEqual(reading.items.map(r=>r.title),['Alfa','Zeta']);
    assert.equal((await get('/packages?mapel=Bahasa%20Indonesia')).body.total,1);
    assert.equal((await get('/users?sort=invalid')).status,400);
   });

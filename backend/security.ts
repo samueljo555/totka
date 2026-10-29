@@ -27,7 +27,6 @@ export const safeUserSelect = {
 export const studentQuestionSelect = {
   id: true, type: true, mapel: true, element: true, content: true,
   imageUrl: true, options: true,
-  reading: { select: { id: true, title: true, content: true } },
 } as const;
 
 const admins: Role[] = ['super_admin', 'admin'];
@@ -54,10 +53,10 @@ const rules: [string, RegExp, Role[]][] = [
   ['POST', /^\/schools(?:\/batch)?\/?$/, admins],
   ['PUT', /^\/schools\/[^/]+\/?$/, admins],
   ['DELETE', /^\/schools\/[^/]+\/?$/, admins],
-  ['GET', /^\/(?:questions|readings)\/?$/, authors],
-  ['POST', /^\/(?:questions|readings)\/?$/, authors],
-  ['PUT', /^\/(?:questions|readings)\/[^/]+\/?$/, authors],
-  ['DELETE', /^\/(?:questions|readings)\/[^/]+\/?$/, authors],
+  ['GET', /^\/questions\/?$/, authors],
+  ['POST', /^\/questions\/?$/, authors],
+  ['PUT', /^\/questions\/[^/]+\/?$/, authors],
+  ['DELETE', /^\/questions\/[^/]+\/?$/, authors],
   ['POST', /^\/upload\/?$/, authors],
   ['GET', /^\/sessions\/?$/, operators],
   ['POST', /^\/sessions\/start\/?$/, ['siswa']],
@@ -125,25 +124,12 @@ export function authorizeApi(prisma: PrismaClient, secret: string): RequestHandl
         }
       }
 
-      // Teachers can edit only their own bank, including referenced reading texts.
-      if (user.role === 'guru') {
-        const resourceRoute = /^\/(questions|readings)\/([^/]+)\/?$/.exec(req.path);
-        if (resourceRoute && ['PUT', 'DELETE'].includes(req.method)) {
-          const where = { id: decodeURIComponent(resourceRoute[2]!) };
-          const resource = resourceRoute[1] === 'questions'
-            ? await prisma.question.findUnique({ where, select: { authorId: true } })
-            : await prisma.readingText.findUnique({ where, select: { authorId: true } });
-          if (!resource || resource.authorId !== user.id) {
-            return void res.status(403).json({ error: 'FORBIDDEN' });
-          }
-        }
-        if (/^\/questions(?:\/|$)/.test(req.path) && req.body?.readingId) {
-          const reading = await prisma.readingText.findUnique({
-            where: { id: req.body.readingId }, select: { authorId: true },
-          });
-          if (!reading || reading.authorId !== user.id) {
-            return void res.status(403).json({ error: 'FORBIDDEN' });
-          }
+      // Teachers can edit only questions in their own bank.
+      if (user.role === 'guru' && ['PUT', 'DELETE'].includes(req.method)) {
+        const resourceRoute = /^\/questions\/([^/]+)\/?$/.exec(req.path);
+        if (resourceRoute) {
+          const resource = await prisma.question.findUnique({ where: { id: decodeURIComponent(resourceRoute[1]!) }, select: { authorId: true } });
+          if (!resource || resource.authorId !== user.id) return void res.status(403).json({ error: 'FORBIDDEN' });
         }
       }
       next();

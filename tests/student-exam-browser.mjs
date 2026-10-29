@@ -13,11 +13,12 @@ const web=http.createServer(async(req,res)=>{
 }).listen(0,'127.0.0.1');await new Promise(resolve=>web.once('listening',resolve));
 const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH}:{})});
 const errors=[];
+const prose='TKA_RICH_V1:'+JSON.stringify({version:1,format:'prose',indent:false,lineHeight:1.85,doc:{type:'doc',content:[{type:'heading',attrs:{level:2},content:[{type:'text',text:'Sekolah Hijau'}]},{type:'paragraph',content:[{type:'text',text:'Pohon membantu menjaga '},{type:'text',text:'kebersihan udara',marks:[{type:'bold'}]}]},{type:'paragraph',content:[{type:'text',text:'Apa manfaat utama pohon?'}]}]}});
 const questions=[
  {id:'q1',type:'Pilihan Ganda Sederhana',content:'Hitung $\\frac{2}{3} + \\frac{1}{4}$.',imageUrl:'/uploads/exam.svg',options:[{text:'$7/12$'},{text:'$3/7$'},{text:'$11/12$'},{text:'$5/6$'}]},
  {id:'q2',type:'Pilihan Ganda Kompleks',content:'Pilih semua bilangan prima.',options:[{text:'2'},{text:'9'},{text:'11'},{text:'15'}]},
  {id:'q3',type:'Pilihan Ganda Kompleks Kategori',content:'Persegi panjang berukuran 12 cm × 8 cm.',options:[{text:'Luasnya 96 cm².'},{text:'Kelilingnya 20 cm.'},{text:'Selisih panjang dan lebar 4 cm.'}]},
- {id:'q4',type:'Pilihan Ganda Sederhana',content:'Apa manfaat utama pohon?',reading:{title:'Sekolah Hijau',content:'Pohon membantu menjaga **kebersihan udara**.\n\nSiswa merawat tanaman bersama.'},options:[{text:'Udara bersih'},{text:'Halaman sempit'}]},
+ {id:'q4',type:'Pilihan Ganda Sederhana',content:prose,options:[{text:'Udara bersih'},{text:'Halaman sempit'}]},
 ];
 let sequence=0;
 async function openFixture({remaining=5400,release='langsung',holdFinish=false,authFail=false,blockReviews=false}={}){
@@ -68,7 +69,7 @@ try{
  await page.getByRole('button',{name:'Selesai ujian',exact:true}).click();const summary=page.getByRole('dialog',{name:'Sudah selesai mengerjakan?',exact:true});await summary.getByText(/baru dijawab sebagian/).waitFor();
  await summary.getByRole('button',{name:'Periksa kembali',exact:true}).click();
  await page.getByRole('radio',{name:'Pernyataan 2: Salah',exact:true}).check();await page.getByRole('radio',{name:'Pernyataan 3: Benar',exact:true}).check();await waitSaved(page);assert.deepEqual(fixture.records.get('q3').answerData,[0,1,0]);
- await go(page,4);await page.getByRole('heading',{name:'Sekolah Hijau',exact:true}).waitFor();assert.equal(await page.locator('.exam-reading strong').innerText(),'kebersihan udara');
+ await go(page,4);await page.getByRole('heading',{name:'Sekolah Hijau',exact:true}).waitFor();assert.equal(await page.locator('.exam-question-content strong').innerText(),'kebersihan udara');
  await go(page,1);assert.equal(await page.getByRole('radio',{name:'Pilihan C',exact:true}).isChecked(),true);
  await page.screenshot({path:'/tmp/totka-student-live-desktop.png',fullPage:true});
  // Offline choices remain in the durable outbox, and manual finish is blocked.
@@ -89,5 +90,5 @@ try{
  const expiry=await openFixture({remaining:2,release:'ditunda',holdFinish:true});await expiry.page.getByRole('button',{name:'Selesai ujian',exact:true}).click();await expiry.page.waitForFunction(()=>document.querySelector('.exam-timer strong')?.textContent==='00:00:00');assert.equal(await expiry.page.locator('.exam-options input').first().isDisabled(),true);assert.equal(await expiry.page.locator('.exam-number.flagged:visible').count(),0);await expiry.page.waitForTimeout(250);assert.equal(expiry.fixture.finishes.length,1);await expiry.fixture.heldFinish();await expiry.page.getByRole('heading',{name:'Menunggu Rilis',exact:true}).waitFor();
  const kicked=await openFixture({authFail:true});kicked.fixture.holdSave=true;await kicked.page.getByRole('radio',{name:'Pilihan A',exact:true}).check();await kicked.page.getByRole('button',{name:'Selesai ujian',exact:true}).click();await kicked.page.waitForTimeout(250);assert.ok(kicked.fixture.held.length);await kicked.fixture.held[0]();await kicked.page.getByText('Sesi Ujian Dinonaktifkan',{exact:true}).waitFor();assert.equal(kicked.fixture.finishes.length,0);assert.equal(await kicked.page.locator('dialog[open]').count(),0);
  const storage=await openFixture({blockReviews:true});await storage.page.getByRole('button',{name:'Tandai untuk ditinjau',exact:true}).click();await storage.page.getByText(/Penanda tinjau belum dapat disimpan di tab ini/).waitFor();await storage.page.getByRole('radio',{name:'Pilihan A',exact:true}).check();await waitSaved(storage.page);await storage.page.getByRole('button',{name:'Selesai ujian',exact:true}).click();await storage.page.getByRole('dialog',{name:'Sudah selesai mengerjakan?',exact:true}).getByRole('button',{name:'Selesai ujian',exact:true}).click();await storage.page.getByRole('heading',{name:'Ujian Selesai!',exact:true}).waitFor();assert.equal(storage.fixture.finishes.length,1);
- assert.deepEqual(errors,[]);console.log('PASS: live student UI and AnswerSync; identity/API metadata, math/image/reading, all 3 answer payloads, review+reload/session isolation, offline durable recovery, conflict decisions, mobile drawer, finish manifest/cleanup, expiry with open dialog/deferred score, revoked session with open dialog, blocked review storage.');
+ assert.deepEqual(errors,[]);console.log('PASS: live student UI and AnswerSync; identity/API metadata, math/image/unified prose, all 3 answer payloads, review+reload/session isolation, offline durable recovery, conflict decisions, mobile drawer, finish manifest/cleanup, expiry with open dialog/deferred score, revoked session with open dialog, blocked review storage.');
 }finally{await browser.close();web.closeAllConnections();await new Promise(resolve=>web.close(resolve));}

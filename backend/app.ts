@@ -482,55 +482,6 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
     }
   });
 
-  // Reading Text CRUD
-
-
-  app.post('/api/readings', async (req, res) => {
-    const { title, content } = req.body;
-    if (!title || !content) return res.status(400).json({ error: 'Title and content are required' });
-    try {
-      const reading = await prisma.readingText.create({ data: { title, content, authorId: req.user!.id } });
-      await Promise.all([deleteCache('v2:api:readings:all'), deleteCache(`v2:api:readings:${reading.authorId || req.user!.id}`)]);
-      res.json(reading);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to create reading' });
-    }
-  });
-
-  app.put('/api/readings/:id', async (req, res) => {
-    const { title, content } = req.body;
-    try {
-      const reading = await examTransaction(prisma, async tx => {
-        await lockExamContent(tx, true);
-        await assertContentEditable(tx, 'reading', req.params.id);
-        return await tx.readingText.update({
-          where: { id: req.params.id },
-          data: { title, content }
-        });
-      });
-      await Promise.all([deleteCache('v2:api:readings:all'), deleteCache(`v2:api:readings:${reading.authorId || req.user!.id}`)]);
-      res.json(reading);
-    } catch (error) {
-      if (error instanceof ExamError) return res.status(error.status).json({ error: error.code, message: error.message });
-      res.status(500).json({ error: 'Failed to update reading' });
-    }
-  });
-
-  app.delete('/api/readings/:id', async (req, res) => {
-    try {
-      const reading = await examTransaction(prisma, async tx => {
-        await lockExamContent(tx, true);
-        await assertContentEditable(tx, 'reading', req.params.id);
-        return await tx.readingText.delete({ where: { id: req.params.id } });
-      });
-      await Promise.all([deleteCache('v2:api:readings:all'), deleteCache(`v2:api:readings:${reading.authorId || req.user!.id}`)]);
-      res.json({ message: 'Deleted successfully' });
-    } catch (error) {
-      if (error instanceof ExamError) return res.status(error.status).json({ error: error.code, message: error.message });
-      res.status(500).json({ error: 'Failed to delete reading' });
-    }
-  });
-
   app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -631,6 +582,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   };
   const validateQuestionContent = (body: Record<string, unknown>) => {
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new RichContentError('Konten soal tidak valid.');
+    if ('readingId' in body || 'reading' in body) throw new RichContentError('Bacaan harus ditulis langsung pada isi soal.');
     body.content = questionContent(body.content);
     if (body.imageUrl && !safeImageUrl(body.imageUrl)) throw new RichContentError('Alamat gambar soal tidak valid.');
     if (Array.isArray(body.options)) body.options = body.options.map(option => {
@@ -640,7 +592,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   };
   app.post('/api/questions', async (req, res) => {
     try { validateQuestionContent(req.body); } catch (error) { return res.status(400).json({ error: 'INVALID_CONTENT', message: error instanceof Error ? error.message : 'Konten tidak valid.' }); }
-    const { type, mapel, element, content, imageUrl, options, correctAnswer, readingId } = req.body;
+    const { type, mapel, element, content, imageUrl, options, correctAnswer } = req.body;
     if (!content || !type || !mapel || !element) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -656,7 +608,6 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
           options: options || [],
           correctAnswer: correctAnswer || [],
           authorId: req.user!.id,
-          readingId: readingId !== undefined ? readingId : undefined,
         }
       });
       await Promise.all([deleteCache('v2:api:questions:all'), deleteCache(`v2:api:questions:${question.authorId || req.user!.id}`)]);
@@ -670,7 +621,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
   app.put('/api/questions/:id', async (req, res) => {
     try {
       validateQuestionContent(req.body);
-      const { type, mapel, element, content, imageUrl, options, correctAnswer, readingId } = req.body;
+      const { type, mapel, element, content, imageUrl, options, correctAnswer } = req.body;
       const question = await examTransaction(prisma, async tx => {
         await lockExamContent(tx, true);
         await assertContentEditable(tx, 'question', req.params.id);
@@ -684,7 +635,6 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
             imageUrl: imageUrl || null,
             options: options || [],
             correctAnswer: correctAnswer || [],
-            readingId: readingId !== undefined ? readingId : undefined,
           }
         });
       });
@@ -725,7 +675,7 @@ export function createApp(prisma: PrismaClient, JWT_SECRET: string, cardSecret =
       }
       const data = await (async () => {
         const questionAccess = isAdmin(req.user!.role)
-          ? { include: { reading: true } } as const
+          ? true
           : { select: studentQuestionSelect };
         const session = await prisma.examSession.findUnique({
           where: { id: sessionId },

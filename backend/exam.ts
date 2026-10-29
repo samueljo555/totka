@@ -150,10 +150,10 @@ export async function startExam(prisma: PrismaClient, studentId: string, token: 
     // Cache only after a committed session has frozen this package's content.
     // A missed Redis invalidation must never resurrect an editable pre-exam bank.
     const frozen = !!session || !!await tx.examSession.findFirst({ where: { packageId: pkg.id }, select: { id: true } });
-    const items = await getOrSetCache(`exam:frozen-content:${pkg.id}`, frozen ? 300 : 0, () => tx.packageQuestion.findMany({
+    const items = await getOrSetCache(`exam:unified-content:${pkg.id}`, frozen ? 300 : 0, () => tx.packageQuestion.findMany({
       where: { packageId: pkg.id }, orderBy: { questionId: 'asc' },
-      include: { question: { include: { reading: true } } },
-    }), ['v2:api:packages', 'v2:api:questions:all', 'v2:api:readings:all']);
+      include: { question: true },
+    }), ['v2:api:packages', 'v2:api:questions:all']);
     if (!session) {
       if (pkg.status !== 'aktif') throw new ExamError(403, 'EXAM_INACTIVE', 'Ujian tidak menerima peserta baru.');
       if (!Number.isInteger(pkg.durationMinutes) || pkg.durationMinutes <= 0 || !items.length || items.some(item => !validQuestion(item.question))) {
@@ -168,8 +168,7 @@ export async function startExam(prisma: PrismaClient, studentId: string, token: 
     if (session.status === ACTIVE && now >= deadline) { session = await finalize(tx, session, now); changed = true; }
     if (![ACTIVE, FINISHED].includes(session.status)) throw new ExamError(409, 'EXAM_CLOSED', 'Sesi tidak dapat dilanjutkan.');
     const questions = items.map(({ question: q }) => ({
-      id: q.id, type: q.type, mapel: q.mapel, element: q.element, content: q.content, imageUrl: q.imageUrl, options: q.options,
-      reading: q.reading ? { id: q.reading.id, title: q.reading.title, content: q.reading.content } : null
+      id: q.id, type: q.type, mapel: q.mapel, element: q.element, content: q.content, imageUrl: q.imageUrl, options: q.options
     }));
     const existingAnswers = await tx.answer.findMany({ where: { sessionId: session.id }, select: { questionId: true, answerData: true, version: true, mutationId: true } });
     const { token: _token, ...safePackage } = session.package;
@@ -272,10 +271,10 @@ export async function finalizeExpiredExams(prisma: PrismaClient, limit = 100): P
 }
 
 /** Guard mutable content before the first session freezes it. Called under exclusive content lock. */
-export async function assertContentEditable(tx: Tx, kind: 'package' | 'question' | 'reading', id: string) {
+export async function assertContentEditable(tx: Tx, kind: 'package' | 'question', id: string) {
   const used = await tx.examSession.findFirst({
     where: kind === 'package' ? { packageId: id } : {
-      package: { questions: { some: kind === 'question' ? { questionId: id } : { question: { readingId: id } } } },
+      package: { questions: { some: { questionId: id } } },
     }, select: { id: true },
   });
   if (used) throw new ExamError(409, 'EXAM_CONTENT_LOCKED', 'Konten sudah digunakan dalam ujian. Buat salinan untuk perubahan.');

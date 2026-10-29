@@ -55,16 +55,14 @@ test('exam transactions on isolated PostgreSQL schema', { skip: !url, timeout: 6
       await prisma.packageQuestion.deleteMany();
       await prisma.package.deleteMany();
       await prisma.question.deleteMany();
-      await prisma.readingText.deleteMany();
       await prisma.user.deleteMany();
       await prisma.user.createMany({ data: [
         { id: 's1', username: 's1', password: 'unused', fullName: 'Siswa 1', role: 'siswa', activeToken: 'sid-s1' },
         { id: 's2', username: 's2', password: 'unused', fullName: 'Siswa 2', role: 'siswa', activeToken: 'sid-s2' },
         { id: 'admin', username: 'admin', password: 'unused', fullName: 'Admin', role: 'admin', activeToken: 'sid-admin' },
       ] });
-      await prisma.readingText.create({ data: { id: 'r1', title: 'Bacaan', content: 'Teks' } });
       await prisma.question.createMany({ data: [
-        { id: 'q1', type: 'Pilihan Ganda Sederhana', mapel: 'Matematika', element: 'Bilangan', content: 'PG', options: [{ text: 'A' }, { text: 'B' }], correctAnswer: [0], readingId: 'r1' },
+        { id: 'q1', type: 'Pilihan Ganda Sederhana', mapel: 'Matematika', element: 'Bilangan', content: 'PG', options: [{ text: 'A' }, { text: 'B' }], correctAnswer: [0] },
         { id: 'q2', type: 'Pilihan Ganda Kompleks', mapel: 'Matematika', element: 'Bilangan', content: 'Kompleks', options: [{}, {}, {}], correctAnswer: [0, 2] },
         { id: 'q3', type: 'Pilihan Ganda Kompleks Kategori', mapel: 'Matematika', element: 'Bilangan', content: 'Kategori', options: [{}, {}], correctAnswer: [0, 1] },
         { id: 'foreign', type: 'Pilihan Ganda Sederhana', mapel: 'Matematika', element: 'Bilangan', content: 'Di luar paket', options: [{}, {}], correctAnswer: [0] },
@@ -236,12 +234,11 @@ test('exam transactions on isolated PostgreSQL schema', { skip: !url, timeout: 6
       assert.equal(Number((await finishExam(prisma, 's1', session.id)).totalScore), 0);
       assert.ok((await prisma.answer.findMany()).every(a => a.isCorrect === false));
     });
-    await t.test('used packages, questions and readings are frozen; status and release settings remain editable', async () => {
+    await t.test('used packages and questions are frozen; status and release settings remain editable', async () => {
       await open();
       for (const [path, method, body] of [
         ['/packages/p1', 'PUT', { durationMinutes: 20 }], ['/packages/p1', 'PUT', { questionIds: ['q1'] }],
         ['/questions/q1', 'PUT', { content: 'Changed' }], ['/questions/q1', 'DELETE', {}],
-        ['/readings/r1', 'PUT', { content: 'Changed' }], ['/readings/r1', 'DELETE', {}],
       ]) {
         const result = await request(path, 'admin', method, body);
         assert.equal(result.status, 409, JSON.stringify(result));

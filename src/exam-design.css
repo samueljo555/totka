@@ -144,10 +144,6 @@
 .exam-notice svg { margin-top: 2px; }
 .exam-workspace .exam-storage-warning { border-color: #efccc2; background: #fff1ec; color: #a65c4c; }
 .exam-workspace .exam-local-note { font-size: 11px; color: #9b865e; margin-top: 12px; }
-.exam-reading { padding: 20px 22px; background: #f8fafd; border: 1px solid #e6edf6; border-left: 3px solid #aec5ee; border-radius: 7px; margin-bottom: 24px; }
-.exam-reading small { display: block; font-size: 9px; color: #92a2b9; letter-spacing: 1px; font-weight: 700; margin-bottom: 6px; }
-.exam-reading h3 { font-size: 15px; font-weight: 650; color: #496487; margin-bottom: 9px; }
-.exam-reading .exam-markdown { font-size: calc(var(--exam-font-size) - 2px); color: #61748d; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .exam-category { border: 1px solid #e1e8f2; border-radius: 8px; overflow: hidden; margin-top: 22px; font-size: calc(var(--exam-font-size) - 2px); }
 .exam-category-heading, .exam-category-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px 72px; align-items: stretch; }
 .exam-category-heading { background: #f7f9fd; font-size: 11px; color: #7f91ac; font-weight: 600; }
@@ -233,7 +229,6 @@
   .exam-hint > span:last-child { display: none; }
   .exam-option { padding: 13px 14px; gap: 11px; }
   .exam-option-text, .exam-question-content { font-size: calc(var(--exam-font-size) - 1px); }
-  .exam-reading { padding: 17px; }
   .exam-category-heading, .exam-category-row { grid-template-columns: minmax(0, 1fr) 51px 51px; }
   .exam-category-row { font-size: 13px; }
   .exam-category-text { padding: 11px 12px; }

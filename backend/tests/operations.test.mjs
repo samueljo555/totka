@@ -13,7 +13,7 @@ import { runtimePaths, backendDir, projectDir } from '../dist/runtime-paths.js';
 
 const root = new URL('..', import.meta.url);
 const url = process.env.INTEGRITY_TEST_DATABASE_URL;
-const migrations = ['20260805150436_init', '20261024100000_align_legacy_schema', '20261024120000_student_login_cards', '20261024140000_answer_versions', '20261024160000_query_indexes'];
+const migrations = ['20260805150436_init', '20261024100000_align_legacy_schema', '20261024120000_student_login_cards', '20261024140000_answer_versions', '20261024160000_query_indexes', '20261029090000_unify_question_content'];
 const secret = 'operations-test-secret-at-least-32-characters';
 function command(args, env, expected = 0) {
   const result = spawnSync(process.execPath, args, { cwd: root, env: { ...process.env, ...env }, encoding: 'utf8', timeout: 60000 });
@@ -95,18 +95,16 @@ test('deployment migrations, encrypted cards and real pg_dump/pg_restore recover
       await existing.pool.query('ALTER TABLE "User" ADD COLUMN unexpected TEXT');
       command(['scripts/adopt-database.mjs', '--apply'], existing.env, 1);
     });
-    await t.test('pre-P1 installation receives missing columns and indexes while preserving answers', async () => {
+    await t.test('partial older physical schemas are refused without changing existing answers', async () => {
       const old = await create();
       prisma(['db', 'push'], old.env);
       await old.pool.query('ALTER TABLE "User" DROP COLUMN "loginCardPassword"; ALTER TABLE "Answer" DROP COLUMN version, DROP COLUMN "mutationId"');
       const indexSql = await readFile(new URL('../prisma/migrations/20261024160000_query_indexes/migration.sql', import.meta.url), 'utf8');
-      for (const match of indexSql.matchAll(/CREATE INDEX "([^"]+)"/g)) await old.pool.query(`DROP INDEX "${match[1]}"`);
+      for (const match of indexSql.matchAll(/CREATE INDEX "([^"]+)"/g)) await old.pool.query(`DROP INDEX IF EXISTS "${match[1]}"`);
       await old.pool.query(`INSERT INTO "User" (id,username,password,"fullName",role) VALUES ('old','old','legacy-hash','Old','siswa'); INSERT INTO "Package" (id,name,mapel) VALUES ('p','P','M'); INSERT INTO "Question" (id,type,mapel,element,content,options,"correctAnswer") VALUES ('q','PG_Sederhana','M','E','Q','[]','0'); INSERT INTO "ExamSession" (id,"studentId","packageId") VALUES ('e','old','p'); INSERT INTO "Answer" (id,"sessionId","questionId","answerData") VALUES ('a','e','q','0')`);
-      command(['scripts/adopt-database.mjs', '--apply'], old.env);
-      prisma(['migrate', 'deploy'], old.env);
-      prisma(['migrate', 'diff', '--from-config-datasource', '--to-schema', 'prisma/schema.prisma', '--exit-code'], old.env);
-      const row = (await old.pool.query('SELECT "answerData",version FROM "Answer"')).rows[0];
-      assert.equal(row.answerData, 0); assert.equal(row.version, 0);
+      command(['scripts/adopt-database.mjs', '--apply'], old.env, 1);
+      assert.equal((await old.pool.query('SELECT "answerData" FROM "Answer"')).rows[0].answerData, 0);
+      assert.equal((await old.pool.query(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema='public' AND table_name='Answer' AND column_name='version'`)).rows[0].n, 0);
       assert.equal((await old.pool.query('SELECT password FROM "User"')).rows[0].password, 'legacy-hash');
     });
     await t.test('populated original legacy schema refuses invented NPSN and credentials and rolls back', async () => {

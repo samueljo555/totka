@@ -11,4 +11,4 @@ Pada **pratinjau seluruh frontend**, gunakan dropdown di bilah atas untuk berpin
 
 Pratinjau editor keseluruhan memperagakan susunan konten dan perubahan teks sederhana. Toolbar lengkap, konversi rumus, unggahan gambar, kunci, dan penilaian tetap mengikuti implementasi aplikasi. Statistik dan nilai contoh tidak menunjukkan kapasitas atau hasil sistem sebenarnya. Pengaturan ujian ditunjukkan melalui paket, sesuai fitur yang tersedia.
 
-Status rancangan seluruh frontend: **menunggu persetujuan pengguna sebelum diterapkan ke halaman aplikasi**.
+Status rancangan: **disetujui dan diterapkan bertahap**. Pada Tahap 5, menu Manajemen Bacaan dan dukungan bacaan terpisah dihapus sesuai keputusan pengguna memulai database kosong; pratinjau HTML terdahulu disimpan sebagai referensi historis.

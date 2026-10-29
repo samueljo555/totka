@@ -40,7 +40,6 @@ try {
   await prisma.examSession.createMany({ data: Array.from({length:130},(_,i)=>i>=120&&i<125?null:({id:'e'+(i+1),studentId:`s${String(i+1).padStart(3,'0')}`,packageId:'p01',status:i<110?'selesai':i<120?'sedang_mengerjakan':'dibatalkan',totalScore:i<110?(i%4)*25:i<120?80:null,endTime:i<110?new Date():null})).filter(Boolean) });
   await prisma.examSession.create({data:{id:'second-package',studentId:'s001',packageId:'p02',status:'selesai',totalScore:95,endTime:new Date()}});
   await prisma.packageQuestion.create({data:{packageId:'p02',questionId:'q01'}});
-  await prisma.readingText.createMany({data:Array.from({length:12},(_,i)=>({id:'r'+i,title:'Bacaan '+String(i).padStart(2,'0'),content:'Teks bacaan untuk uji tampilan.',authorId:'guru'}))});
   api = createApp(prisma, secret, secret).listen(0, '127.0.0.1'); await new Promise(resolve => api.once('listening', resolve));
   web = http.createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://local').pathname;
@@ -119,8 +118,10 @@ try {
   await op.getByRole('button',{name:'Lihat peserta',exact:true}).first().click();await waitTotal(op,100);
   assert.equal(await op.getByRole('columnheader',{name:'NISN',exact:true}).count(),1);
   const guru=await open('guru');await waitTotal(guru,27);
-  await guru.getByRole('button',{name:'Manajemen Bacaan',exact:true}).click();await waitTotal(guru,12);
-  await guru.getByRole('button',{name:'Judul Bacaan',exact:true}).click();
+  assert.equal(await guru.getByRole('button',{name:'Manajemen Bacaan',exact:true}).count(),0);
+  await guru.getByRole('button',{name:'Cuplikan Soal',exact:true}).click();
+  await guru.getByLabel('Mata pelajaran soal',{exact:true}).selectOption('Matematika');await waitTotal(guru,14);
+  await guru.getByRole('button',{name:'Reset Filter',exact:true}).click();await waitTotal(guru,27);
   // Every administrative table uses one shared scroll container; narrow screens scroll within it.
   for(const p of [page,op,guru]){
     await p.setViewportSize({width:390,height:844});await p.waitForTimeout(300);

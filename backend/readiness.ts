@@ -20,7 +20,7 @@ export function checkDatabase(prisma: PrismaClient) {
   // Parse all tables/operational columns without scanning any student records.
   return prisma.$queryRaw`SELECT a.version, a."mutationId", u.username, u.password,
     u."loginCardPassword", u."activeToken", u."schoolNpsn", s.npsn,
-    q."imageUrl", q."readingId", r.id, p.token, es.id, pq."questionId"
-    FROM "Answer" a, "User" u, "School" s, "Question" q, "ReadingText" r,
+    q."imageUrl", p.token, es.id, pq."questionId"
+    FROM "Answer" a, "User" u, "School" s, "Question" q,
     "Package" p, "ExamSession" es, "PackageQuestion" pq LIMIT 0`;
 }

@@ -17,12 +17,12 @@ const { createApp } = await import('../dist/app.js');
 const { encodeRichContent, RICH_PREFIX } = await import('../dist/rich-content.js');
 const { loadJwtSecret } = await import('../dist/config.js');
 const secret = 'test-only-secret-with-at-least-32-characters';
-let users, questions, readings, sessions, answers, packages;
+let users, questions, sessions, answers, packages;
 const schools = [{ npsn: '11111111', name: 'Sekolah A' }, { npsn: '22222222', name: 'Sekolah B' }];
 
 function project(row, query = {}) {
   if (!row) return null;
-  const relations = ['student', 'package', 'answers', 'school', 'reading', 'question', 'questions'];
+  const relations = ['student', 'package', 'answers', 'school', 'question', 'questions'];
   const result = query.select ? {} : Object.fromEntries(Object.entries(structuredClone(row)).filter(([key]) => !relations.includes(key)));
   if (!query.select && !query.include) return result;
   for (const [key, selection] of Object.entries(query.select || query.include)) {
@@ -47,7 +47,7 @@ function matches(row, where = {}) {
     if (key === 'packageId_questionId') return matches(row, value);
     if (key === 'package') {
       const condition = value.questions?.some;
-      return row.packageId === 'p1' && (!condition || (condition.questionId ? condition.questionId === 'q1' : condition.question?.readingId === 'r1'));
+      return row.packageId === 'p1' && (!condition || (condition.questionId === 'q1'));
     }
     if (key === 'student') return matches(users.find(user => user.id === row.studentId), value);
     return row?.[key] === value;
@@ -97,7 +97,7 @@ function repository(getRows, hydrate = row => row) {
   };
 }
 const userRepo = repository(() => users, row => row && ({ ...row, school: schools.find(s => s.npsn === row.schoolNpsn) || null }));
-const questionRepo = repository(() => questions, row => row && ({ ...row, reading: readings.find(r => r.id === row.readingId) || null }));
+const questionRepo = repository(() => questions);
 const answerRepo = repository(() => answers, row => row && ({ ...row, question: questions.find(q => q.id === row.questionId) }));
 answerRepo.upsert = async q => {
   const row = answers.find(row => matches(row, q.where));
@@ -110,11 +110,10 @@ const prisma = {
   },
   user: userRepo,
   question: questionRepo,
-  readingText: repository(() => readings),
   school: repository(() => schools),
   package: repository(() => packages),
   packageQuestion: {
-    async findMany(q) { return questions.filter(question => question.id === 'q1').map(question => project({ packageId: 'p1', questionId: question.id, question: { ...question, reading: readings[0] } }, q)); },
+    async findMany(q) { return questions.filter(question => question.id === 'q1').map(question => project({ packageId: 'p1', questionId: question.id, question }, q)); },
     async count() { return 1; },
     async findUnique(q) {
       const item = { packageId: 'p1', questionId: 'q1', question: questions[0] };
@@ -147,9 +146,8 @@ beforeEach(() => {
     ['op', 'operator', '11111111'], ['op2', 'operator', '22222222'],
     ['unassigned', 'operator', null], ['s1', 'siswa', '11111111'], ['s2', 'siswa', '22222222'],
   ].map(([id, role, schoolNpsn]) => ({ id, username: id, role, schoolNpsn, activeToken: `sid-${id}`, loginCardPassword: null, password: 'legacy-password', fullName: id }));
-  readings = [{ id: 'r1', title: 'Bacaan', content: 'Isi', authorId: 'guru' }, { id: 'r2', authorId: 'guru2' }];
   questions = [
-    { id: 'q1', type: 'Pilihan Ganda Sederhana', content: 'Soal', options: [{ text: 'A' }, { text: 'B' }], correctAnswer: [0], authorId: 'guru', readingId: 'r1' },
+    { id: 'q1', type: 'Pilihan Ganda Sederhana', content: 'Soal', options: [{ text: 'A' }, { text: 'B' }], correctAnswer: [0], authorId: 'guru' },
     { id: 'q2', correctAnswer: [1], authorId: 'guru2' },
   ];
   packages = [{ id: 'p1', token: 'EXAM', status: 'aktif', releaseScoreMode: 'langsung', durationMinutes: 90 }];
@@ -273,13 +271,12 @@ test('old or reset sessions cannot bypass revocation by omitting session headers
 });
 test('teacher bank is scoped and authorship cannot be supplied by the client', async () => {
   assert.deepEqual((await request('/questions', 'guru')).body.map(q => q.id), ['q1']);
-  assert.deepEqual((await request('/readings', 'guru')).body.map(q => q.id), ['r1']);
   const created = await request('/questions', 'guru', 'POST', { type: 'Pilihan Ganda Sederhana', mapel: 'Matematika', element: 'Bilangan', content: 'Baru', authorId: 'admin' });
   assert.equal(created.status, 200);
   assert.equal(created.body.authorId, 'guru');
   assert.equal((await request('/questions/q2', 'guru', 'PUT', { content: 'Hijack' })).status, 403);
   assert.equal((await request('/readings/r2', 'guru', 'PUT', { content: 'Hijack' })).status, 403);
-  assert.equal((await request('/questions/q1', 'guru', 'PUT', { readingId: 'r2' })).status, 403);
+  assert.equal((await request('/questions/q1', 'guru', 'PUT', { readingId: 'r2' })).status, 400);
   assert.equal((await request(`/questions/${created.body.id}`, 'guru', 'PUT', { content: 'Own edit', authorId: 'admin' })).status, 200);
   assert.equal(questions.find(q => q.id === created.body.id).authorId, 'guru');
   assert.equal((await request('/users', 'guru')).status, 403);
@@ -477,7 +474,7 @@ test('rich content and image-only choices round trip without changing answer ind
   const created = await request('/questions', 'guru', 'POST', { type: 'Pilihan Ganda Sederhana', mapel: 'Bahasa Indonesia', element: 'Membaca', content, options: [{ id: 1, text: rich([image]) }, { id: 2, text: 'Pilihan teks' }], correctAnswer: [0] });
   assert.equal(created.status, 200); assert.equal(created.body.content, content); assert.deepEqual(created.body.correctAnswer, [0]);
   assert.ok(created.body.options[0].text.startsWith(RICH_PREFIX));
-  const edited = await request(`/questions/${created.body.id}`, 'guru', 'PUT', { ...created.body, correctAnswer: [1], readingId: null });
+  const edited = await request(`/questions/${created.body.id}`, 'guru', 'PUT', { ...created.body, correctAnswer: [1] });
   assert.equal(edited.status, 200); assert.deepEqual(edited.body.correctAnswer, [1]);
   const bad = await request('/questions', 'guru', 'POST', { type: 'Pilihan Ganda Sederhana', mapel: 'Matematika', element: 'Bilangan', content: RICH_PREFIX + '{bad', options: [], correctAnswer: [] });
   assert.equal(bad.status, 400);
@@ -493,4 +490,10 @@ test('image uploads verify raster signatures, limit size, and cannot store spoof
   assert.equal((await upload(Buffer.from('<svg/>'), 'image/svg+xml', 'bad.svg')).status, 400);
   assert.equal((await upload(Buffer.alloc(5 * 1024 * 1024 + 1), 'image/png', 'large.png')).status, 413);
   assert.equal((await readdir(testUploads)).length, 1);
+});
+
+test('separate reading endpoints and payload fields are retired', async () => {
+ for (const who of ['guru','admin','super']) for (const [path,method] of [['/readings','GET'],['/readings','POST'],['/readings/removed','PUT'],['/readings/removed','DELETE']]) assert.equal((await request(path,who,method,method==='GET'?undefined:{content:'Ignored'})).status,403);
+ const bad=await request('/questions','guru','POST',{type:'Pilihan Ganda Sederhana',mapel:'Matematika',element:'Bilangan',content:'Soal',readingId:null});assert.equal(bad.status,400);
+ const started=await request('/sessions/start','s1','POST',{token:'EXAM'});assert.equal(started.status,200);assert.ok(started.body.questions.every(q=>!('reading' in q)&&!('readingId' in q)));
 });

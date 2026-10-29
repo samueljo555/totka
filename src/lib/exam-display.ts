@@ -1,7 +1,6 @@
 export interface ExamQuestionData {
   id: string; type?: string; content?: string; imageUrl?: string | null;
   options?: { id?: string | number; text?: string }[];
-  reading?: { title: string; content: string } | null;
 }
 export function questionKind(question?: ExamQuestionData) {
   const type = question?.type || 'Pilihan Ganda Sederhana';

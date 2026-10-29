@@ -72,23 +72,12 @@ export function registerQueryRoutes(app: Express, prisma: PrismaClient) {
     const search = text(req.query, 'search'), mapel = text(req.query, 'mapel'), type = text(req.query, 'type');
     const where: Prisma.QuestionWhereInput = { ...(isAdmin(req.user!.role) ? {} : { authorId: req.user!.id }), ...(mapel ? { mapel } : {}), ...(type ? { type } : {}), ...(search ? { content: { contains: search, mode: 'insensitive' } } : {}) };
     const { p, sort, following, orderBy, cursor } = await listOrder(req, prisma.question, where, 'content', 'id');
-    return getOrSetCache(`questions:${JSON.stringify({ p, where, sort })}`, 30, async () => {
+    return getOrSetCache(`questions:unified:${JSON.stringify({ p, where, sort })}`, 30, async () => {
       const [rows, total] = await Promise.all([
-        prisma.question.findMany({ where: { AND: [where, following] }, include: { reading: { select: { id: true, title: true, content: true } } }, orderBy: orderBy as Prisma.QuestionOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.question.count({ where }),
+        prisma.question.findMany({ where: { AND: [where, following] }, orderBy: orderBy as Prisma.QuestionOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.question.count({ where }),
       ]);
       return pageResult(rows, total, p, cursor);
     }, ['v2:api:questions:all', `v2:api:questions:${req.user!.id}`]);
-  });
-  get('/api/readings', async req => {
-    const search = text(req.query, 'search');
-    const where: Prisma.ReadingTextWhereInput = { ...(isAdmin(req.user!.role) ? {} : { authorId: req.user!.id }), ...(search ? { title: { contains: search, mode: 'insensitive' } } : {}) };
-    const { p, sort, following, orderBy, cursor } = await listOrder(req, prisma.readingText, where, 'title', 'id');
-    return getOrSetCache(`readings:${JSON.stringify({ p, where, sort })}`, 30, async () => {
-      const [rows, total] = await Promise.all([
-        prisma.readingText.findMany({ where: { AND: [where, following] }, include: { _count: { select: { questions: true } } }, orderBy: orderBy as Prisma.ReadingTextOrderByWithRelationInput[], skip: p.skip, take: p.take }), prisma.readingText.count({ where }),
-      ]);
-      return pageResult(rows, total, p, cursor);
-    }, ['v2:api:readings:all', `v2:api:readings:${req.user!.id}`]);
   });
   get('/api/sessions', async req => {
     const p = pagination(req.query), where: Prisma.ExamSessionWhereInput = {

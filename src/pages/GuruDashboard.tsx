@@ -1,285 +1,367 @@
-import { WorkspaceShell } from '../components/WorkspaceShell';
-import { TableFrame, SortableHeading, TableState } from '../components/TableFrame';
-import { Pagination } from '../components/Pagination';
-import { usePagedList, useDebounced } from '../lib/paging';
-import { useConfirm } from '../contexts/ConfirmContext';
-import toast from 'react-hot-toast';
-import { useState } from 'react';
-import { 
-  FileText, 
-  Library, 
+import { lazy, Suspense, useRef, useState } from "react";
+import {
+  Edit3,
+  Eye,
+  Library,
   Plus,
+  RotateCcw,
   Search,
-  Image as ImageIcon,
-  Edit,
   Trash2,
-  Eye
-} from 'lucide-react';
-import { lazy, Suspense } from 'react';
-import { ExamQuestion } from '../components/ExamQuestion';
-import { ExamDialog } from '../components/ExamDialog';
-import { RichImageDialog } from '../components/RichImageDialog';
-import { contentText } from '../../backend/rich-content';
-const QuestionEditor = lazy(() => import('../components/QuestionEditor').then(module => ({ default: module.QuestionEditor })));
-import 'katex/dist/katex.min.css';
+} from "lucide-react";
+import toast from "react-hot-toast";
+import { WorkspaceShell } from "../components/WorkspaceShell";
+import {
+  TableFrame,
+  SortableHeading,
+  TableState,
+} from "../components/TableFrame";
+import { Pagination } from "../components/Pagination";
+import { ExamQuestion } from "../components/ExamQuestion";
+import { ExamDialog } from "../components/ExamDialog";
+import { RichImageDialog } from "../components/RichImageDialog";
+import { useConfirm } from "../contexts/ConfirmContext";
+import { useDebounced, usePagedList } from "../lib/paging";
+import { contentText } from "../../backend/rich-content";
+import "../teacher-design.css";
+import "katex/dist/katex.min.css";
+const QuestionEditor = lazy(() =>
+  import("../components/QuestionEditor").then((module) => ({
+    default: module.QuestionEditor,
+  })),
+);
 
-const GuruDashboard = ({ user, onLogout }: { user?: any, onLogout: () => void }) => {
-  const confirmModal = useConfirm();
-  const [activeTab, setActiveTab] = useState('bank');
-  const [isAdding, setIsAdding] = useState(false);
-
-
-  const [isAddingReading, setIsAddingReading] = useState(false);
-  const [editingReadingId, setEditingReadingId] = useState<string | null>(null);
-  const [readingTitle, setReadingTitle] = useState('');
-  const [readingContent, setReadingContent] = useState('');
-
-  const [questionSort, setQuestionSort] = useState('name_asc');
-  const [readingSort, setReadingSort] = useState('name_asc');
-  const [questionPageSize, setQuestionPageSize] = useState(10);
-  const [readingPageSize, setReadingPageSize] = useState(10);
-  const [questionPage, setQuestionPage] = useState(1);
-  const [readingPage, setReadingPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [filterSubject, setFilterSubject] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const query = useDebounced(search);
-  const questionList = usePagedList<any>('/api/questions', questionPage, questionPageSize, { search: query, mapel: filterSubject, type: filterType, sort: questionSort }, activeTab === 'bank');
-  const readingList = usePagedList<any>('/api/readings', readingPage, readingPageSize, { search: query, sort: readingSort }, activeTab === 'bacaan');
-  const questions = questionList.items, readings = readingList.items;
-
-  const handleSaveReading = async () => {
+const GuruDashboard = ({
+  user,
+  onLogout,
+}: {
+  user?: any;
+  onLogout: () => void;
+}) => {
+  const confirm = useConfirm();
+  const [editing, setEditing] = useState<any | null | undefined>(undefined),
+    [preview, setPreview] = useState<any>(null),
+    [image, setImage] = useState<string | null>(null);
+  const [search, setSearch] = useState(""),
+    [subject, setSubject] = useState(""),
+    [type, setType] = useState(""),
+    [sort, setSort] = useState("name_asc");
+  const [page, setPage] = useState(1),
+    [pageSize, setPageSize] = useState(10),
+    [deleting, setDeleting] = useState(false);
+  const mutation = useRef(false),
+    query = useDebounced(search);
+  const list = usePagedList<any>(
+    "/api/questions",
+    page,
+    pageSize,
+    { search: query, mapel: subject, type, sort },
+    editing === undefined,
+  );
+  const reset = () => {
+    setSearch("");
+    setSubject("");
+    setType("");
+    setSort("name_asc");
+    setPage(1);
+  };
+  const remove = async (question: any) => {
+    if (mutation.current) return;
+    mutation.current = true;
+    setDeleting(true);
     try {
-      const url = editingReadingId ? `/api/readings/${editingReadingId}` : '/api/readings';
-      const method = editingReadingId ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: readingTitle, content: readingContent, authorId: user?.id })
-      });
-      if (res.ok) {
-        setIsAddingReading(false);
-        setEditingReadingId(null);
-        setReadingTitle('');
-        setReadingContent('');
-        await readingList.reload();
-      } else {
-        const error = await res.json();
-        toast.error(error.message || 'Gagal menyimpan bacaan');
-      }
-    } catch(err) {
-      toast.error('Gagal menyimpan bacaan');
+      if (
+        !(await confirm({
+          title: "Hapus soal?",
+          message: "Yakin ingin menghapus soal ini?",
+          confirmText: "Hapus",
+          isDestructive: true,
+        }))
+      )
+        return;
+      const response = await fetch(
+        `/api/questions/${encodeURIComponent(question.id)}`,
+        { method: "DELETE" },
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok)
+        throw new Error(data?.message || "Gagal menghapus soal.");
+      toast.success("Soal berhasil dihapus.");
+      await list.reload();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Gagal menghapus soal.",
+      );
+    } finally {
+      mutation.current = false;
+      setDeleting(false);
     }
   };
-
-  const [editingQuestion, setEditingQuestion] = useState<any>(null);
-  const [previewQuestion, setPreviewQuestion] = useState<any>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const tabs = [
-    { id: 'bank', name: 'Bank Soal', icon: <Library size={20} /> },
-    { id: 'bacaan', name: 'Manajemen Bacaan', icon: <FileText size={20} /> },
-  ];
-
   return (
-    <WorkspaceShell user={user} roleLabel="Guru Penulis" items={tabs} activeId={activeTab}
-      onNavigate={id => { setActiveTab(id); setIsAdding(false); }} onLogout={onLogout}
-      description={({bank:'Susun soal yang mudah dibaca, lengkap dengan gambar dan rumus.',bacaan:'Kelola bacaan tertaut pada soal yang sudah tersedia.'} as Record<string, string>)[activeTab]}
-      actions={<><div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
-          <Search size={16} aria-hidden="true" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input type="text" className="input-field" aria-label="Cari soal atau bacaan" placeholder="Cari soal/bacaan..." value={search} onChange={event => { setSearch(event.target.value); setQuestionPage(1); setReadingPage(1); }} style={{ paddingLeft: '34px', width: '250px' }} />
-        </div></>}>
-
-        {(questionList.loading || readingList.loading) && <p role="status">Memuat data...</p>}
-        {(questionList.error || readingList.error) && <p role="alert">{questionList.error || readingList.error}</p>}
-
-        {activeTab === 'bank' && !isAdding && (
-          <div className="animate-fade-in glass-panel p-8">
-            <div className="flex justify-between items-center mb-6">
+    <WorkspaceShell
+      user={user}
+      roleLabel="Guru Penulis"
+      items={[{ id: "bank", name: "Bank Soal", icon: <Library /> }]}
+      activeId="bank"
+      onNavigate={() => setEditing(undefined)}
+      onLogout={onLogout}
+      description="Susun bacaan, puisi, gambar, dan pertanyaan langsung dalam satu editor soal."
+      actions={
+        editing === undefined ? (
+          <button
+            className="btn"
+            disabled={deleting}
+            onClick={() => setEditing(null)}
+          >
+            <Plus size={15} />
+            Tambah Soal
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="teacher-content">
+        {editing === undefined ? (
+          <section className="teacher-panel">
+            <div className="teacher-panel-heading">
               <div>
                 <h2>Daftar Soal</h2>
-                <p>Kelola bank soal untuk materi Matematika dan Bahasa Indonesia.</p>
+                <p>
+                  Kelola soal Matematika dan Bahasa Indonesia milik akun Anda.
+                </p>
               </div>
-              <button className="btn" onClick={() => {
-                setEditingQuestion(null);
-                setIsAdding(true);
-              }}>
-                <Plus size={18} /> Tambah Soal
-              </button>
+              <span className="teacher-scope">Bank soal Anda</span>
             </div>
-
-            <div className="flex gap-4 mb-6">
-              <select className="input-field" style={{ width: '200px' }} value={filterSubject} onChange={event => { setFilterSubject(event.target.value); setQuestionPage(1); }}>
+            <div className="teacher-filters">
+              <label className="table-search">
+                <Search size={15} aria-hidden="true" />
+                <input
+                  className="input-field"
+                  aria-label="Cari soal"
+                  placeholder="Cari teks soal..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </label>
+              <select
+                className="input-field"
+                aria-label="Mata pelajaran soal"
+                value={subject}
+                onChange={(e) => {
+                  setSubject(e.target.value);
+                  setPage(1);
+                }}
+              >
                 <option value="">Semua Mata Pelajaran</option>
                 <option>Matematika</option>
                 <option>Bahasa Indonesia</option>
               </select>
-              <select className="input-field" style={{ width: '200px' }} value={filterType} onChange={event => { setFilterType(event.target.value); setQuestionPage(1); }}>
+              <select
+                className="input-field"
+                aria-label="Tipe soal"
+                value={type}
+                onChange={(e) => {
+                  setType(e.target.value);
+                  setPage(1);
+                }}
+              >
                 <option value="">Semua Tipe Soal</option>
                 <option value="Pilihan Ganda Sederhana">PG Sederhana</option>
                 <option value="Pilihan Ganda Kompleks">PG Kompleks</option>
-                <option value="Pilihan Ganda Kompleks Kategori">PG Kategori</option>
+                <option value="Pilihan Ganda Kompleks Kategori">
+                  PG Kategori
+                </option>
               </select>
-            </div>
-
-            <TableFrame exportOptions={{ url: '/api/questions', params: { search: query, mapel: filterSubject, type: filterType, sort: questionSort }, filename: 'bank_soal.csv', disabled: questionList.loading || !!questionList.error || search !== query, columns: [{ title: 'Mata Pelajaran', value: r => r.mapel }, { title: 'Elemen', value: r => r.element }, { title: 'Tipe Soal', value: r => r.type }, { title: 'Soal', value: r => contentText(r.content) }] }} sortLabel="Soal" sort={questionSort} onSort={value => { setQuestionSort(value); setQuestionPage(1); }} total={questionList.total} pageSize={questionPageSize} onPageSize={value => { setQuestionPageSize(value); setQuestionPage(1); }} label="Bank soal">
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
-                  <th scope="col" className="p-4">Mapel / Elemen</th>
-                  <th scope="col" className="p-4">Tipe Soal</th>
-                  <SortableHeading title="Cuplikan Soal" sort={questionSort} onSort={value => { setQuestionSort(value); setQuestionPage(1); }} />
-                  <th scope="col" className="p-4">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {questionList.error || questionList.loading ? <TableState loading={questionList.loading} error={questionList.error} columns={4} retry={() => void questionList.reload()} /> : questions.length > 0 ? questions.map((soal) => (
-                  <tr key={soal.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td className="p-4">
-                      <span className="tag">{soal.mapel || 'Mapel'}</span><small className="table-secondary">{soal.element || '—'}</small>
-                    </td>
-                    <td className="p-4 font-semibold text-main">{soal.type || 'Pilihan Ganda'}</td>
-                    <td className="p-4" style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <div className="flex items-center gap-2">
-                        {soal.imageUrl && <ImageIcon size={14} style={{ color: 'var(--primary-color)', flexShrink: 0 }} />}
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{contentText(soal.content)}</span>
-                      </div>
-                    </td>
-                    <td className="p-4 flex gap-2">
-                      <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: 'var(--primary-color)' }} title="Lihat Pratinjau" onClick={() => {
-                        setPreviewQuestion(soal);
-                      }}>
-                        <Eye size={16}/>
-                      </button>
-                      <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px' }} title="Edit" onClick={() => {
-                        setIsAdding(true);
-                        setEditingQuestion(soal);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}>
-                        <Edit size={16}/>
-                      </button>
-                      <button className="btn-secondary" style={{ padding: '6px', borderRadius: '6px', color: '#d32f2f' }} title="Hapus" onClick={async () => {
-                        if (await confirmModal({ title: 'Konfirmasi', message: 'Yakin ingin menghapus soal ini?' })) {
-                          const response = await fetch(`/api/questions/${soal.id}`, { method: 'DELETE' });
-                          if (!response.ok) {
-                            const error = await response.json();
-                            toast.error(error.message || 'Gagal menghapus soal');
-                            return;
-                          }
-                          await questionList.reload();
-                        }
-                      }}>
-                        <Trash2 size={16}/>
-                      </button>
-                    </td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan={4} className="p-4 text-center text-muted">Belum ada soal sesuai filter.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            </TableFrame>
-            <Pagination page={questionPage} total={questionList.total} pageSize={questionPageSize} onChange={setQuestionPage} loading={questionList.loading} />
-          </div>
-        )}
-
-        {activeTab === 'bank' && isAdding && <Suspense fallback={<p role="status">Memuat editor soal...</p>}><QuestionEditor key={editingQuestion?.id || 'new'} initial={editingQuestion} onCancel={() => setIsAdding(false)} onSaved={async () => { setIsAdding(false); setEditingQuestion(null); await questionList.reload(); }} /></Suspense>}
-
-        {activeTab === 'bacaan' && !isAddingReading && (
-          <div className="animate-fade-in glass-panel p-8" style={{ minHeight: '400px' }}>
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2>Manajemen Teks Bacaan Bersama</h2>
-                <p>Kelola bacaan yang dapat ditautkan ke lebih dari satu soal sekaligus.</p>
-              </div>
-              <button className="btn" onClick={() => { setIsAddingReading(true); setEditingReadingId(null); setReadingTitle(''); setReadingContent(''); }}>
-                <Plus size={18} /> Tambah Bacaan
+              <button className="table-reset" onClick={reset}>
+                <RotateCcw size={13} />
+                Reset Filter
               </button>
             </div>
-            
-            <TableFrame exportOptions={{ url: '/api/readings', params: { search: query, sort: readingSort }, filename: 'teks_bacaan.csv', disabled: readingList.loading || !!readingList.error || search !== query, columns: [{ title: 'Judul', value: r => r.title }, { title: 'Teks Bacaan', value: r => contentText(r.content) }, { title: 'Soal Ditautkan', value: r => r._count?.questions || 0 }] }} sortLabel="Judul" sort={readingSort} onSort={value => { setReadingSort(value); setReadingPage(1); }} total={readingList.total} pageSize={readingPageSize} onPageSize={value => { setReadingPageSize(value); setReadingPage(1); }} label="Teks bacaan">
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
-                  <SortableHeading title="Judul Bacaan" sort={readingSort} onSort={value => { setReadingSort(value); setReadingPage(1); }} />
-                  <th scope="col" className="p-4">Potongan Teks</th>
-                  <th scope="col" className="numeric">Soal Ditautkan</th>
-                  <th scope="col" className="p-4">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {readingList.error || readingList.loading ? <TableState loading={readingList.loading} error={readingList.error} columns={4} retry={() => void readingList.reload()} /> : readings.length > 0 ? readings.map(r => (
-                  <tr key={r.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <td className="p-4 font-semibold text-main">{r.title}</td>
-                    <td className="p-4 text-muted">{r.content.substring(0, 50)}...</td>
-                    <td className="numeric">{r._count?.questions || 0}</td>
-                    <td className="p-4">
-                      <div className="flex gap-2">
-                        <button className="btn-secondary" style={{ padding: '4px 8px' }} onClick={() => {
-                          setEditingReadingId(r.id);
-                          setReadingTitle(r.title);
-                          setReadingContent(r.content);
-                          setIsAddingReading(true);
-                        }}>Edit</button>
-                        <button className="btn-secondary" style={{ padding: '4px 8px', color: '#d32f2f', background: 'rgba(255,0,0,0.1)' }} onClick={async () => {
-                          if (await confirmModal({ title: 'Konfirmasi', message: 'Hapus bacaan ini?' })) {
-                            const response = await fetch(`/api/readings/${r.id}`, { method: 'DELETE' });
-                            if (!response.ok) {
-                              const error = await response.json();
-                              toast.error(error.message || 'Gagal menghapus bacaan');
-                              return;
-                            }
-                            await readingList.reload();
-                          }
-                        }}>Hapus</button>
-                      </div>
-                    </td>
+            <TableFrame
+              total={list.total}
+              pageSize={pageSize}
+              onPageSize={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+              label="Bank soal"
+              sortLabel="Soal"
+              sort={sort}
+              onSort={(value) => {
+                setSort(value);
+                setPage(1);
+              }}
+              exportOptions={{
+                url: "/api/questions",
+                params: { search: query, mapel: subject, type, sort },
+                filename: "bank_soal.csv",
+                disabled: list.loading || !!list.error || query !== search,
+                columns: [
+                  { title: "Mata Pelajaran", value: (q) => q.mapel },
+                  { title: "Elemen", value: (q) => q.element },
+                  { title: "Tipe Soal", value: (q) => q.type },
+                  { title: "Soal", value: (q) => contentText(q.content) },
+                ],
+              }}
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <SortableHeading
+                      title="Cuplikan Soal"
+                      sort={sort}
+                      onSort={(value) => {
+                        setSort(value);
+                        setPage(1);
+                      }}
+                    />
+                    <th scope="col">Mata Pelajaran</th>
+                    <th scope="col">Elemen</th>
+                    <th scope="col">Tipe Soal</th>
+                    <th scope="col">Aksi</th>
                   </tr>
-                )) : (
-                  <tr><td colSpan={4} className="p-4 text-center text-muted">Belum ada bacaan bersama.</td></tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {list.loading || list.error ? (
+                    <TableState
+                      columns={5}
+                      loading={list.loading}
+                      error={list.error}
+                      retry={() => void list.reload()}
+                    />
+                  ) : list.items.length ? (
+                    list.items.map((question) => (
+                      <tr key={question.id}>
+                        <td>
+                          <strong className="teacher-question-summary">
+                            {contentText(question.content)}
+                          </strong>
+                          <small className="table-secondary">
+                            ID: {question.id.substring(0, 8)}
+                          </small>
+                        </td>
+                        <td>
+                          <span className="tag">{question.mapel}</span>
+                        </td>
+                        <td>
+                          <span className="table-secondary">
+                            {question.element || "—"}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="teacher-type">{question.type}</span>
+                        </td>
+                        <td>
+                          <div className="teacher-row-actions">
+                            <button
+                              className="teacher-icon-action"
+                              aria-label="Lihat Pratinjau"
+                              title="Lihat Pratinjau"
+                              onClick={() => setPreview(question)}
+                            >
+                              <Eye size={15} />
+                            </button>
+                            <button
+                              className="teacher-icon-action"
+                              aria-label="Edit"
+                              title="Edit"
+                              disabled={deleting}
+                              onClick={() => {
+                                setEditing(question);
+                                window.scrollTo(0, 0);
+                              }}
+                            >
+                              <Edit3 size={15} />
+                            </button>
+                            <button
+                              className="teacher-icon-action danger"
+                              aria-label="Hapus"
+                              title="Hapus"
+                              disabled={deleting}
+                              onClick={() => void remove(question)}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5}>
+                        <div className="table-empty">
+                          <Library size={25} />
+                          <strong>Belum ada soal sesuai filter.</strong>
+                          <p>
+                            Tambahkan soal baru atau ubah pencarian dan filter.
+                          </p>
+                          <button className="btn-secondary" onClick={reset}>
+                            Reset Filter
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </TableFrame>
-            <Pagination page={readingPage} total={readingList.total} pageSize={readingPageSize} onChange={setReadingPage} loading={readingList.loading} />
-          </div>
+            <Pagination
+              page={page}
+              total={list.total}
+              pageSize={pageSize}
+              onChange={setPage}
+              loading={list.loading}
+            />
+            <p className="table-caption">
+              Bacaan dan pertanyaan ditulis dalam satu isi soal. Konten yang
+              sudah dipakai ujian tetap mengikuti penguncian sistem.
+            </p>
+          </section>
+        ) : (
+          <Suspense
+            fallback={
+              <p role="status" className="teacher-loading">
+                Memuat editor soal...
+              </p>
+            }
+          >
+            <QuestionEditor
+              key={editing?.id || "new"}
+              initial={editing}
+              onCancel={() => setEditing(undefined)}
+              onSaved={async () => {
+                setEditing(undefined);
+              }}
+            />
+          </Suspense>
         )}
-
-        {activeTab === 'bacaan' && isAddingReading && (
-          <div className="animate-fade-in glass-panel p-8" style={{ minHeight: '400px' }}>
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2>{editingReadingId ? 'Edit Teks Bacaan Bersama' : 'Tambah Teks Bacaan Bersama'}</h2>
-                <p>Tulis atau tempel teks panjang yang akan digunakan pada beberapa soal.</p>
-              </div>
+        <ExamDialog
+          open={!!preview}
+          title="Pratinjau Tampilan Siswa"
+          className="question-preview-dialog teacher-preview-dialog"
+          onClose={() => setPreview(null)}
+        >
+          {preview && (
+            <div className="exam-workspace teacher-preview">
+              <article className="exam-question-card">
+                <div className="exam-question-body">
+                  <ExamQuestion
+                    question={preview}
+                    number={1}
+                    answer={null}
+                    disabled
+                    onAnswer={() => {}}
+                    onImage={setImage}
+                  />
+                </div>
+              </article>
             </div>
-            
-            <div className="flex flex-col gap-4">
-              <div className="input-group">
-                <label className="input-label">Judul Wacana / Teks</label>
-                <input type="text" className="input-field" value={readingTitle} onChange={e => setReadingTitle(e.target.value)} placeholder="Contoh: Peristiwa Rengasdengklok" />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Isi Teks Bacaan</label>
-                <textarea className="input-field" rows={10} value={readingContent} onChange={e => setReadingContent(e.target.value)} placeholder="Masukkan teks cerita/wacana lengkap di sini..."></textarea>
-              </div>
-              
-              <div className="flex justify-end gap-4 mt-4">
-              <button className="btn-secondary" onClick={() => { setIsAddingReading(false); setEditingReadingId(null); setReadingTitle(''); setReadingContent(''); }}>Batal</button>
-              <button className="btn" onClick={handleSaveReading}>{editingReadingId ? 'Perbarui Teks' : 'Simpan Teks Bacaan'}</button>
-              </div></div>
-          </div>
-        )}
-
-        {/* Preview Modal */}
-        <ExamDialog open={!!previewQuestion} title="Pratinjau Tampilan Siswa" className="question-preview-dialog" onClose={() => setPreviewQuestion(null)}>
-          {previewQuestion && <div className="exam-workspace"><div className="exam-question-body"><ExamQuestion question={previewQuestion} number={1} answer={null} disabled onAnswer={() => {}} onImage={setPreviewImage} /></div></div>}
+          )}
         </ExamDialog>
-        <RichImageDialog src={previewImage} onClose={() => setPreviewImage(null)} />
-
+        <RichImageDialog src={image} onClose={() => setImage(null)} />
+      </div>
     </WorkspaceShell>
   );
 };
-
 export default GuruDashboard;

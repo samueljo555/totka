@@ -27,7 +27,7 @@ export async function visibleQuestionPage(prisma: PrismaClient, req: Request) {
     page = pageResult(rows.flatMap(row => row.id ? [{ id: row.id }] : []), rows[0]?.total || 0, p, row => row.id);
   } else page = await reportPage(prisma, req, source, JSON.stringify(['questions', req.user!.id, req.user!.role, mapel, type]));
   const ids = page.items.map(row => String(row.id));
-  const records = ids.length ? await prisma.question.findMany({ where: { id: { in: ids } }, include: { reading: { select: { id: true, title: true, content: true } } } }) : [];
+  const records = ids.length ? await prisma.question.findMany({ where: { id: { in: ids } } }) : [];
   const byId = new Map(records.map(row => [row.id, row]));
   return { ...page, items: ids.flatMap(id => byId.has(id) ? [byId.get(id)!] : []) };
 }

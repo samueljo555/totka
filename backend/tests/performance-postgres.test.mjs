@@ -126,9 +126,10 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       const other = await get('/monitoring/packages', 'op2');
       assert.equal(other.body.items[0].registeredStudents, 50); assert.equal(other.body.items[0].finished, 0);
     });
-    await t.test('indexes migrate without replacing answer data and PostgreSQL uses an index for scoped paging', async () => {
-      const sql = readFileSync(new URL('../prisma/migrations/20261024160000_query_indexes/migration.sql', import.meta.url), 'utf8');
+    await t.test('current indexes rebuild without replacing answers and PostgreSQL uses scoped paging indexes', async () => {
+      const sql = readFileSync(new URL('../prisma/migrations/20261024160000_query_indexes/migration.sql', import.meta.url), 'utf8').split('\n').filter(line => !/Question_readingId_idx|ReadingText_authorId_id_idx/.test(line)).join('\n');
       const names = [...sql.matchAll(/CREATE INDEX "([^"]+)"/g)].map(match => match[1]);
+      assert.equal(names.length, 9);
       for (const name of names) await prisma.$executeRawUnsafe(`DROP INDEX "${name}"`);
       await pool.query(sql);
       assert.equal(await prisma.answer.count(), 502500);
@@ -136,6 +137,7 @@ test('paged queries and aggregates with 10050 students and 502500 answers in iso
       assert.match(JSON.stringify(result.rows), /Index (Only )?Scan/);
       const indexes = await pool.query('SELECT indexname FROM pg_indexes WHERE schemaname=$1', [schema]);
       assert.ok(names.every(name => indexes.rows.some(row => row.indexname === name)));
+      assert.ok(!indexes.rows.some(row => ['Question_readingId_idx','ReadingText_authorId_id_idx'].includes(row.indexname)));
     });
     await t.test('analytics use actual NISN and keep unavailable scores distinct from a genuine zero without rewriting results', async () => {
       const users = [

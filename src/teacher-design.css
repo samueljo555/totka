@@ -1,0 +1,289 @@
+.teacher-content {
+  min-width: 0;
+}
+.teacher-panel {
+  border: 1px solid var(--tka-line);
+  border-top: 3px solid var(--tka-blue);
+  border-radius: 8px;
+  background: white;
+  padding: 21px;
+  min-width: 0;
+  box-shadow: 0 2px 3px #23365002;
+}
+.teacher-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 19px;
+}
+.teacher-panel-heading h2 {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+  margin: 0;
+}
+.teacher-panel-heading p {
+  font-size: 11px;
+  color: var(--tka-muted);
+  margin-top: 5px;
+}
+.teacher-scope {
+  font-size: 10px;
+  color: #7b92b2;
+  background: #f3f7ff;
+  border: 1px solid #dce7f9;
+  border-radius: 5px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.teacher-filters {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.teacher-filters .table-search input {
+  width: 255px;
+}
+.teacher-filters > .input-field {
+  width: auto;
+  max-width: 250px;
+  min-width: 165px;
+}
+.teacher-content .table-frame {
+  margin-top: 12px;
+}
+.teacher-content .data-table-scroll {
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+}
+.teacher-content .table-pagination {
+  border-top: 1px solid var(--tka-line);
+  margin-top: 14px;
+}
+.teacher-question-summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 210px;
+  max-width: 320px;
+  white-space: normal;
+  color: #4d6689;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.7;
+}
+.teacher-row-actions {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.teacher-icon-action {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e1e8f3;
+  background: white;
+  color: #6980a3;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.teacher-icon-action:hover {
+  background: #eff5ff;
+  border-color: #adc7f3;
+}
+.teacher-icon-action.danger {
+  color: #b47773;
+}
+.teacher-type {
+  font-size: 10px;
+  color: #7f74ad;
+  background: #f3f0fd;
+  border-radius: 4px;
+  padding: 4px 8px;
+  display: inline-block;
+  max-width: 190px;
+  white-space: normal;
+}
+.teacher-loading {
+  font-size: 12px;
+  color: var(--tka-muted);
+  padding: 20px;
+}
+.teacher-content .question-authoring {
+  border: 1px solid var(--tka-line);
+  border-radius: 8px;
+  background: white;
+  padding: 21px;
+  box-shadow: 0 2px 3px #23365002;
+}
+.teacher-content .question-authoring > .report-heading {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--tka-line);
+}
+.teacher-content .question-authoring > .report-heading h2 {
+  font-size: 18px;
+}
+.teacher-content .authoring-metadata {
+  gap: 16px;
+  margin: 20px 0 24px;
+}
+.teacher-content .authoring-input > h3 {
+  margin: 0 0 10px;
+}
+.teacher-content .authoring-preview {
+  background: #f0f5fd;
+  border-radius: 8px;
+  border-color: #dce7f7;
+  padding: 17px;
+  top: 20px;
+}
+.teacher-content .authoring-preview-heading h3 {
+  margin: 0;
+}
+.teacher-content .option-editor {
+  background: #fbfcff;
+  border-color: #e0e8f4;
+}
+.teacher-content .authoring-actions {
+  border-top: 1px solid var(--tka-line);
+  padding-top: 20px;
+  margin-top: 23px;
+}
+.teacher-content .wysiwyg-editor {
+  border-radius: 7px;
+}
+.teacher-content .rich-toolbar {
+  background: #f8faff;
+}
+.teacher-content .rich-settings {
+  background: white;
+}
+.teacher-content .question-editor-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.exam-dialog.teacher-preview-dialog {
+  max-width: 850px;
+  width: calc(100% - 28px);
+  padding: 23px;
+  border-radius: 10px;
+}
+.teacher-preview .exam-question-card {
+  border: 0;
+  box-shadow: none;
+}
+.teacher-preview .exam-question-body {
+  padding: 12px 0;
+}
+.exam-workspace.teacher-preview fieldset:disabled .exam-option {
+  opacity: 1;
+}
+.teacher-preview-dialog .exam-dialog-heading h2 {
+  font-size: 18px;
+  margin: 0;
+}
+@media (max-width: 1280px) {
+  .teacher-content .authoring-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .teacher-content .authoring-preview {
+    position: static;
+    max-height: none;
+  }
+  .teacher-content .authoring-student {
+    max-width: 750px;
+    margin: auto;
+  }
+}
+@media (max-width: 700px) {
+  .teacher-content .authoring-metadata {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 520px) {
+  .teacher-panel {
+    padding: 17px;
+  }
+  .teacher-panel-heading {
+    flex-wrap: wrap;
+  }
+  .teacher-filters .table-search,
+  .teacher-filters .table-search input {
+    width: 100%;
+    max-width: none;
+  }
+  .teacher-filters > .input-field {
+    flex: 1;
+    max-width: 100%;
+  }
+  .teacher-content .question-authoring {
+    padding: 17px;
+  }
+  .teacher-content .authoring-preview {
+    padding: 12px;
+  }
+  .teacher-content .authoring-preview .exam-question-body {
+    padding: 15px !important;
+  }
+  .teacher-content .rich-toolbar {
+    gap: 4px;
+  }
+  .teacher-content .rich-context-tools {
+    gap: 8px;
+  }
+  .teacher-content .rich-context-tools input {
+    max-width: 100%;
+  }
+  .teacher-content .authoring-actions {
+    gap: 8px;
+  }
+  .teacher-content .authoring-actions button {
+    flex: 1;
+  }
+  .teacher-content .option-editor {
+    padding: 10px;
+  }
+  .teacher-content .rich-editor-surface .tiptap {
+    padding: 16px;
+  }
+  .teacher-content .table-toolbar-actions {
+    gap: 8px;
+  }
+  .exam-dialog.teacher-preview-dialog {
+    padding: 20px;
+  }
+  .teacher-content .option-editor-heading {
+    flex-wrap: wrap;
+  }
+}
+@media print {
+  .teacher-filters,
+  .teacher-row-actions,
+  .teacher-scope,
+  .teacher-content .authoring-input {
+    display: none !important;
+  }
+  .teacher-panel {
+    box-shadow: none;
+  }
+}
+
+.teacher-save-error {
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid #efc9c5;
+  background: #fff5f3;
+  color: #a85c53;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.7;
+}

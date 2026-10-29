@@ -1,6 +1,6 @@
 # Deployment, backup, dan pemulihan TKA
 
-Panduan ini untuk PostgreSQL khusus aplikasi, schema `public`, dan PM2 pada satu host. Semua contoh dijalankan oleh akun layanan aplikasi; sesuaikan path. Lakukan perubahan pada jadwal pemeliharaan di luar ujian. Tidak ada perintah reset, truncate, seed, atau penghapusan database produksi dalam prosedur pembaruan.
+Panduan ini untuk PostgreSQL khusus aplikasi, schema `public`, dan PM2 pada satu host. Semua contoh dijalankan oleh akun layanan aplikasi; sesuaikan path. Lakukan perubahan pada jadwal pemeliharaan di luar ujian. Prosedur pembaruan rutin ini tidak menjalankan reset, truncate, atau seed. Untuk keputusan pengguna memulai dari kosong pada Tahap 5, gunakan [panduan khusus database kosong](FRESH_DATABASE_STAGE5.md) dan terapkan frontend/backend bersama.
 
 ## Konfigurasi dan lokasi data
 
@@ -37,11 +37,11 @@ npm run db:adopt -- --apply
 npm run db:deploy
 ```
 
-Perintah pertama hanya memeriksa. Perintah kedua merekam migrasi yang struktur fisiknya sudah ada; tidak mengganti akun, hash, kartu, jawaban, atau nilai. Pemeriksaan menggunakan diff schema Prisma untuk kolom, tipe, constraint, dan indeks; memeriksa checksum riwayat yang dikenal; dan menolak migrasi gagal, indeks/kolom parsial, serta drift tak dikenal. Setelah adopsi, `db:deploy` menjalankan hanya migrasi yang masih diperlukan. Pengujian mencakup schema sebelum penambahan kartu/versi/indeks dan schema terbaru tanpa riwayat.
+Perintah pertama hanya memeriksa. Perintah kedua merekam migrasi yang struktur fisiknya sudah ada; tidak mengganti akun, hash, kartu, jawaban, atau nilai. Pemeriksaan menggunakan diff schema Prisma untuk kolom, tipe, constraint, dan indeks; memeriksa checksum riwayat yang dikenal; dan menolak migrasi gagal, indeks/kolom parsial, serta drift tak dikenal. Setelah adopsi, `db:deploy` menjalankan hanya migrasi yang masih diperlukan. Adopsi hanya berlaku pada schema lengkap yang sudah cocok dengan model terbaru. Schema parsial atau schema yang masih memiliki bacaan terpisah ditolak tanpa perubahan; untuk rilis Tahap 5 gunakan panduan database kosong bila memulai ulang.
 
 Jika riwayat dan schema sudah sepenuhnya selaras, cukup `npm run db:deploy`. `migrate deploy` pada deployment biasa tidak menggantikan audit drift: `db:check` tetap dijalankan oleh skrip tersebut. Jangan mengedit file migrasi yang sudah diterapkan atau menandai migrasi selesai hanya untuk menghilangkan error.
 
-Schema awal yang masih berisi `School.id`/`User.schoolId` dan belum memiliki username/password memerlukan pemetaan identitas sekolah ke NPSN dan penetapan kredensial yang ditinjau khusus. Migrasi menolak data semacam itu daripada menebak identitas. Uji pemetaan pada clone, rekonsiliasi relasi dan jumlah data, lalu audit ulang. Instalasi kosong dengan schema awal dapat dimigrasikan otomatis. Schema parsial/tak dikenal harus diperbaiki pada clone sebelum jalur produksi dipilih.
+Schema awal yang masih berisi `School.id`/`User.schoolId` dan belum memiliki username/password memerlukan pemetaan identitas sekolah ke NPSN dan penetapan kredensial yang ditinjau khusus. Migrasi menolak data semacam itu daripada menebak identitas. Uji pemetaan pada clone, rekonsiliasi relasi dan jumlah data, lalu audit ulang. Riwayat migrasi tetap dapat membangun instalasi kosong hingga model terbaru; migrasi penghapusan bacaan menolak data bacaan terpisah yang masih terisi. Schema parsial/tak dikenal harus diperbaiki pada clone sebelum jalur produksi dipilih.
 
 Pembuatan indeks menggunakan `CREATE INDEX` biasa dan dapat menahan penulisan. Hindari jam ujian. Bila migrasi gagal, jangan menjalankan reset: catat migrasi dan error, periksa transaksi/schema pada clone, siapkan perbaikan atau pemulihan, lalu selesaikan status migrasi sesuai hasil sebenarnya.
 
@@ -118,4 +118,4 @@ npm run build
 npm run lint
 ```
 
-Suite operasi menguji fresh deploy tanpa drift, adopsi database berisi data, upgrade sebelum P1, penolakan legacy yang memerlukan mapping, backup/restore nyata, dekripsi kartu dengan key yang sama, checksum rusak, penolakan target terisi, frontend/media produksi, endpoint kesehatan, dan shutdown. Tes ini membuktikan prosedur pada fixture terisolasi; waktu pemulihan dan kapasitas server produksi harus diukur pada ukuran data serta infrastruktur target.
+Suite operasi menguji fresh deploy tanpa drift, adopsi database berisi data, penolakan schema parsial sebelum P1 tanpa mengubah data, penolakan legacy yang memerlukan mapping, backup/restore nyata, dekripsi kartu dengan key yang sama, checksum rusak, penolakan target terisi, frontend/media produksi, endpoint kesehatan, dan shutdown. Tes ini membuktikan prosedur pada fixture terisolasi; waktu pemulihan dan kapasitas server produksi harus diukur pada ukuran data serta infrastruktur target.

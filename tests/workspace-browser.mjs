@@ -38,20 +38,20 @@ try {
     assert.equal(await page.locator('.workspace-desktop-nav .workspace-avatar').innerText(), 'NP');
     const menu = page.getByRole('navigation', { name: 'Menu utama', exact: true });
     const names = await menu.getByRole('button').allTextContents();
-    assert.equal(names.length, role.includes('admin') ? 6 : role === 'operator' ? 3 : role === 'guru' ? 2 : 1);
+    assert.equal(names.length, role.includes('admin') ? 6 : role === 'operator' ? 3 : 1);
     for (const name of names) {
       await menu.getByRole('button', { name, exact: true }).click();
       assert.equal(await page.locator('.workspace-main h1').innerText(), name);
       assert.equal(await menu.getByRole('button', { name, exact: true }).getAttribute('aria-current'), 'page');
     }
     if (role.includes('admin') || role === 'guru') {
-      const label = role === 'guru' ? 'Cari soal atau bacaan' : 'Cari data';
+      const label = role === 'guru' ? 'Cari soal' : 'Cari data';
       if (role.includes('admin')) await menu.getByRole('button', { name: 'Manajemen Akun', exact: true }).click();
       await page.getByLabel(label, { exact: true }).fill('contoh pencarian');
       if (role.includes('admin')) await menu.getByRole('button', { name: 'Data Sekolah', exact: true }).click();
       else await menu.getByRole('button', { name: 'Bank Soal', exact: true }).click();
       if (role.includes('admin')) assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), '');
-      else await page.waitForFunction(() => document.querySelector('[aria-label="Cari soal atau bacaan"]').value === 'contoh pencarian');
+      else await page.waitForFunction(() => document.querySelector('[aria-label="Cari soal"]').value === 'contoh pencarian');
       await page.waitForTimeout(400);
     }
     await page.screenshot({ path: `/tmp/totka-stage1-${role}.png`, fullPage: true });
