@@ -51,6 +51,16 @@ node backend/scripts/run-live-load.mjs < /secure/admin-login.json
 
 `LIVE_SMOKE_ONLY=true` hanya menjalankan pemeriksaan awal. Paket tetap baru pada setiap pengulangan.
 
+Untuk melanjutkan setelah tahap yang sudah lolos, `LIVE_PREVIOUS_RUN_DIR` dapat
+menunjuk laporan sebelumnya. Runner memeriksa target, fixture, serta tahap
+sebelumnya yang lolos dan paketnya sudah ditutup. Semua tahap yang dipilih
+melalui `LIVE_STAGES` harus lebih tinggi daripada tahap sebelumnya tersebut.
+Laporan baru merekam hubungan kelanjutannya; metrik lama tidak dihitung ulang.
+
+Jika sesi admin ditolak dengan HTTP 401, runner melakukan login admin ulang
+dan mengulangi operasi kontrol sekali. Penolakan 403 tidak dicoba ulang.
+Kegagalan tahap menghasilkan exit code bukan nol; interupsi menghasilkan 130.
+
 ## Artefak dan batas interpretasi
 
 Folder `load-tests/results/HTTP-…/` memuat laporan, ringkasan k6, log error tanpa body/JWT, resource generator, kredensial dan kunci privat. Folder berizin 700, file 600, seluruh hasil diabaikan Git. Jangan memublikasikan seluruh folder.

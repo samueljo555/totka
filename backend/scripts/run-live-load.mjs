@@ -27,6 +27,13 @@ const report = { run, target: fixture.base, fixture: fixture.run, startedAt: new
   monitoring: 'External HTTP and local generator only; no GCP monitoring or database audit.',
   stages: [], planned: process.env.LIVE_STAGES ? process.env.LIVE_STAGES.split(',').map(Number) : [100, 250, 500, 1000, 2500, 5000, 7500, 10000], complete: false };
 assert.ok(report.planned.length && report.planned.every(v => [100, 250, 500, 1000, 2500, 5000, 7500, 10000].includes(v)));
+if (process.env.LIVE_PREVIOUS_RUN_DIR) {
+  const previous = JSON.parse(fs.readFileSync(path.join(process.env.LIVE_PREVIOUS_RUN_DIR, 'report.json'), 'utf8'));
+  assert.equal(previous.target, fixture.base); assert.equal(previous.fixture, fixture.run);
+  const passed = previous.stages.filter(s => !s.smoke && s.passed && s.packageClosed);
+  assert.ok(passed.length && passed.every(s => s.vus < Math.min(...report.planned)));
+  report.continuedFrom = { run: previous.run, passedStages: passed.map(s => s.vus) };
+}
 const write = (file, data) => { const temporary = file + '.partial'; fs.writeFileSync(temporary, JSON.stringify(data, null, 2), { mode: 0o600 }); fs.renameSync(temporary, file); };
 const persist = () => write(reportPath, report);
 const announce = data => console.log(JSON.stringify(data));
@@ -34,12 +41,21 @@ let token, child, stop = false, activePackage;
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 process.on('SIGINT', () => { stop = true; child?.kill('SIGINT'); });
 process.on('SIGTERM', () => { stop = true; child?.kill('SIGINT'); });
-async function api(route, method = 'GET', body, authenticated = true) {
+async function api(route, method = 'GET', body, authenticated = true, renewed = false) {
   const response = await fetch(fixture.base + route, { method,
     headers: { ...(authenticated ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(30000) });
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`${method} ${new URL(fixture.base + route).pathname} HTTP ${response.status()}`);
+  if (!response.ok) {
+    if (authenticated && !renewed && response.status === 401 &&
+        ['SESSION_KICKED', 'TOKEN_EXPIRED', 'UNAUTHORIZED'].includes(data?.error)) {
+      const login = await api('/api/login', 'POST', admin, false);
+      assert.ok(['admin', 'super_admin'].includes(login.user?.role)); token = login.token;
+      return api(route, method, body, true, true);
+    }
+    const code = typeof data?.error === 'string' && /^[A-Z_]{1,80}$/.test(data.error) ? ` ${data.error}` : '';
+    throw new Error(`${method} ${new URL(fixture.base + route).pathname} HTTP ${response.status}${code}`);
+  }
   return data;
 }
 async function availablePort() {
@@ -179,7 +195,10 @@ try {
     for (let i = 0; i < report.planned.length && !stop; i++) {
       const vus = report.planned[i];
       const stage = await runStage({ vus, seconds: vus === 10000 ? 600 : 300, ramp: ramps[vus], finishSpread: vus === 10000 ? 30 : 15 }, report.questionIds);
-      if (!stage.passed) { report.stopReason = stage.generatorError || 'Previous stage failed thresholds or target concurrency/duration'; break; }
+      if (!stage.passed) {
+        report.stopReason = stage.generatorError || 'Previous stage failed thresholds or target concurrency/duration';
+        process.exitCode = 1; break;
+      }
     }
     report.complete = !stop && report.stages.length === report.planned.length + 1 && report.stages.every(s => s.passed);
   }
@@ -189,6 +208,7 @@ finally {
     try { await api(`/api/packages/${encodeURIComponent(activePackage)}`, 'PUT', { status: 'selesai' }); report.lastPackageClosed = true; }
     catch { report.lastPackageClosed = false; }
   }
+  if (stop) process.exitCode = 130;
   report.interrupted = stop; report.finishedAt = new Date().toISOString(); persist();
   announce({ event: 'report', output, complete: report.complete, error: report.error, stopReason: report.stopReason });
 }

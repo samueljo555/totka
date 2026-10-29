@@ -1,5 +1,9 @@
 # Hasil pengujian domain — 29 Oktober 2026
 
+**Pembaruan:** setelah pengguna mengubah konfigurasi Cloud Armor, tahap 100
+lulus; tahap 250 masih mendapat 403 HTML. Lihat [laporan pengujian ulang](LIVE_LOAD_RETEST_20261029.md).
+Bagian di bawah adalah riwayat percobaan awal sebelum perubahan tersebut.
+
 **Target 10.000 siswa belum tercapai. Kenaikan dihentikan pada tahap 100 karena error HTTP. Hasil ini belum menentukan kapasitas maksimum aplikasi/database.**
 
 Target: `https://naingsima.my.id/`. k6 v2.3.0 resmi, checksum SHA-256 diverifikasi. Pengukuran melalui HTTPS dan autentikasi normal, tanpa monitoring GCP atau audit database.
