@@ -2,6 +2,8 @@
 
 Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Bank Soal, Paket Ujian, manajemen peserta didik, dan penilaian otomatis.
 
+**Uji domain 29 Oktober 2026:** pemeriksaan awal berhasil; pengujian 100 siswa dihentikan karena error HTTP, dengan 403 HTML terkonfirmasi pada pengulangan. Tahap 10.000 belum dijalankan. Lihat [hasil dan batas kesimpulan](docs/LIVE_LOAD_TEST_RESULTS.md) serta [metode k6 eksternal](docs/LIVE_LOAD_TESTING.md).
+
 **Rilis Tahap 5:** dashboard Guru menggunakan satu editor soal dan tidak memiliki bacaan terpisah. Untuk keputusan memulai database dari kosong, ikuti [panduan penerapan Tahap 5](docs/FRESH_DATABASE_STAGE5.md). Catatan migrasi P0/P1 di bawah merupakan riwayat perubahan; urutan penerapan rilis ini mengikuti panduan tersebut.
 
 **Status frontend:** keenam tahap desain yang disetujui sudah diterapkan, termasuk halaman siswa dan pemeriksaan lintas peran pada Tahap 6. Kebutuhan database Tahap 5 tetap berlaku untuk penerapan rilis gabungan.
