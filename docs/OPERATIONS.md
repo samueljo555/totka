@@ -14,6 +14,24 @@ Panduan ini untuk PostgreSQL khusus aplikasi, schema `public`, dan PM2 pada satu
 
 PM2 menggunakan cwd absolut, menunggu pesan `ready` setelah pemeriksaan database dan listen HTTP, serta memberi 20 detik sebelum mematikan proses. `WEB_CONCURRENCY` mengatur worker, `APP_WORKERS` harus mencerminkan seluruh proses bila beberapa host. Anggaran koneksi dijelaskan pada README. Konfigurasi ini bukan jaminan kapasitas 10.000 pengguna bersamaan.
 
+### Koneksi melalui PgBouncer/pooler
+
+Error `08P01: unsupported startup parameter: statement_timeout` berarti endpoint menolak parameter saat koneksi dibuka. `db:check` bisa berhasil karena Prisma CLI tidak memakai konfigurasi pool runtime yang sama. Menambahkan `pgbouncer=true` ke URL tidak membuat driver `pg` menghilangkan parameter tersebut.
+
+1. Tambahkan `DB_SERVER_TIMEOUTS=false` pada `backend/.env`. Nilai default `true` mempertahankan batas startup untuk koneksi langsung. Mode kompatibilitas menghilangkan dua parameter startup: `statement_timeout` dan `idle_in_transaction_session_timeout`. Jangan menyisipkan parameter tersebut melalui URL atau `options` jika pooler menolaknya.
+2. Minta administrator menetapkan batas server pada role aplikasi/database PostgreSQL. Contoh berikut memakai **nama contoh** yang harus diganti dengan role dan database sebenarnya, melalui koneksi administrasi langsung:
+
+   ```sql
+   ALTER ROLE tka_app IN DATABASE tka SET statement_timeout = '15s';
+   ALTER ROLE tka_app IN DATABASE tka SET idle_in_transaction_session_timeout = '20s';
+   ```
+
+   Pengaturan berlaku untuk sesi server baru; administrator perlu memastikan koneksi server pooler diperbarui sesuai prosedur layanannya. `DB_STATEMENT_TIMEOUT_MS` tidak diterapkan oleh aplikasi ketika `DB_SERVER_TIMEOUTS=false`. `DB_QUERY_TIMEOUT_MS` tetap membatasi waktu tunggu driver, tetapi tidak menjamin query berhenti di PostgreSQL.
+3. Dari root proyek, jalankan `npm --prefix backend run build`, lalu `pm2 startOrReload ecosystem.config.cjs --update-env`. Environment yang sudah ada di PM2 mengalahkan `.env`; jika variabel ini pernah dipasang pada environment PM2, perbarui juga nilai tersebut secara eksplisit saat reload.
+4. Periksa `pm2 status`, log aplikasi, serta `/api/ready`. Setelah seluruh worker sehat, jalankan `pm2 save`. Tidak diperlukan migrasi atau reset database.
+
+Jumlah worker diatur pada environment saat file ecosystem dibaca, bukan dari `backend/.env`. Untuk satu VM dengan delapan worker, gunakan `WEB_CONCURRENCY=8 APP_WORKERS=8` saat menjalankan perintah PM2. Jika jumlah proses lama belum berubah, gunakan `pm2 scale tka-app-server 8` setelah environment `APP_WORKERS` diperbarui. Dengan konfigurasi bawaan, delapan worker memiliki maksimum total 40 koneksi client pool; koneksi server PostgreSQL di belakang pooler mengikuti konfigurasi pooler.
+
 ## Memasang database baru
 
 Siapkan database kosong dan akun pemilik schema menggunakan pengelolaan PostgreSQL Anda. Pastikan `DATABASE_URL` menunjuk ke database tersebut, lalu dari root proyek:
