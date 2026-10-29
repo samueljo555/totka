@@ -47,6 +47,7 @@ const noOverflow = async (page, label) => assert.equal(await page.evaluate(() =>
 try {
   const { context, page, state } = await fixture();
   await page.goto(base); await page.getByRole('heading', { name: /Siap melangkah/ }).waitFor();
+  assert.equal(await page.title(), 'TOTKA JU1 / Try Out TKA Jakarta Utara I');
   assert.equal(await page.locator('.access-role-card').count(), 4);
   for (const [role, name] of [['siswa', 'Siswa'], ['operator', 'Operator Sekolah'], ['guru', 'Guru Penulis'], ['super_admin', 'Super Admin']]) {
     await page.getByRole('link', { name: `Masuk sebagai ${name}`, exact: true }).click(); await page.waitForURL(`${base}/login/${role}`);
@@ -71,6 +72,8 @@ try {
   }
   await page.getByRole('button', { name: 'Tampilkan password', exact: true }).click();
   await page.getByLabel('Peran akses', { exact: true }).selectOption('guru');
+  // Route effects clear credentials after navigation commits.
+  await page.waitForFunction(() => document.querySelector('#password')?.value === '');
   assert.equal(await page.getByLabel('Password', { exact: true }).inputValue(), ''); assert.equal(await page.getByLabel('Password', { exact: true }).getAttribute('type'), 'password');
   assert.equal(await page.getByRole('alert').count(), 0);
   await credentials(page); state.mode = 'hold'; const count = state.requests.length; await submit(page);

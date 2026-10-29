@@ -70,7 +70,7 @@ export function WorkspaceShell({ user, roleLabel, items, activeId, onNavigate, o
       <main className="workspace-main" id={mainId} tabIndex={-1}>
         <header className="workspace-page-heading"><div><p className="workspace-eyebrow">{roleLabel}</p><h1 ref={heading} tabIndex={-1}>{pageTitle}</h1>{description && <p className="workspace-description">{description}</p>}</div>{actions && <div className="workspace-page-actions">{actions}</div>}</header>
         {children}
-        <footer className="workspace-footer"><span>© {new Date().getFullYear()} TOTKA · Try Out Tes Kemampuan Akademik</span><span>{roleLabel}</span></footer>
+        <footer className="workspace-footer"><span>© {new Date().getFullYear()} TOTKA JU1 · Try Out TKA Jakarta Utara I</span><span>{roleLabel}</span></footer>
       </main>
     </div>
     <dialog ref={dialog} id={menuId} className="workspace-nav-dialog" aria-label={`Menu ${roleLabel}`} onCancel={event => { event.preventDefault(); setOpen(false); }} onKeyDown={event => {

@@ -6,7 +6,7 @@
 }
 .tka-brand{display:flex;align-items:center;gap:10px;font-size:21px;font-weight:750;letter-spacing:-.7px;color:var(--tka-ink);line-height:1.3}
 .tka-brand-symbol{width:33px;height:33px;display:grid;place-items:center;background:var(--tka-blue);color:white;border-radius:9px;flex-shrink:0}
-.tka-brand-symbol svg{width:22px;height:22px}.tka-brand small{display:block;font-size:9px;font-weight:600;letter-spacing:2px;color:#97a5b9;margin-top:1px}
+.tka-brand-symbol svg{width:22px;height:22px}.tka-brand small{display:block;font-size:9px;font-weight:600;letter-spacing:.8px;color:#97a5b9;margin-top:1px}
 .workspace-shell{--primary-color:var(--tka-blue);--primary-dark:var(--tka-ink);--text-main:var(--tka-ink);--text-muted:var(--tka-muted);--glass-border:var(--tka-line);display:flex;min-height:100dvh;align-items:stretch;min-width:0;background:var(--tka-bg);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--tka-ink)}
 .workspace-shell *{box-sizing:border-box}.workspace-shell button,.workspace-shell input,.workspace-shell select,.workspace-shell textarea{font-family:inherit}
 .workspace-shell .glass-panel{background:white;border:1px solid var(--tka-line);border-radius:var(--tka-radius);backdrop-filter:none;box-shadow:0 2px 3px #23365002}

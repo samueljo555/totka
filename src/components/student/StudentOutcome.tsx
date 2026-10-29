@@ -12,7 +12,7 @@ function OutcomeLayout({ children }: { children: ReactNode }) {
       </header>
       <main className="student-outcome-main">{children}</main>
       <footer className="student-outcome-footer">
-        © {new Date().getFullYear()} TOTKA · Try Out Tes Kemampuan Akademik
+        © {new Date().getFullYear()} TOTKA JU1 · Try Out TKA Jakarta Utara I
       </footer>
     </div>
   );
