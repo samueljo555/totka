@@ -38,7 +38,7 @@ try {
     assert.equal(await page.locator('.workspace-desktop-nav .workspace-avatar').innerText(), 'NP');
     const menu = page.getByRole('navigation', { name: 'Menu utama', exact: true });
     const names = await menu.getByRole('button').allTextContents();
-    assert.equal(names.length, role.includes('admin') ? 6 : role === 'operator' ? 3 : 1);
+    assert.equal(names.length, role.includes('admin') ? 6 : role === 'operator' ? 3 : role === 'siswa' ? 2 : 1);
     for (const name of names) {
       await menu.getByRole('button', { name, exact: true }).click();
       assert.equal(await page.locator('.workspace-main h1').innerText(), name);

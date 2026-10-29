@@ -1,4 +1,5 @@
-import React from 'react';
+import { ExamDialog } from "./ExamDialog";
+import "../confirm-design.css";
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -10,58 +11,41 @@ interface ConfirmModalProps {
   onCancel: () => void;
   isDestructive?: boolean;
 }
-
-export const ConfirmModal: React.FC<ConfirmModalProps> = ({
+export function ConfirmModal({
   isOpen,
   title,
   message,
-  confirmText = 'Yakin',
-  cancelText = 'Batal',
+  confirmText = "Yakin",
+  cancelText = "Batal",
   onConfirm,
   onCancel,
-  isDestructive = false
-}) => {
+  isDestructive = false,
+}: ConfirmModalProps) {
   if (!isOpen) return null;
-
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.4)',
-      backdropFilter: 'blur(4px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 9999
-    }}>
-      <div className="glass-panel" style={{
-        maxWidth: '400px',
-        width: '90%',
-        padding: '2rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1rem',
-        animation: 'fadeIn 0.2s ease-out'
-      }}>
-        <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-main)' }}>{title}</h3>
-        <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: '1.5' }}>{message}</p>
-        
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-          <button className="btn-secondary" onClick={onCancel}>
-            {cancelText}
-          </button>
-          <button 
-            className="btn" 
-            style={isDestructive ? { backgroundColor: '#ef4444' } : {}}
-            onClick={() => {
-              onConfirm();
-              onCancel(); // auto close
-            }}
-          >
-            {confirmText}
-          </button>
-        </div>
+    <ExamDialog
+      open={isOpen}
+      title={title}
+      onClose={onCancel}
+      className="workspace-confirm-dialog"
+    >
+      <p className="workspace-confirm-message">{message}</p>
+      <div className="workspace-confirm-actions">
+        <button
+          type="button"
+          className="workspace-confirm-button"
+          onClick={onCancel}
+        >
+          {cancelText}
+        </button>
+        <button
+          type="button"
+          className={`workspace-confirm-button primary${isDestructive ? " danger" : ""}`}
+          onClick={onConfirm}
+        >
+          {confirmText}
+        </button>
       </div>
-    </div>
+    </ExamDialog>
   );
-};
+}

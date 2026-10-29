@@ -288,6 +288,37 @@ try {
     .getByRole("button", { name: "Terapkan rumus", exact: true })
     .click();
   assert.ok((await page.locator(".authoring-preview .katex").count()) > 0);
+  await page
+    .getByRole("button", { name: "Lihat pratinjau lengkap", exact: true })
+    .click();
+  const fullPreview = page.getByRole("dialog", {
+    name: "Pratinjau lengkap",
+    exact: true,
+  });
+  await fullPreview
+    .getByRole("button", { name: "Perbesar Ilustrasi bangun", exact: true })
+    .click();
+  const zoomPreview = page.getByRole("dialog", {
+    name: "Gambar soal",
+    exact: true,
+  });
+  await zoomPreview.waitFor();
+  assert.equal(
+    await page.evaluate(() => document.body.style.overflow),
+    "hidden",
+  );
+  await zoomPreview
+    .getByRole("button", { name: "Tutup Gambar soal", exact: true })
+    .click();
+  assert.equal(await fullPreview.isVisible(), true);
+  assert.equal(
+    await page.evaluate(() => document.body.style.overflow),
+    "hidden",
+  );
+  await fullPreview
+    .getByRole("button", { name: "Tutup Pratinjau lengkap", exact: true })
+    .click();
+  assert.equal(await page.evaluate(() => document.body.style.overflow), "");
   await page.screenshot({
     path: "/tmp/totka-wysiwyg-author.png",
     fullPage: true,

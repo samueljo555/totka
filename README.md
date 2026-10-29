@@ -4,6 +4,8 @@ Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Ba
 
 **Rilis Tahap 5:** dashboard Guru menggunakan satu editor soal dan tidak memiliki bacaan terpisah. Untuk keputusan memulai database dari kosong, ikuti [panduan penerapan Tahap 5](docs/FRESH_DATABASE_STAGE5.md). Catatan migrasi P0/P1 di bawah merupakan riwayat perubahan; urutan penerapan rilis ini mengikuti panduan tersebut.
 
+**Status frontend:** keenam tahap desain yang disetujui sudah diterapkan, termasuk halaman siswa dan pemeriksaan lintas peran pada Tahap 6. Kebutuhan database Tahap 5 tetap berlaku untuk penerapan rilis gabungan.
+
 
 ## Keamanan API dan konfigurasi JWT
 
@@ -325,3 +327,15 @@ Menu dan CRUD bacaan terpisah, relasi `Question.readingId`, model `ReadingText`,
 **Tahap ini memerlukan build frontend dan backend, Prisma Client baru, serta migrasi/reset yang direncanakan pengelola server.** Ikuti [urutan penerapan database kosong](docs/FRESH_DATABASE_STAGE5.md). Pembuatan Super Admin dilakukan kembali setelah reset. Jika Redis dipakai, gunakan namespace baru untuk memisahkan cache instalasi lama. `db:adopt` hanya menerima schema lengkap model terbaru.
 
 Verifikasi mencakup build, pengujian HTTP keamanan, PostgreSQL integritas ujian/laporan, fresh deploy tanpa drift, penolakan migrasi pada bacaan terisi, backup/restore nyata, dan browser editor/siswa. Jalankan `tests/wysiwyg-browser.mjs`, `tests/student-exam-browser.mjs`, `tests/workspace-browser.mjs`, dan `tests/tables-real-browser.mjs` dengan variabel Playwright/database uji seperti tahap sebelumnya. Tahap 6 (halaman siswa dan pemeriksaan menyeluruh) tetap memerlukan persetujuan pengguna.
+
+### Rekonstruksi frontend — tahap 6
+
+Halaman siswa mengikuti desain yang disetujui: identitas dari profil login, menu Profil Siswa yang hanya dibaca, formulir token, petunjuk sebelum mulai, ruang ujian dengan brand bersama, dan hasil dengan identitas peserta. Profil terbaru dari respons mulai ujian digunakan selama pengerjaan dan pada hasil. Token dikirim persis sesuai isian; tampilan tidak mengubah huruf besar/kecil secara diam-diam.
+
+Pengiriman mulai ujian dikunci selama request aktif, dibatalkan ketika halaman ditinggalkan, dan menampilkan kesalahan/batas waktu. Respons ujian yang tidak lengkap tidak membuka lembar soal kosong. Rekaman token pada `sessionStorage` disimpan atomik bersama ID siswa; rekaman milik akun lain, format lama, atau rekaman rusak tidak dipakai untuk memulai otomatis. Siswa dapat memasukkan token kembali untuk melanjutkan sesi miliknya. Kegagalan penyimpanan token ditampilkan tanpa menghalangi pengerjaan atau hasil yang sudah dikonfirmasi server.
+
+AnswerSync, payload jawaban, versi/mutation ID, manifest finalisasi, dan batas waktu server tetap digunakan. Nilai nol ditampilkan sebagai hasil sah; nilai langsung yang belum tersedia tidak diubah menjadi nol atau NaN. Nilai tertunda disembunyikan meskipun field angka diterima klien. Nilai langsung memakai angka server dengan maksimal dua desimal. Kesalahan penyelesaian mempertahankan halaman/ringkasan untuk dicoba lagi; sesi dinonaktifkan menutup workspace dan dialog tanpa menghapus outbox jawaban yang masih diperlukan untuk pemulihan.
+
+Dialog ujian, gambar, pratinjau, serta konfirmasi umum memakai modal native dengan fokus keyboard dan penguncian scroll yang mendukung pratinjau bertingkat. Pembesaran gambar tetap mendukung 50–300%, tombol +/−, reset, dan Escape. Menutup semua dialog atau berganti ke hasil memulihkan scroll. Notifikasi dan dialog umum menggunakan gaya putih–biru; font antarmuka memakai font sistem tanpa mengunduh font Google. Rumus tetap memakai KaTeX lokal.
+
+Tahap 6 tidak menambah migrasi atau mengubah backend. Jika skema Tahap 5 belum diterapkan, ikuti panduan database kosong sebelum menerapkan rilis gabungan. Setelah build, `node tests/student-pages-browser.mjs` menguji identitas/token, scope akun, batas waktu/pembatalan, gangguan storage, dialog, kegagalan finish/retry, nilai nol/tidak tersedia/tertunda, serta lebar 320–1440 px. Regresi mencakup browser akses publik, workspace, admin, operator, editor Guru, ruang ujian dan analitik; `npm run test:sync` dan `npm run test:analytics` memeriksa outbox serta CSV. `tests/tables-real-browser.mjs` juga menjalankan login, mulai, simpan/ack, dan finalisasi siswa melalui API sungguhan pada PostgreSQL terisolasi untuk nilai langsung dan tertunda. Variabel Playwright dan `INTEGRITY_TEST_DATABASE_URL` mengikuti tahap sebelumnya. Pengujian ini tidak membuktikan kapasitas 10.000 peserta bersamaan.
