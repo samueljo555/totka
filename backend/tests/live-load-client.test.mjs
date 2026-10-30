@@ -8,7 +8,7 @@ const source = fs.readFileSync(new URL('../scripts/run-live-load.mjs', import.me
 const helper = source.slice(source.indexOf('async function api('), source.indexOf('async function availablePort('));
 function client(responses) {
   const calls = [];
-  const context = vm.createContext({ fixture: { base: 'https://example.invalid' }, token: 'old',
+  const context = vm.createContext({ target: 'https://example.invalid', token: 'old',
     admin: { username: 'fixture', password: 'fixture' }, assert, URL, AbortSignal,
     fetch: async (url, options) => {
       calls.push({ url, authorization: options.headers.Authorization });

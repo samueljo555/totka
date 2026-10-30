@@ -4,6 +4,8 @@ Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Ba
 
 **Uji domain 29 Oktober 2026:** pengujian ulang 100 siswa lulus selama jendela lima menit, tanpa error HTTP. Tahap 250 dihentikan karena 120 respons 403 HTML (4,69%); tahap 10.000 belum tercapai. Lihat [hasil terbaru](docs/LIVE_LOAD_RETEST_20261029.md), [hasil awal](docs/LIVE_LOAD_TEST_RESULTS.md), serta [metode k6 eksternal](docs/LIVE_LOAD_TESTING.md).
 
+**Menjalankan k6 dari GCP:** tersedia [paket mandiri dan panduan VM generator](docs/K6_GCP.md), dengan pilihan domain publik atau target internal serta data dummy privat yang diekspor terpisah dari Git.
+
 **Rilis Tahap 5:** dashboard Guru menggunakan satu editor soal dan tidak memiliki bacaan terpisah. Untuk keputusan memulai database dari kosong, ikuti [panduan penerapan Tahap 5](docs/FRESH_DATABASE_STAGE5.md). Catatan migrasi P0/P1 di bawah merupakan riwayat perubahan; urutan penerapan rilis ini mengikuti panduan tersebut.
 
 **Status frontend:** keenam tahap desain yang disetujui sudah diterapkan, termasuk halaman siswa dan pemeriksaan lintas peran pada Tahap 6. Kebutuhan database Tahap 5 tetap berlaku untuk penerapan rilis gabungan.

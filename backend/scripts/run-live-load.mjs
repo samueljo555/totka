@@ -7,29 +7,39 @@ import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { encodeRichContent, parseRichContent } from '../dist/rich-content.js';
+import { liveTarget, balancedDummyStudents } from './live-load-config.mjs';
 
 // Only the explicitly prepared dummy fixture is permitted. No direct DB access.
 process.umask(0o077);
 const project = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const fixture = JSON.parse(fs.readFileSync(path.join(project, 'load-tests/results/dummy-preparation-state.json'), 'utf8'));
+const fixture = JSON.parse(fs.readFileSync(process.env.LIVE_FIXTURE_FILE || path.join(project, 'load-tests/results/dummy-preparation-state.json'), 'utf8'));
 assert.equal(fixture.base, 'https://naingsima.my.id'); assert.equal(fixture.verified, true);
-const admin = JSON.parse(fs.readFileSync(0, 'utf8'));
+const target = liveTarget(process.env.LIVE_TARGET_URL || fixture.base);
+const admin = JSON.parse(fs.readFileSync(process.env.LIVE_ADMIN_FILE || 0, 'utf8'));
+assert.ok(typeof admin.username === 'string' && admin.username && typeof admin.password === 'string' && admin.password,
+  'Isi username dan password admin pada LIVE_ADMIN_FILE.');
 const k6 = process.env.K6_BIN || 'k6';
 const run = `HTTP-${new Date().toISOString().replace(/[-:.]/g, '')}`;
 const output = path.join(project, 'load-tests/results', run);
 fs.mkdirSync(output, { recursive: true, mode: 0o700 });
 const reportPath = path.join(output, 'report.json');
-const report = { run, target: fixture.base, fixture: fixture.run, startedAt: new Date().toISOString(),
+let provenance = { commit: null, workingTreeModified: null };
+const kitVersion = path.join(project, 'kit-version.json');
+if (fs.existsSync(kitVersion)) provenance = JSON.parse(fs.readFileSync(kitVersion, 'utf8'));
+else try {
+  provenance = { commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: project, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(),
+    workingTreeModified: Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: project, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()) };
+} catch { /* A standalone kit does not require Git. */ }
+const report = { run, target, fixtureSource: fixture.base, fixture: fixture.run, startedAt: new Date().toISOString(),
   k6: execFileSync(k6, ['version'], { encoding: 'utf8' }).trim(),
-  commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: project, encoding: 'utf8' }).trim(),
-  workingTreeModified: Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: project, encoding: 'utf8' }).trim()),
+  ...provenance,
   generator: { cpus: os.cpus().length, totalMemoryMb: os.totalmem() / 1024 ** 2, node: process.version },
   monitoring: 'External HTTP and local generator only; no GCP monitoring or database audit.',
   stages: [], planned: process.env.LIVE_STAGES ? process.env.LIVE_STAGES.split(',').map(Number) : [100, 250, 500, 1000, 2500, 5000, 7500, 10000], complete: false };
 assert.ok(report.planned.length && report.planned.every(v => [100, 250, 500, 1000, 2500, 5000, 7500, 10000].includes(v)));
 if (process.env.LIVE_PREVIOUS_RUN_DIR) {
   const previous = JSON.parse(fs.readFileSync(path.join(process.env.LIVE_PREVIOUS_RUN_DIR, 'report.json'), 'utf8'));
-  assert.equal(previous.target, fixture.base); assert.equal(previous.fixture, fixture.run);
+  assert.equal(previous.target, target); assert.equal(previous.fixture, fixture.run);
   const passed = previous.stages.filter(s => !s.smoke && s.passed && s.packageClosed);
   assert.ok(passed.length && passed.every(s => s.vus < Math.min(...report.planned)));
   report.continuedFrom = { run: previous.run, passedStages: passed.map(s => s.vus) };
@@ -42,7 +52,7 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 process.on('SIGINT', () => { stop = true; child?.kill('SIGINT'); });
 process.on('SIGTERM', () => { stop = true; child?.kill('SIGINT'); });
 async function api(route, method = 'GET', body, authenticated = true, renewed = false) {
-  const response = await fetch(fixture.base + route, { method,
+  const response = await fetch(target + route, { method,
     headers: { ...(authenticated ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(30000) });
   const data = await response.json().catch(() => null);
@@ -54,7 +64,7 @@ async function api(route, method = 'GET', body, authenticated = true, renewed = 
       return api(route, method, body, true, true);
     }
     const code = typeof data?.error === 'string' && /^[A-Z_]{1,80}$/.test(data.error) ? ` ${data.error}` : '';
-    throw new Error(`${method} ${new URL(fixture.base + route).pathname} HTTP ${response.status}${code}`);
+    throw new Error(`${method} ${new URL(target + route).pathname} HTTP ${response.status}${code}`);
   }
   return data;
 }
@@ -92,11 +102,12 @@ async function runStage(spec, questionIds) {
   const ticks = Number(execFileSync('getconf', ['CLK_TCK'], { encoding: 'utf8' }).trim());
   child = spawn(k6, ['run', '--quiet', '--address', `127.0.0.1:${port}`, path.join(project, 'load-tests/live-student.js')], {
     cwd: project, stdio: ['ignore', log, log],
-    env: { ...process.env, API_URL: fixture.base + '/api', CREDENTIALS_FILE: path.join(output, 'credentials.json'),
+    env: { ...process.env, API_URL: target + '/api', CREDENTIALS_FILE: path.join(output, 'credentials.json'),
       QUESTION_KEYS_FILE: path.join(output, 'question-keys.json'), EXAM_TOKEN: examToken, RUN_ID: `${run}:${id}`,
       STUDENT_PREFIX: fixture.prefix, VUS: String(spec.vus), ACTIVITY_SECONDS: String(spec.seconds),
       LOGIN_RAMP_SECONDS: String(spec.ramp), FINISH_SPREAD_SECONDS: String(spec.finishSpread), SUMMARY_FILE: summaryFile,
-      K6_NO_USAGE_REPORT: 'true', K6_WEB_DASHBOARD: 'false', GOMEMLIMIT: '4GiB' },
+      K6_NO_USAGE_REPORT: 'true', K6_WEB_DASHBOARD: 'false',
+      GOMEMLIMIT: process.env.LIVE_GENERATOR_GOMEMLIMIT || process.env.GOMEMLIMIT || '4GiB' },
   });
   let exit; child.once('error', error => { stage.generatorError = error.code || 'spawn failure'; exit = { code: -1 }; });
   child.once('exit', (code, signal) => { exit = { code, signal }; });
@@ -158,12 +169,8 @@ async function runStage(spec, questionIds) {
 }
 try {
   const login = await api('/api/login', 'POST', admin, false); assert.ok(['admin', 'super_admin'].includes(login.user?.role)); token = login.token;
-  const credentials = JSON.parse(fs.readFileSync(path.join(fixture.dir, 'student-credentials.json'), 'utf8'));
-  assert.equal(credentials.length, 10000); assert.equal(new Set(credentials.map(c => c.id)).size, 10000);
-  const grouped = fixture.schools.map(s => credentials.filter(c => c.schoolNpsn === s.npsn).sort((a, b) => a.username.localeCompare(b.username)));
-  assert.ok(grouped.every(group => group.length === 100));
-  const balanced = Array.from({ length: 10000 }, (_, i) => grouped[i % 100][Math.floor(i / 100)]);
-  assert.ok(balanced.every(c => c.username.startsWith(fixture.prefix) && c.id && c.password));
+  const credentials = JSON.parse(fs.readFileSync(path.resolve(project, fixture.dir, 'student-credentials.json'), 'utf8'));
+  const balanced = balancedDummyStudents(fixture, credentials);
   write(path.join(output, 'credentials.json'), balanced);
   const sourcePath = process.env.LIVE_QUESTION_SOURCE_FILE; assert.ok(sourcePath, 'LIVE_QUESTION_SOURCE_FILE is required');
   const sources = JSON.parse(fs.readFileSync(sourcePath, 'utf8')).filter(q => q.mapel === 'Matematika');

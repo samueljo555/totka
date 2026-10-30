@@ -4,7 +4,7 @@ import exec from 'k6/execution';
 import { SharedArray } from 'k6/data';
 import { Counter, Rate, Trend } from 'k6/metrics';
 
-// Public-endpoint benchmark. No database access or forged authentication tokens.
+// Benchmark against an explicitly selected public or internal application endpoint.
 const students = new SharedArray('live students', () => JSON.parse(open(__ENV.CREDENTIALS_FILE)));
 const keyRows = new SharedArray('question keys', () => JSON.parse(open(__ENV.QUESTION_KEYS_FILE)));
 const vus = Number(__ENV.VUS);
@@ -12,7 +12,7 @@ const seconds = Number(__ENV.ACTIVITY_SECONDS);
 const ramp = Number(__ENV.LOGIN_RAMP_SECONDS);
 const finishSpread = Number(__ENV.FINISH_SPREAD_SECONDS || 15);
 const base = __ENV.API_URL;
-if (base !== 'https://naingsima.my.id/api' || !__ENV.EXAM_TOKEN || !__ENV.RUN_ID ||
+if (!/^https?:\/\/[^\s/?#@]+\/api$/.test(base || '') || !__ENV.EXAM_TOKEN || !__ENV.RUN_ID ||
     !Number.isInteger(vus) || vus < 1 || vus > students.length ||
     !(seconds > 0) || !(ramp >= 0) || !(finishSpread >= 0) || keyRows.length !== 30) {
   throw new Error('Invalid live benchmark configuration');

@@ -1,7 +1,7 @@
 # Pengujian HTTP eksternal melalui domain
 
 Runner: `backend/scripts/run-live-load.mjs`; skenario: `load-tests/live-student.js`.
-Menggunakan k6 dan API publik dengan autentikasi normal. Tidak menggunakan koneksi database, JWT buatan, seed/reset, atau monitoring GCP. Target dibatasi ke `https://naingsima.my.id`. Jalankan hanya dalam lingkup izin pemilik website.
+Menggunakan k6 dengan autentikasi normal. Tidak menggunakan koneksi database, JWT buatan, seed/reset, atau monitoring GCP. Target default `https://naingsima.my.id`; `LIVE_TARGET_URL` dapat menunjuk origin internal yang Anda kelola dan mengakses fixture yang sama. Jalankan hanya dalam lingkup izin pemilik website. Untuk paket mandiri di VM GCP, lihat [panduan GCP](K6_GCP.md).
 
 ## Prasyarat dan pelaksanaan
 
@@ -9,7 +9,7 @@ Menggunakan k6 dan API publik dengan autentikasi normal. Tidak menggunakan konek
 - Build backend untuk utilitas konten: `npm --prefix backend run build`.
 - Fixture yang telah diverifikasi pada `load-tests/results/dummy-preparation-state.json`: 100 sekolah, 100 siswa per sekolah, file ID/username/password/NPSN privat.
 - `LIVE_QUESTION_SOURCE_FILE`: JSON tepat 30 soal Matematika dengan konten editor, pilihan, dan kunci yang valid.
-- File login admin JSON dengan username/password, disimpan di luar Git dengan izin 600.
+- File login admin JSON dengan username/password, disimpan di luar Git dengan izin 600. Dapat diberikan melalui stdin atau path `LIVE_ADMIN_FILE`.
 
 Dari root proyek, sesuaikan path privat:
 
@@ -70,3 +70,9 @@ Penyelesaian sesi setelah abort harus dicatat sebagai cleanup, bukan kelulusan b
 HTTP 403 HTML mengindikasikan penolakan pada jalur permintaan, tetapi tidak membuktikan aturan Cloud Armor tertentu. Periksa proxy/WAF/rate limit sebelum melanjutkan. Jangan memakai header IP palsu atau menonaktifkan perlindungan secara menyeluruh.
 
 Simulasi HTTP tidak menjalankan 10.000 browser dan tidak mengaudit semua record database. Hasil pertama: [laporan 29 Oktober 2026](LIVE_LOAD_TEST_RESULTS.md).
+
+Fixture dapat dipindahkan melalui arsip privat dari `export-live-load-kit.mjs`.
+`LIVE_FIXTURE_FILE` menunjuk manifest alternatif; `fixture.dir` relatif terhadap
+root paket atau absolut untuk kompatibilitas workspace asal. Paket tidak
+memerlukan Git atau node_modules. Metadata asal dan hash skrip disertakan dalam
+`kit-version.json`.
