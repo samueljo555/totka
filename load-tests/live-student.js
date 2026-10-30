@@ -3,6 +3,7 @@ import { check, sleep } from 'k6';
 import exec from 'k6/execution';
 import { SharedArray } from 'k6/data';
 import { Counter, Rate, Trend } from 'k6/metrics';
+import { resumePlan } from './live-schedule.js';
 
 // Benchmark against an explicitly selected public or internal application endpoint.
 const students = new SharedArray('live students', () => JSON.parse(open(__ENV.CREDENTIALS_FILE)));
@@ -12,9 +13,11 @@ const seconds = Number(__ENV.ACTIVITY_SECONDS);
 const ramp = Number(__ENV.LOGIN_RAMP_SECONDS);
 const finishSpread = Number(__ENV.FINISH_SPREAD_SECONDS || 15);
 const base = __ENV.API_URL;
+const resumeMode = __ENV.RESUME_MODE || 'random';
 if (!/^https?:\/\/[^\s/?#@]+\/api$/.test(base || '') || !__ENV.EXAM_TOKEN || !__ENV.RUN_ID ||
     !Number.isInteger(vus) || vus < 1 || vus > students.length ||
-    !(seconds > 0) || !(ramp >= 0) || !(finishSpread >= 0) || keyRows.length !== 30) {
+    !(seconds > 0) || !(ramp >= 0) || !(finishSpread >= 0) || keyRows.length !== 30 ||
+    !['random', 'synchronized'].includes(resumeMode)) {
   throw new Error('Invalid live benchmark configuration');
 }
 const started = new Counter('sessions_started');
@@ -28,6 +31,8 @@ const resumeOk = new Rate('resume_success');
 const heartbeatOk = new Rate('heartbeat_success');
 const scoreOk = new Rate('score_success');
 const timing = new Trend('operation_ms', true);
+const resumeQuestion = new Trend('resume_after_question');
+const resumeTime = new Trend('resume_at_ms', true);
 export const options = {
   scenarios: { exam: { executor: 'per-vu-iterations', vus, iterations: 1,
     maxDuration: `${Math.ceil(ramp + seconds + finishSpread + 180)}s`, gracefulStop: '30s' } },
@@ -122,6 +127,7 @@ function studentJourney() {
   const windowStart = exec.scenario.startTime + ramp * 1000;
   const windowEnd = windowStart + seconds * 1000;
   const interval = seconds * 1000 / 34;
+  const plannedResume = resumePlan(exam.questions.length, resumeMode);
   let nextHeartbeat = Date.now() + Math.random() * 1000;
   function waitUntil(deadline) {
     while (Date.now() < deadline) {
@@ -157,7 +163,11 @@ function studentJourney() {
       response = post('replay', `/sessions/${sessionId}/answer`, payload, token);
       if (!ack(response, payload)) return fail('replay', response);
     }
-    if (index === 14) {
+    if (index === plannedResume.index) {
+      // Keep heartbeats running during the independent jitter. The delay scales
+      // down for smoke tests and does not extend the common activity window.
+      if (!waitUntil(Date.now() + plannedResume.jitter * Math.min(3000, interval / 2))) return false;
+      resumeQuestion.add(index + 1); resumeTime.add(Math.max(0, Date.now() - windowStart));
       response = post('resume', '/sessions/start', { token: __ENV.EXAM_TOKEN }, token);
       const resumed = json(response);
       const valid = response.status === 200 && resumed?.session?.id === sessionId &&

@@ -35,7 +35,7 @@ function write(relative, value) {
   fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value, null, 2), { mode: 0o600 });
 }
 const files = ['backend/scripts/run-live-load.mjs', 'backend/scripts/live-load-config.mjs',
-  'backend/dist/rich-content.js', 'load-tests/live-student.js'];
+  'backend/dist/rich-content.js', 'load-tests/live-student.js', 'load-tests/live-schedule.js'];
 const hashes = {};
 for (const relative of files) {
   const data = fs.readFileSync(path.join(project, relative)); write(relative, data.toString());

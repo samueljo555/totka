@@ -92,7 +92,11 @@ test('exported kit runs a k6 journey against a local fake API outside the reposi
       if (url.pathname === '/api/auth/session-check') { assert.equal(url.searchParams.get('studentId'), student.id); return send({ status: 'valid' }); }
       if (url.pathname === '/api/sessions/start') {
         assert.equal(data.token, pack.token);
-        if (!sessions.has(student.id)) sessions.set(student.id, { id: student.id, status: 'sedang_mengerjakan', answers: new Map() });
+        if (!sessions.has(student.id)) sessions.set(student.id, { id: student.id, status: 'sedang_mengerjakan', answers: new Map(), resumes: 0 });
+        else {
+          const resumed = sessions.get(student.id); resumed.resumes++;
+          assert.ok(resumed.answers.size >= 5 && resumed.answers.size <= 25);
+        }
         const session = sessions.get(student.id);
         return send({ session: { id: session.id, status: session.status }, questions: keys.map((q, i) => ({ ...q, options: sources[i].options })), existingAnswers: [...session.answers.values()] });
       }
@@ -116,10 +120,14 @@ test('exported kit runs a k6 journey against a local fake API outside the reposi
   const adminFile = path.join(kit, 'admin-login.json'); fs.writeFileSync(adminFile, JSON.stringify({ username: 'fixture-admin', password: 'fixture-only' }));
   const target = `http://127.0.0.1:${server.address().port}`;
   await command('bash', ['run.sh', 'smoke'], { cwd: kit, env: { ...process.env, LIVE_TARGET_URL: target,
-    LIVE_ADMIN_FILE: adminFile, LIVE_PREVIOUS_RUN_DIR: '', LIVE_SMOKE_ONLY: '', LIVE_STAGES: '' } });
+    LIVE_ADMIN_FILE: adminFile, LIVE_PREVIOUS_RUN_DIR: '', LIVE_SMOKE_ONLY: '', LIVE_STAGES: '', LIVE_RESUME_MODE: '' } });
   const resultDir = fs.readdirSync(path.join(kit, 'load-tests/results')).find(name => name.startsWith('HTTP-'));
   const report = JSON.parse(fs.readFileSync(path.join(kit, 'load-tests/results', resultDir, 'report.json')));
   assert.equal(report.target, target); assert.equal(report.complete, true); assert.equal(report.stages[0].passed, true);
   assert.equal(report.stages[0].packageClosed, true); assert.equal(finished, 3); assert.ok(requests > 100);
+  assert.equal(report.resume.mode, 'random');
+  assert.ok([...sessions.values()].every(s => s.resumes === 1));
+  assert.ok(report.stages[0].resumeDistribution.afterQuestion.min >= 5);
+  assert.ok(report.stages[0].resumeDistribution.afterQuestion.max <= 25);
   assert.equal(report.scriptSha256['load-tests/live-student.js'].length, 64);
 });

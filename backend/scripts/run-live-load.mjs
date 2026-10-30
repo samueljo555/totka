@@ -19,6 +19,8 @@ const admin = JSON.parse(fs.readFileSync(process.env.LIVE_ADMIN_FILE || 0, 'utf8
 assert.ok(typeof admin.username === 'string' && admin.username && typeof admin.password === 'string' && admin.password,
   'Isi username dan password admin pada LIVE_ADMIN_FILE.');
 const k6 = process.env.K6_BIN || 'k6';
+const resumeMode = process.env.LIVE_RESUME_MODE || 'random';
+assert.ok(['random', 'synchronized'].includes(resumeMode), 'LIVE_RESUME_MODE harus random atau synchronized.');
 const run = `HTTP-${new Date().toISOString().replace(/[-:.]/g, '')}`;
 const output = path.join(project, 'load-tests/results', run);
 fs.mkdirSync(output, { recursive: true, mode: 0o700 });
@@ -35,6 +37,8 @@ const report = { run, target, fixtureSource: fixture.base, fixture: fixture.run,
   ...provenance,
   generator: { cpus: os.cpus().length, totalMemoryMb: os.totalmem() / 1024 ** 2, node: process.version },
   monitoring: 'External HTTP and local generator only; no GCP monitoring or database audit.',
+  resume: { mode: resumeMode, afterQuestions: resumeMode === 'random' ? [5, 25] : [15, 15],
+    maximumJitterSeconds: resumeMode === 'random' ? 3 : 0 },
   stages: [], planned: process.env.LIVE_STAGES ? process.env.LIVE_STAGES.split(',').map(Number) : [100, 250, 500, 1000, 2500, 5000, 7500, 10000], complete: false };
 assert.ok(report.planned.length && report.planned.every(v => [100, 250, 500, 1000, 2500, 5000, 7500, 10000].includes(v)));
 if (process.env.LIVE_PREVIOUS_RUN_DIR) {
@@ -106,6 +110,7 @@ async function runStage(spec, questionIds) {
       QUESTION_KEYS_FILE: path.join(output, 'question-keys.json'), EXAM_TOKEN: examToken, RUN_ID: `${run}:${id}`,
       STUDENT_PREFIX: fixture.prefix, VUS: String(spec.vus), ACTIVITY_SECONDS: String(spec.seconds),
       LOGIN_RAMP_SECONDS: String(spec.ramp), FINISH_SPREAD_SECONDS: String(spec.finishSpread), SUMMARY_FILE: summaryFile,
+      RESUME_MODE: resumeMode,
       K6_NO_USAGE_REPORT: 'true', K6_WEB_DASHBOARD: 'false',
       GOMEMLIMIT: process.env.LIVE_GENERATOR_GOMEMLIMIT || process.env.GOMEMLIMIT || '4GiB' },
   });
@@ -156,6 +161,7 @@ async function runStage(spec, questionIds) {
     stage.thresholdFailures = Object.entries(summary.metrics).flatMap(([name, m]) => Object.entries(m.thresholds || {}).filter(([, value]) => !value.ok).map(([rule]) => `${name}: ${rule}`));
     stage.endpointLatency = Object.fromEntries(Object.entries(summary.metrics).filter(([name]) => name.startsWith('operation_ms{')).map(([name, m]) => [name, m.values]));
     stage.checks = Object.fromEntries(['answer_ack_success', 'resume_success', 'heartbeat_success', 'score_success', 'flow_success'].map(name => [name, metric(name)?.rate ?? null]));
+    stage.resumeDistribution = { afterQuestion: metric('resume_after_question') || null, atMs: metric('resume_at_ms') || null };
     stage.passed = exit.code === 0 && !stage.generatorError && stage.completed === spec.vus && !stage.thresholdFailures.length &&
       stage.peakConfirmedActive === spec.vus && stage.fullTargetSeconds >= spec.seconds - (spec.smoke ? 4 : 8);
     if (exit.code === 0 && !stage.passed) stage.observationError = 'Target active concurrency/duration was not demonstrated';

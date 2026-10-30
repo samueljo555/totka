@@ -8,6 +8,8 @@ Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Ba
 
 **Menjalankan k6 dari GCP:** tersedia [paket mandiri dan panduan VM generator](docs/K6_GCP.md), dengan pilihan domain publik atau target internal serta data dummy privat yang diekspor terpisah dari Git.
 
+**Pola resume k6 terbaru:** default memakai satu resume per siswa pada soal ke-5–25 yang dipilih independen, dengan jeda acak maksimal tiga detik. Mode lama soal ke-15 tersedia melalui `LIVE_RESUME_MODE=synchronized`; laporan historis tetap menggunakan pola lama. Perubahan ini belum diuji ulang pada beban produksi 2.500 siswa.
+
 **Rilis Tahap 5:** dashboard Guru menggunakan satu editor soal dan tidak memiliki bacaan terpisah. Untuk keputusan memulai database dari kosong, ikuti [panduan penerapan Tahap 5](docs/FRESH_DATABASE_STAGE5.md). Catatan migrasi P0/P1 di bawah merupakan riwayat perubahan; urutan penerapan rilis ini mengikuti panduan tersebut.
 
 **Status frontend:** keenam tahap desain yang disetujui sudah diterapkan, termasuk halaman siswa dan pemeriksaan lintas peran pada Tahap 6. Kebutuhan database Tahap 5 tetap berlaku untuk penerapan rilis gabungan.

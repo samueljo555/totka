@@ -113,6 +113,30 @@ Untuk memeriksa satu tingkat saja, tetap didahului smoke:
 ./run.sh stage 250
 ```
 
+Pada paket terbaru, setiap siswa melakukan satu resume pada posisi acak
+antara soal ke-5 dan ke-25, ditambah jeda acak maksimal tiga detik. Pada smoke,
+jeda diperkecil agar tetap sesuai durasinya. Pemeriksaan jawaban/versi tetap
+berlaku, dan heartbeat tetap berjalan selama jeda. Untuk mengulang 2.500 siswa:
+
+```bash
+./run.sh stage 2500
+```
+
+Mode default `LIVE_RESUME_MODE=random` mengurangi penumpukan resume di satu
+titik; sebagian request tetap bisa berdekatan. Mode lama tersedia hanya untuk
+perbandingan terkontrol:
+
+```bash
+LIVE_RESUME_MODE=synchronized ./run.sh stage 2500
+```
+
+Mode dan distribusi resume dicatat pada `report.resume` dan
+`stages[].resumeDistribution`. `atMs` adalah waktu mulai resume relatif terhadap
+jendela aktivitas, bukan lama respons. Jangan menyamakan hasil model acak
+dengan laporan lama yang memakai resume bersama pada soal ke-15. Paket unduhan
+lama tidak berubah otomatis; gunakan arsip terbaru dan simpan hasil lama serta
+file admin pribadi Anda ketika mengganti paket.
+
 Jangan menjalankan dua generator menggunakan akun yang sama bersamaan karena
 sesi login dapat saling menggantikan. Satu VM generator juga berarti satu jalur
 keluar jaringan, bukan 100 IP sekolah berbeda.

@@ -27,7 +27,8 @@ Runner membuat 30 salinan soal dummy milik admin agar ujian tidak mengunci soal 
 - Pemeriksaan awal 3 siswa selama 10 detik.
 - Tahap 100, 250, 500, 1.000, 2.500, 5.000, 7.500, 10.000.
 - Jendela aktivitas bersama 300 detik; tahap 10.000 memakai 600 detik. Login berlangsung 10–180 detik di luar jendela itu. Penyelesaian disebar 15–30 detik.
-- Menjawab 30 soal, mengubah satu jawaban lalu mengembalikannya dengan versi lebih tinggi, tiga replay identik, serta resume pertengahan ujian yang memeriksa receipt dan payload.
+- Menjawab 30 soal, mengubah satu jawaban lalu mengembalikannya dengan versi lebih tinggi, tiga replay identik, serta satu pemeriksaan resume per peserta yang memeriksa receipt dan payload.
+- Default resume sekarang acak secara independen setelah soal ke-5–25, dengan jitter tambahan 0–3 detik (diperkecil untuk smoke). Pemilihan posisi dan jitter dilakukan terpisah. Heartbeat tetap berjalan selama menunggu; jendela aktivitas bersama tidak diperpanjang.
 - Heartbeat sekitar setiap 15 detik dalam VU yang sama; request lambat dapat menundanya.
 - Semua peserta tetap aktif sampai akhir jendela. Jeda menjawab sekitar 9 detik untuk aktivitas 5 menit: simulasi dipercepat, bukan kecepatan membaca siswa yang terukur.
 
@@ -50,6 +51,14 @@ node backend/scripts/run-live-load.mjs < /secure/admin-login.json
 ```
 
 `LIVE_SMOKE_ONLY=true` hanya menjalankan pemeriksaan awal. Paket tetap baru pada setiap pengulangan.
+
+`LIVE_RESUME_MODE=random` adalah default baru. Untuk mereproduksi gelombang
+lama di soal ke-15, gunakan `LIVE_RESUME_MODE=synchronized` secara eksplisit.
+Mode dicatat pada `report.resume`; `stages[].resumeDistribution` mencatat
+statistik nomor soal dan waktu dimulainya resume sejak jendela aktivitas
+(`atMs`, bukan latensi respons). Hasil model acak dan model lama perlu
+dibandingkan dengan memperhatikan perubahan pola beban ini. Laporan historis
+sebelum perubahan tetap mewakili resume serempak pada soal ke-15.
 
 Untuk melanjutkan setelah tahap yang sudah lolos, `LIVE_PREVIOUS_RUN_DIR` dapat
 menunjuk laporan sebelumnya. Runner memeriksa target, fixture, serta tahap
