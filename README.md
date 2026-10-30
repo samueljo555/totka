@@ -2,7 +2,7 @@
 
 Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Bank Soal, Paket Ujian, manajemen peserta didik, dan penilaian otomatis.
 
-**Uji domain 29 Oktober 2026:** pengujian ulang 100 siswa lulus selama jendela lima menit, tanpa error HTTP. Tahap 250 dihentikan karena 120 respons 403 HTML (4,69%); tahap 10.000 belum tercapai. Lihat [hasil terbaru](docs/LIVE_LOAD_RETEST_20261029.md), [hasil awal](docs/LIVE_LOAD_TEST_RESULTS.md), serta [metode k6 eksternal](docs/LIVE_LOAD_TESTING.md).
+**Uji domain 30 Oktober 2026:** tahap 100–1.000 siswa lulus pada jendela aktivitas lima menit, tanpa error HTTP atau 403. Tahap 2.500 dihentikan karena timeout serta simpan p95 1.011 ms melampaui target 750 ms. Tahap 10.000 belum tercapai. Lihat [hasil terbaru](docs/LIVE_LOAD_RETEST_20261030.md), [riwayat sebelumnya](docs/LIVE_LOAD_RETEST_20261029.md), serta [metode k6 eksternal](docs/LIVE_LOAD_TESTING.md).
 
 **Menjalankan k6 dari GCP:** tersedia [paket mandiri dan panduan VM generator](docs/K6_GCP.md), dengan pilihan domain publik atau target internal serta data dummy privat yang diekspor terpisah dari Git.
 

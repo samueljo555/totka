@@ -1,5 +1,9 @@
 # Pengujian ulang domain — 29 Oktober 2026
 
+**Pembaruan 30 Oktober:** respons 403 tidak teramati lagi; tahap 100–1.000
+lulus dan tahap 2.500 mengalami timeout. Lihat [hasil terbaru](LIVE_LOAD_RETEST_20261030.md).
+Bagian berikut adalah riwayat pengujian 29 Oktober.
+
 **100 siswa lulus. Tahap 250 gagal karena respons HTTP 403 HTML. Target 10.000
 belum tercapai; tahap 500 dan seterusnya tidak dijalankan.**
 
