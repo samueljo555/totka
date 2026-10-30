@@ -1,5 +1,9 @@
 # Uji ulang khusus 2.500 siswa — 31 Oktober 2026
 
+**Pembaruan:** percobaan berikutnya dengan resume acak lulus. Lihat
+[hasil pola acak](LIVE_LOAD_RANDOM_RESUME_20261031.md). Laporan di bawah tetap
+merupakan hasil pola resume bersama pada soal ke-15.
+
 **Tahap 2.500 siswa belum lulus. Tidak ada HTTP 403 yang tercatat. Timeout
 kembali muncul di sekitar gelombang resume, dan simpan p95 melewati target.**
 

@@ -2,13 +2,13 @@
 
 Aplikasi platform ujian dan Try Out berbasis web yang memungkinkan pengaturan Bank Soal, Paket Ujian, manajemen peserta didik, dan penilaian otomatis.
 
-**Uji domain 30 Oktober 2026:** tahap 100–1.000 siswa lulus pada jendela aktivitas lima menit, tanpa error HTTP atau 403. Tahap 2.500 dihentikan karena timeout serta simpan p95 1.011 ms melampaui target 750 ms. Tahap 10.000 belum tercapai. Lihat [hasil 30 Oktober](docs/LIVE_LOAD_RETEST_20261030.md), [riwayat sebelumnya](docs/LIVE_LOAD_RETEST_20261029.md), serta [metode k6 eksternal](docs/LIVE_LOAD_TESTING.md).
+**Uji terbaru 31 Oktober 2026:** 2.500 siswa dengan resume acak lulus pada jendela aktivitas lima menit; seluruh peserta selesai dengan skor sesuai kunci, error HTTP 0%, dan simpan p95 97 ms. Tahap 5.000–10.000 belum dijalankan. Lihat [hasil terbaru](docs/LIVE_LOAD_RANDOM_RESUME_20261031.md) dan [metode k6](docs/LIVE_LOAD_TESTING.md).
 
-**Ulang khusus 2.500 siswa, 31 Oktober:** pola timeout terulang tanpa 403; simpan p95 1.054 ms dan error HTTP 0,317%. Lihat [perbandingan kedua percobaan](docs/LIVE_LOAD_2500_RETEST_20261031.md). Skenario 5.000–10.000 belum dijalankan.
+**Riwayat pola resume bersama:** tahap 100–1.000 lulus, sedangkan 2.500 mengalami timeout. Hasil pola lama tetap tersedia pada [laporan 30 Oktober](docs/LIVE_LOAD_RETEST_20261030.md), [pengulangan 31 Oktober](docs/LIVE_LOAD_2500_RETEST_20261031.md), dan [riwayat 403](docs/LIVE_LOAD_RETEST_20261029.md). Pola lama dan pola acak menguji bentuk beban yang berbeda.
 
 **Menjalankan k6 dari GCP:** tersedia [paket mandiri dan panduan VM generator](docs/K6_GCP.md), dengan pilihan domain publik atau target internal serta data dummy privat yang diekspor terpisah dari Git.
 
-**Pola resume k6 terbaru:** default memakai satu resume per siswa pada soal ke-5–25 yang dipilih independen, dengan jeda acak maksimal tiga detik. Mode lama soal ke-15 tersedia melalui `LIVE_RESUME_MODE=synchronized`; laporan historis tetap menggunakan pola lama. Perubahan ini belum diuji ulang pada beban produksi 2.500 siswa.
+**Pola resume k6 terbaru:** default memakai satu resume per siswa pada soal ke-5–25 yang dipilih independen, dengan jeda acak maksimal tiga detik. Mode lama soal ke-15 tersedia melalui `LIVE_RESUME_MODE=synchronized`; laporan historis tetap menggunakan pola lama. Pola acak sudah diuji melalui domain pada tahap 2.500 siswa.
 
 **Rilis Tahap 5:** dashboard Guru menggunakan satu editor soal dan tidak memiliki bacaan terpisah. Untuk keputusan memulai database dari kosong, ikuti [panduan penerapan Tahap 5](docs/FRESH_DATABASE_STAGE5.md). Catatan migrasi P0/P1 di bawah merupakan riwayat perubahan; urutan penerapan rilis ini mengikuti panduan tersebut.
 
