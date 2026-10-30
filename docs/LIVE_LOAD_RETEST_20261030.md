@@ -1,5 +1,8 @@
 # Uji ulang domain — 30 Oktober 2026
 
+**Pembaruan 31 Oktober:** pengulangan khusus 2.500 siswa menunjukkan pola
+timeout serupa, tanpa HTTP 403. Lihat [perbandingan percobaan](LIVE_LOAD_2500_RETEST_20261031.md).
+
 **Tidak ada HTTP 403 yang tercatat. Tahap 100, 250, 500, dan 1.000 siswa lulus.
 Tahap 2.500 dihentikan karena waktu simpan melampaui target dan terjadi timeout.
 Tahap 5.000–10.000 tidak dijalankan.**
